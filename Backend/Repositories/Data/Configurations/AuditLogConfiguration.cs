@@ -17,7 +17,8 @@ public class AuditLogConfiguration : IEntityTypeConfiguration<AuditLog>
 
         builder.HasOne(a => a.Organization)
             .WithMany()
-            .HasForeignKey(a => a.OrganizationId);
+            .HasForeignKey(a => a.OrganizationId)
+            .IsRequired(false); // null for a failed login with an unknown identifier
 
         builder.HasOne(a => a.User)
             .WithMany()

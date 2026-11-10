@@ -80,7 +80,7 @@ namespace Repositories.Data.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<int>("EntityId")
+                    b.Property<int?>("EntityId")
                         .HasColumnType("int");
 
                     b.Property<string>("EntityType")
@@ -93,7 +93,7 @@ namespace Repositories.Data.Migrations
                         .HasMaxLength(45)
                         .HasColumnType("nvarchar(45)");
 
-                    b.Property<int>("OrganizationId")
+                    b.Property<int?>("OrganizationId")
                         .HasColumnType("int");
 
                     b.Property<int?>("UserId")
@@ -637,11 +637,13 @@ namespace Repositories.Data.Migrations
 
                     b.HasIndex("DepartmentId");
 
-                    b.HasIndex("OrganizationId", "Email")
+                    b.HasIndex("Email")
                         .IsUnique();
 
-                    b.HasIndex("OrganizationId", "EmployeeCode")
+                    b.HasIndex("EmployeeCode")
                         .IsUnique();
+
+                    b.HasIndex("OrganizationId");
 
                     b.ToTable("Users", (string)null);
                 });
@@ -675,8 +677,7 @@ namespace Repositories.Data.Migrations
                     b.HasOne("Common.Models.Organization", "Organization")
                         .WithMany()
                         .HasForeignKey("OrganizationId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("Common.Models.User", "User")
                         .WithMany()

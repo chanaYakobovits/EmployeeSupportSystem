@@ -1,3 +1,117 @@
 @API_HostAddress = http://localhost:5103
+# Password of all demo users (README / OrganizationSeedData.DemoPassword)
+@password = Demo1234
 
-###
+### ============ Successful login – one per role (README) ============
+
+### Employee – Noa Berkovich, by e-mail
+# @name loginEmployee
+POST {{API_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{ "identifier": "noa.berkovich@example.com", "password": "{{password}}" }
+
+### Handler – Alon Biton, by employee code
+# @name loginHandler
+POST {{API_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{ "identifier": "EMP-00014", "password": "{{password}}" }
+
+### Handler (departmental HR) – Liat Shahar
+POST {{API_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{ "identifier": "liat.shahar@example.com", "password": "{{password}}" }
+
+### DepartmentManager – Ron Kahanovich
+POST {{API_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{ "identifier": "EMP-00003", "password": "{{password}}" }
+
+### DepartmentManager (handling department) – Rina Kaplan
+POST {{API_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{ "identifier": "rina.kaplan@example.com", "password": "{{password}}" }
+
+### Executive – Avner Goldman
+POST {{API_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{ "identifier": "EMP-00001", "password": "{{password}}" }
+
+### Admin + Handler + DepartmentManager – Yael Harpaz
+# @name loginAdmin
+POST {{API_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{ "identifier": "yael.harpaz@example.com", "password": "{{password}}" }
+
+### First login (MustChangePassword) – Tomer Zilber → 200, "mustChangePassword": true
+# @name loginMustChange
+POST {{API_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{ "identifier": "tomer.zilber@example.com", "password": "{{password}}" }
+
+### ============ Failed login – all 401 "פרטי ההתחברות שגויים" ============
+
+### Wrong password
+POST {{API_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{ "identifier": "noa.berkovich@example.com", "password": "Wrong9999" }
+
+### Unknown identifier – same response as a wrong password
+POST {{API_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{ "identifier": "nobody@example.com", "password": "{{password}}" }
+
+### Inactive user (Orit Danon) with the correct password – same response
+POST {{API_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{ "identifier": "EMP-00012", "password": "{{password}}" }
+
+### Missing fields → 400
+POST {{API_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{ "identifier": "" }
+
+### ============ GET /api/auth/me ============
+
+### With token → 200
+GET {{API_HostAddress}}/api/auth/me
+Authorization: Bearer {{loginEmployee.response.body.$.accessToken}}
+
+### Without token → 401
+GET {{API_HostAddress}}/api/auth/me
+
+### Pending password change → still 200 (me is allowed)
+GET {{API_HostAddress}}/api/auth/me
+Authorization: Bearer {{loginMustChange.response.body.$.accessToken}}
+
+### ============ Policies (temporary dev endpoints) ============
+
+### Default policy, Employee → 200
+GET {{API_HostAddress}}/api/dev/auth/protected
+Authorization: Bearer {{loginEmployee.response.body.$.accessToken}}
+
+### Default policy, pending password change → 403 "password-change-required"
+GET {{API_HostAddress}}/api/dev/auth/protected
+Authorization: Bearer {{loginMustChange.response.body.$.accessToken}}
+
+### Admin policy, Employee → 403
+GET {{API_HostAddress}}/api/dev/auth/admin
+Authorization: Bearer {{loginEmployee.response.body.$.accessToken}}
+
+### Admin policy, Admin → 200
+GET {{API_HostAddress}}/api/dev/auth/admin
+Authorization: Bearer {{loginAdmin.response.body.$.accessToken}}
+
+### Lockout: send "Wrong password" 5 times → the 6th attempt returns 401 "account-locked" with the wait time.
+### Rate limit: more than 10 login requests within a minute from one IP → 429.

@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Logging;
 
-namespace Services.Tests.Ai.Fakes;
+namespace Services.Tests.Fakes;
 
 /// <summary>Collects formatted log messages so tests can check what is (and is not) logged.</summary>
 public sealed class CapturingLogger<T> : ILogger<T>

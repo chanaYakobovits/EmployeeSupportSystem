@@ -17,6 +17,7 @@ try
         .ReadFrom.Services(services));
 
     builder.Services.AddApi(builder.Configuration);
+    builder.Services.AddApiAuth(builder.Configuration);
     builder.Services.AddServices(builder.Configuration);
 
     var app = builder.Build();
@@ -41,6 +42,9 @@ try
     app.UseDevelopmentSwagger();
 
     app.UseHttpsRedirection();
+    // Rate limiting before authentication: a rejected login attempt costs nothing.
+    app.UseRateLimiter();
+    app.UseAuthentication();
     app.UseAuthorization();
     app.MapControllers();
 

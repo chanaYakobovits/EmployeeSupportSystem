@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Services.Implementations.Ai;
 using Services.Tests.Ai.Fakes;
+using Services.Tests.Fakes;
 
 namespace Services.Tests.Ai;
 

@@ -13,7 +13,7 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddApi(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddControllers();
-        services.AddOpenApi();
+        services.AddOpenApi(options => options.AddDocumentTransformer<BearerSecuritySchemeTransformer>());
 
         // Spec 6.3: CORS open only to the Angular app. Origins come from configuration
         // (Development: http://localhost:4200); an empty list allows no cross-origin calls at all.

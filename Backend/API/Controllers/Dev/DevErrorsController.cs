@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using API.Filters;
 using Common.Exceptions;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace API.Controllers.Dev;
@@ -12,6 +13,7 @@ namespace API.Controllers.Dev;
 [ApiController]
 [Route("api/dev/errors")]
 [DevelopmentOnly]
+[AllowAnonymous]
 public class DevErrorsController : ControllerBase
 {
     [HttpGet("not-found")]

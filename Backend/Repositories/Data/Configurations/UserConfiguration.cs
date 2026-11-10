@@ -26,8 +26,9 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
             .WithMany(d => d.Users)
             .HasForeignKey(u => u.DepartmentId);
 
-        // Spec 8.4: login by email / employee code, no duplicates within an organization.
-        builder.HasIndex(u => new { u.OrganizationId, u.Email }).IsUnique();
-        builder.HasIndex(u => new { u.OrganizationId, u.EmployeeCode }).IsUnique();
+        // Spec 8.4: login by email / employee code. Unique across the whole system (not per organization):
+        // login happens before the organization is known, so an identifier must match at most one user.
+        builder.HasIndex(u => u.Email).IsUnique();
+        builder.HasIndex(u => u.EmployeeCode).IsUnique();
     }
 }

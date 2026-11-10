@@ -21,10 +21,16 @@ public static class DependencyInjection
 
         services.AddSingleton<IPasswordHasher, PasswordHasherService>();
         services.AddSingleton<IPiiRedactor, PiiRedactor>();
+        services.AddSingleton<IDateTimeProvider, SystemDateTimeProvider>();
+
+        // Failed-login counters of unknown identifiers (spec 4.1). The real users' counters live in the database.
+        services.AddMemoryCache();
+        services.AddScoped<IAuthService, AuthService>();
 
         services.AddAi(configuration);
 
-        // Later tasks: services (Scoped); TicketStatusRules, IDateTimeProvider (Singleton).
+        // Later tasks: services (Scoped); TicketStatusRules (Singleton).
+        // Required from the host: ICurrentUser and IAccessTokenIssuer (registered by API).
         return services;
     }
 

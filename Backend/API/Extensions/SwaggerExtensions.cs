@@ -15,7 +15,8 @@ public static class SwaggerExtensions
             return app;
         }
 
-        app.MapOpenApi();
+        // The fallback policy requires a signed-in user everywhere; the document itself is public (Development only).
+        app.MapOpenApi().AllowAnonymous();
         app.UseSwaggerUI(options =>
         {
             options.SwaggerEndpoint(OpenApiDocumentPath, "EmployeeSupportSystem API v1");
