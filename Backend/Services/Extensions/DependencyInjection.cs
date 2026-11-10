@@ -3,6 +3,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Common.Interfaces;
 using Repositories.Extensions;
 using Services.Implementations;
+using Services.Implementations.Ai;
+using Services.Interfaces;
 
 namespace Services.Extensions;
 
@@ -17,8 +19,9 @@ public static class DependencyInjection
         services.AddRepositories(configuration);
 
         services.AddSingleton<IPasswordHasher, PasswordHasherService>();
+        services.AddSingleton<IPiiRedactor, PiiRedactor>();
 
-        // Later tasks: services (Scoped); PiiRedactor, TicketStatusRules, IDateTimeProvider (Singleton).
+        // Later tasks: services (Scoped); TicketStatusRules, IDateTimeProvider (Singleton).
         return services;
     }
 }
