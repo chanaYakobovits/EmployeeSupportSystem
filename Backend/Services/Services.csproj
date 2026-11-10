@@ -13,6 +13,17 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="9.0.10" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.10" />
+    <!-- Official OpenAI .NET SDK (spec 10.1). Targets net8.0, compatible with net9.0. -->
+    <PackageReference Include="OpenAI" Version="2.2.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Versioned system prompts (spec 5.4), loaded by AiPrompt. -->
+    <EmbeddedResource Include="Implementations\Ai\Prompts\*.md" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Services.Tests" />
   </ItemGroup>
 
   <PropertyGroup>
