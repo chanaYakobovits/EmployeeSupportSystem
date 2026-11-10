@@ -1,7 +1,9 @@
+using Common.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Repositories.Data;
+using Repositories.Data.Seed;
 
 namespace Repositories.Extensions;
 
@@ -25,6 +27,9 @@ public static class DependencyInjection
         }
 
         services.AddDbContext<AppDbContext>(options => options.UseSqlServer(connectionString)); // Scoped
+
+        // Demo data (spec 8.5). Exposed only through the Common interface; API allows it only in Development.
+        services.AddScoped<IDatabaseSeeder, DatabaseSeeder>();
 
         return services;
     }

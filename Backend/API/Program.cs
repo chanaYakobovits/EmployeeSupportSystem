@@ -21,6 +21,13 @@ try
 
     var app = builder.Build();
 
+    // Explicit command only (dotnet run --project API -- --seed); never runs on a normal start.
+    if (args.IsSeedCommand())
+    {
+        Environment.ExitCode = await app.RunSeedAsync();
+        return;
+    }
+
     // Order matters: correlation id first, so the request log and error responses carry it;
     // request logging before error handling, so it records the final status code.
     app.UseMiddleware<CorrelationIdMiddleware>();
@@ -42,6 +49,7 @@ try
 catch (Exception exception) when (exception is not HostAbortedException)
 {
     Log.Fatal(exception, "Application terminated unexpectedly");
+    Environment.ExitCode = 1;
 }
 finally
 {

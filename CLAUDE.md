@@ -27,6 +27,8 @@
 - כל פעולת I/O מקבלת CancellationToken.
 - הרשאות נאכפות בשרת. פנייה מחוץ להיקף ההרשאה מחזירה 404 (לא 403).
 - Angular: קריאות HTTP ומצב רק בשירותים; רכיבים רק מציגים. אסור innerHTML לתוכן משתמש.
+- Services לא משתמש בטיפוסי HTTP (HttpContext, IActionResult, Request וכו'), למרות ה-FrameworkReference.
+  מידע על המשתמש – רק דרך ICurrentUser.
 
 ## פרטיות ו-AI (חובה)
 - ל-OpenAI נשלח רק טקסט הפנייה אחרי PiiRedactor. לעולם לא: שם, קוד עובד, מייל, מחלקה, קבצים.
@@ -49,3 +51,11 @@
 - אל תבצע commit או push – אני עושה זאת.
 - אל תתקין חבילות NuGet/npm בלי לציין קודם מה ולמה (חיבור אינטרנט מוגבל).
 - אם משהו באפיון לא ברור או סותר – שאל, אל תנחש.
+## החלטות שחורגות מהאפיון
+- .NET 9 (האפיון: .NET 10) – לא לשדרג בלי אישור.
+- FluentValidation – נדחה לשלב מאוחר.
+- "סטטוסים פתוחים" ל-SLA: New, Assigned, InProgress. WaitingForEmployee לא נכלל (השעון מושהה).
+  ההגדרה במקום אחד בקוד.
+- CategoryId ו-ClassificationSource מתמלאים יחד. Urgency איתם, חוץ ממסלול הגיבוי (null עד קביעה ידנית).
+  כש-Urgency ריק – DueAt מחושב לפי Medium (3.4).
+- להמשך (משימה 4.2): כשפנייה חוזרת מ-WaitingForEmployee – להאריך את DueAt בזמן ההמתנה.
