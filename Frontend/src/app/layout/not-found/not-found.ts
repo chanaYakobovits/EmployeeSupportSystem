@@ -8,12 +8,7 @@ import { EmptyState } from '../../shared/components/empty-state/empty-state';
   selector: 'app-not-found',
   imports: [RouterLink, MatButtonModule, EmptyState],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `
-    <section class="page">
-      <app-empty-state icon="search_off" message="הדף לא נמצא">
-        <a mat-flat-button routerLink="/">חזרה לדף הבית</a>
-      </app-empty-state>
-    </section>
-  `,
+  templateUrl: './not-found.html',
+  styleUrl: './not-found.scss',
 })
 export class NotFound {}

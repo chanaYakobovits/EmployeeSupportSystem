@@ -27,6 +27,12 @@
 - כל פעולת I/O מקבלת CancellationToken.
 - הרשאות נאכפות בשרת. פנייה מחוץ להיקף ההרשאה מחזירה 404 (לא 403).
 - Angular: קריאות HTTP ומצב רק בשירותים; רכיבים רק מציגים. אסור innerHTML לתוכן משתמש.
+- רכיבי Angular – כל רכיב בתיקייה משלו.
+  שלושה קבצים נפרדים (name.ts, name.html, name.scss עם templateUrl + styleUrl) – חובה עבור:
+  * כל מסך: רכיב שנטען מנתיב (app.routes.ts או *.routes.ts ב-features).
+  * רכיבי layout: shell, header, sidebar.
+  * כל רכיב שהתבנית שלו מעל ~20 שורות או שיש לו עיצוב משלו של יותר מכמה שורות.
+  רכיב קטן ופשוט (תג, כפתור, מצב ריק) – מותר inline. כשהוא גדל מעבר לזה – להעביר לקבצים.
 - Services לא משתמש בטיפוסי HTTP (HttpContext, IActionResult, Request וכו'), למרות ה-FrameworkReference.
   מידע על המשתמש – רק דרך ICurrentUser.
 
@@ -59,3 +65,8 @@
 - CategoryId ו-ClassificationSource מתמלאים יחד. Urgency איתם, חוץ ממסלול הגיבוי (null עד קביעה ידנית).
   כש-Urgency ריק – DueAt מחושב לפי Medium (3.4).
 - להמשך (משימה 4.2): כשפנייה חוזרת מ-WaitingForEmployee – להאריך את DueAt בזמן ההמתנה.
+
+
+## בהמשך
+- משימה 2.2: לטעון את Shell ב-loadComponent (lazy), מסך ההתחברות מחוצה לו –
+  כדי להוריד את ה-bundle הראשוני מתחת ל-500KB. לא להגדיל את ה-budget.

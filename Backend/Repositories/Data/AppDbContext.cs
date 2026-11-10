@@ -25,7 +25,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
 
-        // No delete ever cascades: every relationship is Restrict (ON DELETE NO ACTION in SQL Server).
+        
         foreach (var foreignKey in modelBuilder.Model.GetEntityTypes().SelectMany(entity => entity.GetForeignKeys()))
         {
             foreignKey.DeleteBehavior = DeleteBehavior.Restrict;
@@ -34,7 +34,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
-        // All dates are stored as datetime2 in UTC (spec 8) and read back with DateTimeKind.Utc.
+        
         configurationBuilder.Properties<DateTime>()
             .HaveColumnType("datetime2")
             .HaveConversion<UtcDateTimeConverter>();

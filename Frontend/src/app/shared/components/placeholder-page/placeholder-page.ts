@@ -10,12 +10,8 @@ import { EmptyState } from '../empty-state/empty-state';
   selector: 'app-placeholder-page',
   imports: [EmptyState],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `
-    <section class="page">
-      <h1 class="page-title">{{ title() }}</h1>
-      <app-empty-state icon="construction" message="המסך הזה עדיין בבנייה" />
-    </section>
-  `,
+  templateUrl: './placeholder-page.html',
+  styleUrl: './placeholder-page.scss',
 })
 export class PlaceholderPage {
   readonly title = input.required<string>();

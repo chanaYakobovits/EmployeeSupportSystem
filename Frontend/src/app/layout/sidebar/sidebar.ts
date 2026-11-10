@@ -9,26 +9,8 @@ import { NAV_ITEMS } from './nav-items';
   selector: 'app-sidebar',
   imports: [RouterLink, RouterLinkActive, MatListModule, MatIconModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `
-    <nav aria-label="תפריט ראשי">
-      <mat-nav-list>
-        @for (item of items; track item.path) {
-          <a
-            mat-list-item
-            [routerLink]="item.path"
-            routerLinkActive
-            #rla="routerLinkActive"
-            [activated]="rla.isActive"
-            [attr.aria-current]="rla.isActive ? 'page' : null"
-            (click)="navigate.emit()"
-          >
-            <mat-icon matListItemIcon>{{ item.icon }}</mat-icon>
-            <span matListItemTitle>{{ item.label }}</span>
-          </a>
-        }
-      </mat-nav-list>
-    </nav>
-  `,
+  templateUrl: './sidebar.html',
+  styleUrl: './sidebar.scss',
 })
 export class Sidebar {
   protected readonly items = NAV_ITEMS;

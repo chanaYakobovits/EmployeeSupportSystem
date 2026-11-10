@@ -17,11 +17,11 @@ try
         .ReadFrom.Services(services));
 
     builder.Services.AddApi(builder.Configuration);
-    builder.Services.AddServices(builder.Configuration); // registers Repositories internally
+    builder.Services.AddServices(builder.Configuration);
 
     var app = builder.Build();
 
-    // Explicit command only (dotnet run --project API -- --seed); never runs on a normal start.
+    
     if (args.IsSeedCommand())
     {
         Environment.ExitCode = await app.RunSeedAsync();

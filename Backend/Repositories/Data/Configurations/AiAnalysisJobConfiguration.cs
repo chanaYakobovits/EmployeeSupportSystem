@@ -17,7 +17,7 @@ public class AiAnalysisJobConfiguration : IEntityTypeConfiguration<AiAnalysisJob
             .WithMany(t => t.AiAnalysisJobs)
             .HasForeignKey(j => j.TicketId);
 
-        // Spec 8.4: the background worker polls pending jobs that are due.
+       
         builder.HasIndex(j => new { j.Status, j.NextAttemptAt });
     }
 }
