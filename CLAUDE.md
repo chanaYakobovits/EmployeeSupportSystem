@@ -16,6 +16,7 @@
   - `Repositories` – גישה לנתונים: AppDbContext, Fluent API Configurations, Migrations, Seed.
   - `Common` – Entities, DTOs, Enums, Interfaces, Options, Exceptions. בלי לוגיקה ובלי תלויות.
 - `Frontend/` – Angular 20, Standalone Components + Signals, Angular Material, RTL מלא.
+   - עיצוב: כל מסך ורכיב ב-Frontend לפי docs/design-guide.md. קבצי docs/design-reference/ הם השראה לסגנון בלבד – לא להעתיק מהם תוכן או לוגיקה.
 
 ## כללי ארכיטקטורה (חובה)
 - כל שכבה מכירה רק את השכבה שמתחתיה + Common. API לא מפנה ל-Repositories ולא ניגש ל-DbContext.

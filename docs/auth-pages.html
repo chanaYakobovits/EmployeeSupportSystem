@@ -1,0 +1,176 @@
+<div class="container">
+    <!-- Brand Section -->
+    <div class="brand-section">
+        <div class="brand-content">
+            <div class="logo-container">
+                <div class="logo">מ.פ</div>
+                <h1 class="brand-title">מערכת ניהול<br>פניות עובדים</h1>
+                <p class="brand-subtitle">פלטפורמה חכמה לניהול ומעקב אחר פניות העובדים בארגון</p>
+            </div>
+            <ul class="features-list">
+                <li>ניתוב חכם ואוטומטי של פניות באמצעות AI</li>
+                <li>מעקב ובקרה מלאה על זמני טיפול</li>
+                <li>דשבורד ניהולי מתקדם לקבלת החלטות</li>
+                <li>אבטחת מידע ברמה הגבוהה ביותר</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Form Section -->
+    <div class="form-section">
+        <div class="form-header">
+            <div class="form-tabs">
+                <button class="tab-button active" (click)="switchTab('login')">התחברות</button>
+                <button class="tab-button" (click)="switchTab('register')">הרשמה</button>
+            </div>
+        </div>
+
+        <!-- Login Form -->
+        <div id="login-form" class="form-content active">
+            <h2 class="form-title">ברוכים השבים</h2>
+            <p class="form-description">התחברו למערכת כדי לנהל את הפניות שלכם</p>
+
+            <div class="alert error" [class.show]="showLoginError">
+                שם המשתמש או הסיסמה אינם נכונים. אנא נסו שנית.
+            </div>
+
+            <form [formGroup]="loginForm" (ngSubmit)="onLogin()">
+                <div class="form-group">
+                    <label for="login-username"><span class="required">*</span>קוד משתמש או אימייל</label>
+                    <input type="text" id="login-username" formControlName="employeeIdOrEmail"
+                        placeholder="הזינו קוד משתמש או כתובת אימייל">
+                </div>
+
+                <div class="form-group">
+                    <label for="login-password"><span class="required">*</span>סיסמה</label>
+                    <input type="password" id="login-password" formControlName="password"
+                        placeholder="הזינו סיסמה">
+                </div>
+
+                <div class="checkbox-group">
+                    <input type="checkbox" id="remember-me" formControlName="rememberMe">
+                    <label for="remember-me">זכור אותי במכשיר זה</label>
+                </div>
+
+                <button type="submit" class="submit-button">התחבר למערכת</button>
+
+                <div class="forgot-password">
+                    <a href="#" (click)="onForgotPassword($event)">שכחתי סיסמה</a>
+                </div>
+            </form>
+        </div>
+
+        <!-- Register Form -->
+        <div id="register-form" class="form-content">
+            <h2 class="form-title">הוספת עובד חדש</h2>
+            <p class="form-description">מלאו את הפרטים להוספת עובד למערכת</p>
+
+            <div class="alert success" [class.show]="showRegisterSuccess">
+                העובד נוסף בהצלחה! ניתן להתחבר למערכת.
+            </div>
+            <div class="alert error" [class.show]="showRegisterError">
+                {{ registerErrorMessage }}
+            </div>
+
+            <form [formGroup]="registerForm" (ngSubmit)="onRegister()">
+                <div class="form-group">
+                    <label for="full-name"><span class="required">*</span>שם מלא</label>
+                    <input type="text" id="full-name" formControlName="fullName"
+                        placeholder="הזינו שם פרטי ושם משפחה">
+                </div>
+
+                <div class="form-group">
+                    <label for="email"><span class="required">*</span>כתובת אימייל</label>
+                    <input type="email" id="email" formControlName="email"
+                        placeholder="example@company.co.il">
+                    <span class="input-hint">ישמש לכניסה למערכת ולקבלת התראות</span>
+                </div>
+
+                <div class="form-group">
+                    <label for="employee-id"><span class="required">*</span>מספר עובד</label>
+                    <input type="text" id="employee-id" formControlName="employeeId"
+                        placeholder="הזינו מספר עובד">
+                </div>
+
+                <div class="form-group">
+                    <label for="phone">טלפון</label>
+                    <input type="tel" id="phone" formControlName="phone"
+                        placeholder="050-1234567">
+                </div>
+
+                <div class="form-group">
+                    <label for="department"><span class="required">*</span>מחלקה</label>
+                    <select id="department" formControlName="department">
+                        <option value="">בחרו מחלקה</option>
+                        <option *ngFor="let depart of allDepartment" [value]="depart.id">
+                            {{ depart.departmentName }}
+                        </option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="role"><span class="required">*</span>תפקיד במערכת</label>
+                    <select id="role" formControlName="role">
+                        <option value="">בחרו תפקיד עובד</option>
+                        <option *ngFor="let type of allType" [value]="type.id">
+                            {{ type.description }}
+                        </option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="password"><span class="required">*</span>סיסמה</label>
+                    <input type="password" id="password" formControlName="password"
+                        placeholder="בחרו סיסמה חזקה">
+                    <span class="input-hint">לפחות 8 תווים, עם אותיות ומספרים</span>
+                </div>
+
+                <div class="form-group">
+                    <label for="confirm-password"><span class="required">*</span>אימות סיסמה</label>
+                    <input type="password" id="confirm-password" formControlName="confirmPassword"
+                        placeholder="הזינו את הסיסמה שנית"
+                        [class.error]="registerForm.hasError('passwordMismatch') && registerForm.get('confirmPassword')?.touched">
+                    <span class="error-message"
+                        *ngIf="registerForm.hasError('passwordMismatch') && registerForm.get('confirmPassword')?.touched">
+                        הסיסמאות אינן תואמות
+                    </span>
+                </div>
+
+                <div class="checkbox-group">
+                    <input type="checkbox" id="terms" formControlName="terms">
+                    <label for="terms">אני מאשר/ת את
+                        <a href="#" (click)="onTermsClick($event)">תנאי השימוש</a> ו
+                        <a href="#" (click)="onPrivacyClick($event)">מדיניות הפרטיות</a>
+                    </label>
+                </div>
+
+                <button type="submit" class="submit-button" [disabled]="registerForm.invalid">
+                    הוסף עובד למערכת
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Forgot Password Modal -->
+    <div class="modal-overlay" *ngIf="showForgotModal" (click)="closeForgotModal()">
+        <div class="modal-box" (click)="$event.stopPropagation()">
+            <button class="modal-close" (click)="closeForgotModal()">✕</button>
+            <h3>איפוס סיסמה</h3>
+            <p>הזיני את כתובת המייל שלך ונשלח קישור לאיפוס</p>
+
+            <div class="form-group">
+                <label>כתובת מייל</label>
+                <input type="email" [(ngModel)]="forgotEmail"
+                    placeholder="example@company.co.il">
+            </div>
+
+            <div class="alert error" [class.show]="forgotError">{{ forgotError }}</div>
+            <div class="alert success" [class.show]="forgotMessage">{{ forgotMessage }}</div>
+
+            <button class="submit-button" (click)="onForgotSubmit()" [disabled]="forgotLoading">
+                {{ forgotLoading ? 'שולח...' : 'שלח קישור לאיפוס' }}
+            </button>
+        </div>
+    </div>
+
+</div>
