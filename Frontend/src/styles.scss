@@ -1,0 +1,67 @@
+@use '@angular/material' as mat;
+
+// Fonts are bundled from npm (@fontsource) via angular.json – no CDN.
+
+html {
+  color-scheme: light;
+  @include mat.theme((
+    color: (
+      primary: mat.$azure-palette,
+      tertiary: mat.$blue-palette,
+    ),
+    typography: 'Heebo, Arial, sans-serif',
+    density: 0,
+  ));
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: Heebo, Arial, sans-serif;
+  background: var(--mat-sys-surface);
+  color: var(--mat-sys-on-surface);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+// Icon font class used by <mat-icon> (registered as the default font set in app.config.ts).
+.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined';
+  font-weight: normal;
+  font-style: normal;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr; // ligatures must be read left-to-right even inside RTL text
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: 'liga';
+}
+
+// Directional icons (arrows, chevrons) should be mirrored in RTL.
+[dir='rtl'] .icon-mirror-rtl {
+  transform: scaleX(-1);
+}
+
+// Common page layout for feature screens.
+.page {
+  padding: 24px;
+  max-width: 1200px;
+  margin-inline: auto;
+}
+
+.page-title {
+  margin: 0 0 16px;
+  font: var(--mat-sys-headline-small);
+}

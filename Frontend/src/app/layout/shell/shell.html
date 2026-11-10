@@ -1,0 +1,22 @@
+<div class="shell">
+  <app-header [showMenuButton]="isHandset()" (menuToggle)="toggleDrawer()" />
+
+  <mat-sidenav-container class="body">
+    <!-- position "start" = right side in RTL -->
+    <mat-sidenav
+      class="sidenav"
+      position="start"
+      [mode]="sidenavMode()"
+      [opened]="sidenavOpened()"
+      (closedStart)="closeDrawerOnHandset()"
+    >
+      <app-sidebar (navigate)="closeDrawerOnHandset()" />
+    </mat-sidenav>
+
+    <mat-sidenav-content>
+      <main>
+        <router-outlet />
+      </main>
+    </mat-sidenav-content>
+  </mat-sidenav-container>
+</div>

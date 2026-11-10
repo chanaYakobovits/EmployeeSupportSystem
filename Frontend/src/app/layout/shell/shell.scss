@@ -1,0 +1,19 @@
+:host {
+  display: block;
+  height: 100%;
+}
+
+.shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.body {
+  flex: 1;
+}
+
+.sidenav {
+  width: 240px;
+  border-inline-end: 1px solid var(--mat-sys-outline-variant);
+}

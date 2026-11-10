@@ -16,7 +16,7 @@ try
         .ReadFrom.Configuration(context.Configuration)
         .ReadFrom.Services(services));
 
-    builder.Services.AddApi();
+    builder.Services.AddApi(builder.Configuration);
     builder.Services.AddServices(builder.Configuration); // registers Repositories internally
 
     var app = builder.Build();
@@ -24,6 +24,8 @@ try
     // Order matters: correlation id first, so the request log and error responses carry it;
     // request logging before error handling, so it records the final status code.
     app.UseMiddleware<CorrelationIdMiddleware>();
+    // CORS before error handling, so error responses (404/500 ProblemDetails) are readable by the browser too.
+    app.UseCors(ServiceCollectionExtensions.FrontendCorsPolicy);
     // Logs method, path, status and duration only – never request/response bodies or headers (spec 6.4).
     app.UseSerilogRequestLogging();
     app.UseMiddleware<ExceptionHandlingMiddleware>();

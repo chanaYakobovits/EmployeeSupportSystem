@@ -1,0 +1,40 @@
+<section class="page">
+  <h1 class="page-title">בדיקת טיפול בשגיאות</h1>
+  <p class="hint">
+    כל כפתור קורא ל-endpoint ב-DevErrorsController. ההודעה הקופצת מגיעה מה-error.interceptor,
+    והתיבה למטה מציגה את מה שהגיע לרכיב אחרי ה-interceptor.
+  </p>
+
+  <div class="buttons">
+    @for (button of buttons; track button.kind) {
+      <button
+        mat-stroked-button
+        type="button"
+        [disabled]="store.loading() !== null"
+        (click)="store.trigger(button.kind)"
+      >
+        {{ button.label }} ({{ button.expected }})
+      </button>
+    }
+  </div>
+
+  @if (store.loading()) {
+    <app-loading-state message="שולח בקשה..." />
+  }
+
+  @if (store.lastResult(); as result) {
+    <mat-card appearance="outlined" class="result">
+      <mat-card-header>
+        <mat-card-title>מה הגיע לרכיב: {{ result.kind }}</mat-card-title>
+        <mat-card-subtitle>סטטוס {{ result.status }}</mat-card-subtitle>
+      </mat-card-header>
+      <mat-card-content>
+        @if (result.problem) {
+          <pre dir="ltr">{{ result.problem | json }}</pre>
+        } @else {
+          <p>אין ProblemDetails בתשובה.</p>
+        }
+      </mat-card-content>
+    </mat-card>
+  }
+</section>
