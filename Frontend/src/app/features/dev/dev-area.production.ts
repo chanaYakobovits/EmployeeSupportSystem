@@ -1,8 +1,8 @@
 import { Routes } from '@angular/router';
 
-import type { NavItem } from '../../layout/sidebar/nav-items';
+import type { AppArea } from '../../core/navigation/app-areas';
 
-// Production replacement for dev-area.ts: no dev routes, no dev menu items.
-export const DEV_AREA_ROUTES: Routes = [];
+// Production replacement for dev-area.ts: no dev area, no dev routes.
+export const DEV_AREAS: readonly AppArea[] = [];
 
-export const DEV_AREA_NAV_ITEMS: readonly NavItem[] = [];
+export const loadDevRoutes = (): Promise<Routes> => Promise.resolve([]);

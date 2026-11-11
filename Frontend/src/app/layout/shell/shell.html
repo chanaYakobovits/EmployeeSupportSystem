@@ -1,5 +1,5 @@
 <div class="shell">
-  <app-header [showMenuButton]="isHandset()" (menuToggle)="toggleDrawer()" />
+  <app-header [compact]="isHandset()" (menuToggle)="toggleDrawer()" />
 
   <mat-sidenav-container class="body">
     <!-- position "start" = right side in RTL -->
@@ -14,8 +14,10 @@
     </mat-sidenav>
 
     <mat-sidenav-content>
-      <main>
-        <router-outlet />
+      <main class="content">
+        <div class="content-container">
+          <router-outlet />
+        </div>
       </main>
     </mat-sidenav-content>
   </mat-sidenav-container>

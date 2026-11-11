@@ -1,25 +1,59 @@
-// Shared look of the loading / empty / error view states.
+// Shared look of the loading / empty / error view states (spec 7.10, design guide).
 .state {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
-  padding: 48px 16px;
+  gap: 10px;
+  padding: 56px 24px;
   text-align: center;
-  color: var(--mat-sys-on-surface-variant);
+  color: var(--text-secondary);
+}
 
-  p {
-    margin: 0;
-    font: var(--mat-sys-body-large);
+.state-icon-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 80px;
+  height: 80px;
+  margin-bottom: 8px;
+  border-radius: 50%;
+  background: var(--neutral-soft);
+  color: var(--text-secondary);
+
+  &.error {
+    background: var(--error-bg);
+    color: var(--error-text);
   }
 }
 
 .state-icon {
-  width: 48px;
-  height: 48px;
-  font-size: 48px;
+  width: 40px;
+  height: 40px;
+  font-size: 40px;
 }
 
-.state-icon-error {
-  color: var(--mat-sys-error);
+.state-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.state-description {
+  margin: 0;
+  max-width: 420px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.state-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 12px;
+
+  &:empty {
+    display: none;
+  }
 }

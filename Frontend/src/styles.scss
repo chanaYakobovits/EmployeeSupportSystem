@@ -15,16 +15,33 @@
   --text-primary: #1a1a1a;
   --text-secondary: #666666;
   --border: #e0e7ed;
+  --on-primary: #ffffff;
+  --on-primary-muted: #bfe0f5; // slogan on the blue brand area
+  --primary-soft: rgba(0, 103, 184, 0.08); // active / hover tint
+  --primary-soft-hover: #e8f0f7;
+  --neutral-soft: rgba(102, 102, 102, 0.08); // empty-state icon circle
   --error-text: #b3261e;
+  --error-bg: #fdecea;
+  --error-border: rgba(179, 38, 30, 0.25);
+  --warning-text: #a14e00; // darker orange: passes WCAG AA as text
   --success-text: #1b6e3a;
+  --auth-bg-start: #f0f7ff;
+  --on-primary-overlay: rgba(255, 255, 255, 0.15);
+  --on-primary-line: rgba(255, 255, 255, 0.12);
+  --on-primary-pattern: rgba(255, 255, 255, 0.03);
 
   --radius-field: 10px;
   --radius-card: 16px;
   --radius-dialog: 20px;
   --shadow-sm: 0 2px 8px rgba(0, 103, 184, 0.08);
   --shadow-md: 0 4px 20px rgba(0, 103, 184, 0.12);
+  --shadow-lg: 0 8px 32px rgba(0, 103, 184, 0.15);
   --focus-ring: 0 0 0 4px rgba(0, 103, 184, 0.08);
   --transition: 0.2s ease;
+
+  --header-height: 68px;
+  --sidebar-width: 248px;
+  --content-max-width: 1280px;
 }
 
 html {
@@ -88,21 +105,38 @@ html {
 }
 
 // Common page layout for feature screens.
-.page {
-  padding: 24px;
-  max-width: 1200px;
-  margin-inline: auto;
+// User menu panel (layout/header): rendered in an overlay, so styled globally.
+.user-menu-panel .menu-user {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 16px 12px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+
+  .user-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  .user-role {
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
 }
 
-.page-title {
-  margin: 0 0 16px;
-  font: var(--mat-sys-headline-small);
+.surface-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-sm);
 }
 
 // Primary action button: gradient, lifts 2px on hover (design guide).
 .btn-primary-gradient.mat-mdc-unelevated-button:not(:disabled) {
   background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
-  color: #ffffff;
+  color: var(--on-primary);
   border-radius: var(--radius-field);
   transition: transform var(--transition), box-shadow var(--transition);
 

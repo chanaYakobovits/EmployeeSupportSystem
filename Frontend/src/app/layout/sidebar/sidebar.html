@@ -1,17 +1,18 @@
-<nav aria-label="תפריט ראשי">
-  <mat-nav-list>
-    @for (item of items; track item.path) {
+<nav class="sidebar" aria-label="תפריט ראשי">
+  <mat-nav-list class="nav">
+    @for (item of items(); track item.id) {
       <a
         mat-list-item
-        [routerLink]="item.path"
-        routerLinkActive
+        class="nav-item"
+        [routerLink]="'/' + item.path"
+        routerLinkActive="active"
         #rla="routerLinkActive"
         [activated]="rla.isActive"
         [attr.aria-current]="rla.isActive ? 'page' : null"
         (click)="navigate.emit()"
       >
-        <mat-icon matListItemIcon>{{ item.icon }}</mat-icon>
-        <span matListItemTitle>{{ item.label }}</span>
+        <mat-icon matListItemIcon aria-hidden="true">{{ item.icon }}</mat-icon>
+        <span matListItemTitle>{{ item.title }}</span>
       </a>
     }
   </mat-nav-list>

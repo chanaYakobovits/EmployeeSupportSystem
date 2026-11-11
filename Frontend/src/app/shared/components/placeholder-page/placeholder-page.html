@@ -1,4 +1,8 @@
-<section class="page">
-  <h1 class="page-title">{{ title() }}</h1>
-  <app-empty-state icon="construction" message="המסך הזה עדיין בבנייה" />
+<app-page-header [heading]="title()" />
+<section class="surface-card">
+  <app-empty-state
+    icon="construction"
+    heading="המסך הזה עדיין בבנייה"
+    description="האזור מוכן ומחכה לתוכן. המסכים יתווספו בשלבים הבאים."
+  />
 </section>

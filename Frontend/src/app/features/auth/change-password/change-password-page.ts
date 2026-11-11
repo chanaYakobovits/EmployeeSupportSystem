@@ -1,3 +1,4 @@
+import { NgTemplateOutlet } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import {
   ChangeDetectionStrategy,
@@ -8,6 +9,7 @@ import {
   afterNextRender,
   computed,
   inject,
+  input,
   signal,
   viewChild,
 } from '@angular/core';
@@ -32,10 +34,15 @@ import { AuthService } from '../../../core/auth/auth.service';
 import { PASSWORD_RULES, passwordPolicyValidator } from '../../../core/auth/password-policy';
 import { problemMessages, problemType, isProblemDetails } from '../../../core/models/problem-details';
 import { NotificationService } from '../../../core/notifications/notification.service';
+import { PageHeader } from '../../../shared/components/page-header/page-header';
 import { PasswordStrengthMeter } from '../../../shared/components/password-strength/password-strength';
 import { FormAlert, changePasswordAlert } from '../auth-errors';
+import { safeReturnUrl } from '../safe-return-url';
 
 type FieldName = 'currentPassword' | 'newPassword' | 'confirmPassword';
+
+/** required: first login (MustChangePassword), outside the shell. voluntary: from the user menu, inside the shell. */
+export type ChangePasswordMode = 'required' | 'voluntary';
 type RuleState = 'pending' | 'met' | 'unmet';
 
 /** The new password must differ from the current one (same rule as the server). */
@@ -50,12 +57,15 @@ const matchesNewPassword: ValidatorFn = (control: AbstractControl): ValidationEr
 };
 
 /**
- * Spec 7.2 – first-login password change. Mandatory: no skip and no menu (outside the shell).
+ * Spec 7.2 – password change, in two modes (route data.mode):
+ * - required (first login): mandatory, no skip, no menu – outside the shell. Success → home.
+ * - voluntary (user menu): inside the shell, with cancel. Success / cancel → back to returnUrl.
  * The policy (spec 6.1) is shown up front and checked as the user types; the server re-checks it.
  */
 @Component({
   selector: 'app-change-password-page',
   imports: [
+    NgTemplateOutlet,
     ReactiveFormsModule,
     MatFormFieldModule,
     MatInputModule,
@@ -63,6 +73,7 @@ const matchesNewPassword: ValidatorFn = (control: AbstractControl): ValidationEr
     MatIconModule,
     MatProgressSpinnerModule,
     PasswordStrengthMeter,
+    PageHeader,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './change-password-page.html',
@@ -74,6 +85,13 @@ export class ChangePasswordPage {
   private readonly notifications = inject(NotificationService);
   private readonly injector = inject(Injector);
   private readonly destroyRef = inject(DestroyRef);
+
+  /** From route data (withComponentInputBinding). */
+  readonly mode = input<ChangePasswordMode>('required');
+  /** From the query string: the screen the user came from (voluntary mode). */
+  readonly returnUrl = input<string>();
+
+  protected readonly isVoluntary = computed(() => this.mode() === 'voluntary');
 
   protected readonly form = inject(NonNullableFormBuilder).group({
     currentPassword: ['', [Validators.required, Validators.maxLength(128)]],
@@ -152,13 +170,18 @@ export class ChangePasswordPage {
       .subscribe({
         next: () => {
           this.notifications.success('הסיסמה הוחלפה בהצלחה');
-          void this.router.navigateByUrl('/');
+          void this.router.navigateByUrl(this.isVoluntary() ? safeReturnUrl(this.returnUrl()) : '/');
         },
         error: (error: unknown) => this.showServerError(error),
       });
   }
 
-  /** Not a way to skip the change – a way out for someone who cannot complete it now. */
+  /** Voluntary mode only: leave without changing anything. */
+  protected cancel(): void {
+    void this.router.navigateByUrl(safeReturnUrl(this.returnUrl()));
+  }
+
+  /** Required mode: not a way to skip the change – a way out for someone who cannot complete it now. */
   protected logout(): void {
     void this.auth.logout();
   }

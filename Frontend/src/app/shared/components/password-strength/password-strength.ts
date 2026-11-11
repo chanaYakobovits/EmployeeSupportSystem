@@ -29,8 +29,8 @@ const LABELS: Record<PasswordStrength, string> = {
     .track { height: 6px; border-radius: 3px; background: var(--border); overflow: hidden; }
     .bar { display: block; height: 100%; transition: width var(--transition), background-color var(--transition); }
     .label { margin: 6px 0 0; min-height: 20px; font-size: 13px; color: var(--text-secondary); }
-    [data-level='1'] { background-color: #b3261e; color: #b3261e; }
-    [data-level='2'] { background-color: #a14e00; color: #a14e00; }
+    [data-level='1'] { background-color: var(--error-text); color: var(--error-text); }
+    [data-level='2'] { background-color: var(--warning-text); color: var(--warning-text); }
     [data-level='3'] { background-color: var(--primary); color: var(--primary); }
     [data-level='4'] { background-color: var(--success-text); color: var(--success-text); }
     .label span { background: none; font-weight: 600; }

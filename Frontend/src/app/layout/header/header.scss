@@ -1,16 +1,133 @@
+:host {
+  display: block;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
 .header {
-  gap: 8px;
-  background: var(--mat-sys-primary);
-  color: var(--mat-sys-on-primary);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  height: var(--header-height);
+  padding-inline: 24px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
 }
-.header button {
-  color: inherit;
+
+.start {
+  display: flex;
+  align-items: center;
 }
+
 .brand {
-  color: inherit;
+  display: flex;
+  align-items: center;
+  gap: 12px;
   text-decoration: none;
-  font: var(--mat-sys-title-large);
+  border-radius: var(--radius-field);
+
+  &:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 4px;
+  }
 }
-.spacer {
-  flex: 1;
+
+.brand-icon {
+  border-radius: var(--radius-field);
 }
+
+.brand-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.brand-name {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.brand-slogan {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.menu-button {
+  color: var(--text-secondary);
+}
+
+.user-button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: var(--radius-field);
+  background: var(--bg-page);
+  font: inherit;
+  color: inherit;
+  text-align: start;
+  cursor: pointer;
+  transition: background-color var(--transition);
+
+  &:hover {
+    background: var(--primary-soft-hover);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+  }
+}
+
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary), var(--accent));
+  color: var(--on-primary);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.user-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.user-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.user-role {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.chevron {
+  color: var(--text-secondary);
+}
+
+// Compact (small screens): only the menu button and the avatar.
+@media (max-width: 767.98px) {
+  .header {
+    padding-inline: 12px;
+  }
+
+  .user-button {
+    padding: 4px;
+    background: transparent;
+  }
+}
+

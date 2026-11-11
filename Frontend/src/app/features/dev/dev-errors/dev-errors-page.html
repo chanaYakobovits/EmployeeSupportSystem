@@ -1,9 +1,8 @@
-<section class="page">
-  <h1 class="page-title">בדיקת טיפול בשגיאות</h1>
-  <p class="hint">
-    כל כפתור קורא ל-endpoint ב-DevErrorsController. ההודעה הקופצת מגיעה מה-error.interceptor,
-    והתיבה למטה מציגה את מה שהגיע לרכיב אחרי ה-interceptor.
-  </p>
+<app-page-header
+  heading="בדיקת טיפול בשגיאות"
+  subtitle="כל כפתור קורא ל-endpoint ב-DevErrorsController. ההודעה הקופצת מגיעה מה-error.interceptor, והתיבה למטה מציגה את מה שהגיע לרכיב אחרי ה-interceptor."
+/>
+<section>
 
   <div class="buttons">
     @for (button of buttons; track button.kind) {

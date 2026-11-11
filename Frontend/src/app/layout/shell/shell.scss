@@ -11,9 +11,28 @@
 
 .body {
   flex: 1;
+  background: var(--bg-page);
 }
 
 .sidenav {
-  width: 240px;
-  border-inline-end: 1px solid var(--mat-sys-outline-variant);
+  width: var(--sidebar-width);
+  background: var(--surface);
+  border-inline-end: 1px solid var(--border);
+}
+
+.content {
+  min-height: 100%;
+  padding: 32px;
+}
+
+// Uniform max width for every screen.
+.content-container {
+  max-width: var(--content-max-width);
+  margin-inline: auto;
+}
+
+@media (max-width: 767.98px) {
+  .content {
+    padding: 16px;
+  }
 }

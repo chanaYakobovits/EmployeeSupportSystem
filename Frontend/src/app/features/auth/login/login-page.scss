@@ -15,7 +15,7 @@
   overflow: hidden;
   padding: 56px 48px;
   background: linear-gradient(165deg, var(--primary) 0%, var(--primary-dark) 100%);
-  color: #ffffff;
+  color: var(--on-primary);
 
   &::before {
     content: '';
@@ -25,8 +25,8 @@
       45deg,
       transparent,
       transparent 60px,
-      rgba(255, 255, 255, 0.03) 60px,
-      rgba(255, 255, 255, 0.03) 120px
+      var(--on-primary-pattern) 60px,
+      var(--on-primary-pattern) 120px
     );
     animation: brand-pattern 40s linear infinite;
   }
@@ -54,7 +54,7 @@
 
 .brand-icon {
   flex-shrink: 0;
-  border-radius: 14px;
+  border-radius: var(--radius-field);
 }
 
 .brand-name {
@@ -65,7 +65,7 @@
 
 .brand-slogan {
   font-size: 17px;
-  color: #bfe0f5;
+  color: var(--on-primary-muted);
 }
 
 .features {
@@ -79,7 +79,7 @@
     gap: 14px;
     padding: 14px 0;
     font-size: 15px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+    border-bottom: 1px solid var(--on-primary-line);
   }
 }
 
@@ -90,8 +90,8 @@
   flex-shrink: 0;
   width: 36px;
   height: 36px;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.15);
+  border-radius: var(--radius-field);
+  background: var(--on-primary-overlay);
 
   mat-icon {
     font-size: 20px;

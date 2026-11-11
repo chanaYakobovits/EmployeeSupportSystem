@@ -1,0 +1,59 @@
+:host {
+  display: block;
+  height: 100%;
+}
+
+.sidebar {
+  height: 100%;
+  padding: 16px 12px;
+  background: var(--surface);
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0;
+}
+
+.nav-item.mat-mdc-list-item {
+  position: relative;
+  height: 48px;
+  border-radius: var(--radius-field);
+  color: var(--text-secondary);
+  transition: background-color var(--transition), color var(--transition);
+  --mat-list-list-item-label-text-color: var(--text-secondary);
+  --mat-list-list-item-leading-icon-color: var(--text-secondary);
+  --mat-list-list-item-hover-label-text-color: var(--text-primary);
+  --mat-list-list-item-hover-state-layer-opacity: 0;
+  --mat-list-list-item-focus-state-layer-opacity: 0;
+  --mat-list-active-indicator-color: transparent;
+
+  &:hover {
+    background: var(--primary-soft-hover);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: -2px;
+  }
+
+  // Active area: tinted background, primary text/icon, bar on the inline-start edge.
+  &.active {
+    background: var(--primary-soft);
+    --mat-list-list-item-label-text-color: var(--primary);
+    --mat-list-list-item-hover-label-text-color: var(--primary);
+    --mat-list-list-item-leading-icon-color: var(--primary);
+    --mat-list-list-item-label-text-weight: 600;
+
+    &::before {
+      content: '';
+      position: absolute;
+      inset-block: 10px;
+      inset-inline-start: 0;
+      width: 4px;
+      border-radius: 4px;
+      background: var(--primary);
+    }
+  }
+}

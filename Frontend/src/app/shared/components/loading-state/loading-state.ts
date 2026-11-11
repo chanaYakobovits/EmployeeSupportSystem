@@ -8,8 +8,8 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="state" role="status" aria-live="polite">
-      <mat-spinner diameter="40" />
-      <p>{{ message() }}</p>
+      <mat-spinner diameter="40" aria-hidden="true" />
+      <p class="state-description">{{ message() }}</p>
     </div>
   `,
   styleUrl: '../view-state.scss',

@@ -1,14 +1,11 @@
-import { Routes } from '@angular/router';
-
-import type { NavItem } from '../../layout/sidebar/nav-items';
+import type { AppArea } from '../../core/navigation/app-areas';
 
 // TEMPORARY – development-only area. In the production build this file is replaced by
 // dev-area.production.ts (angular.json fileReplacements), so none of the dev code is bundled.
+// Its route is built in app.routes.ts from this definition, like every other area.
 
-export const DEV_AREA_ROUTES: Routes = [
-  { path: 'dev', loadChildren: () => import('./dev.routes').then((m) => m.DEV_ROUTES) },
+export const DEV_AREAS: readonly AppArea[] = [
+  { id: 'dev', path: 'dev', title: 'בדיקות (פיתוח)', icon: 'bug_report', roles: ['Employee'] },
 ];
 
-export const DEV_AREA_NAV_ITEMS: readonly NavItem[] = [
-  { label: 'בדיקות (פיתוח)', icon: 'bug_report', path: '/dev' },
-];
+export const loadDevRoutes = () => import('./dev.routes').then((m) => m.DEV_ROUTES);

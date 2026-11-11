@@ -5,6 +5,7 @@ import { MatCardModule } from '@angular/material/card';
 
 import { DevErrorKind } from '../../../core/api/dev-errors-api.service';
 import { LoadingState } from '../../../shared/components/loading-state/loading-state';
+import { PageHeader } from '../../../shared/components/page-header/page-header';
 import { DevErrorsStore } from './dev-errors.store';
 
 interface DevErrorButton {
@@ -16,7 +17,7 @@ interface DevErrorButton {
 /** TEMPORARY – development only. One button per DevErrorsController endpoint. */
 @Component({
   selector: 'app-dev-errors-page',
-  imports: [JsonPipe, MatButtonModule, MatCardModule, LoadingState],
+  imports: [JsonPipe, MatButtonModule, MatCardModule, LoadingState, PageHeader],
   providers: [DevErrorsStore],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './dev-errors-page.html',
