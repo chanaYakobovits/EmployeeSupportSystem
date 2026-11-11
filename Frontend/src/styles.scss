@@ -1,13 +1,39 @@
 @use '@angular/material' as mat;
+@use './styles/theme-colors' as brand;
+@use './styles/auth';
 
 // Fonts are bundled from npm (@fontsource) via angular.json – no CDN.
 
+// Design tokens (docs/design-guide.md).
+:root {
+  --primary: #0067b8;
+  --primary-light: #4da3d6;
+  --primary-dark: #003d71;
+  --accent: #00a3ad;
+  --bg-page: #f5f8fa;
+  --surface: #ffffff;
+  --text-primary: #1a1a1a;
+  --text-secondary: #666666;
+  --border: #e0e7ed;
+  --error-text: #b3261e;
+  --success-text: #1b6e3a;
+
+  --radius-field: 10px;
+  --radius-card: 16px;
+  --radius-dialog: 20px;
+  --shadow-sm: 0 2px 8px rgba(0, 103, 184, 0.08);
+  --shadow-md: 0 4px 20px rgba(0, 103, 184, 0.12);
+  --focus-ring: 0 0 0 4px rgba(0, 103, 184, 0.08);
+  --transition: 0.2s ease;
+}
+
 html {
   color-scheme: light;
+  // Palette generated from --primary / --accent (ng generate @angular/material:theme-color).
   @include mat.theme((
     color: (
-      primary: mat.$azure-palette,
-      tertiary: mat.$blue-palette,
+      primary: brand.$primary-palette,
+      tertiary: brand.$tertiary-palette,
     ),
     typography: 'Heebo, Arial, sans-serif',
     density: 0,
@@ -22,8 +48,15 @@ body {
 body {
   margin: 0;
   font-family: Heebo, Arial, sans-serif;
-  background: var(--mat-sys-surface);
-  color: var(--mat-sys-on-surface);
+  background: var(--bg-page);
+  color: var(--text-primary);
+}
+
+// Form fields: rounded corners per design guide.
+html {
+  @include mat.form-field-overrides((
+    outlined-container-shape: var(--radius-field),
+  ));
 }
 
 *,
@@ -64,4 +97,46 @@ body {
 .page-title {
   margin: 0 0 16px;
   font: var(--mat-sys-headline-small);
+}
+
+// Primary action button: gradient, lifts 2px on hover (design guide).
+.btn-primary-gradient.mat-mdc-unelevated-button:not(:disabled) {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+  color: #ffffff;
+  border-radius: var(--radius-field);
+  transition: transform var(--transition), box-shadow var(--transition);
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+  }
+}
+
+.btn-primary-gradient.mat-mdc-unelevated-button {
+  border-radius: var(--radius-field);
+}
+
+// Visually hidden but available to screen readers.
+.visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+// Accessibility: no motion for users who asked for less of it.
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

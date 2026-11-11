@@ -6,5 +6,9 @@
   }
   <a class="brand" routerLink="/">עובדנט</a>
   <span class="spacer"></span>
-  <!-- Task 2.2: user name + logout -->
+  <!-- Basic sign-out; user name, role and menu come in task 2.2 part B. -->
+  <button mat-button type="button" class="logout" (click)="logout()">
+    <mat-icon aria-hidden="true" class="icon-mirror-rtl">logout</mat-icon>
+    יציאה
+  </button>
 </mat-toolbar>

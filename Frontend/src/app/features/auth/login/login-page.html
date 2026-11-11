@@ -1,0 +1,103 @@
+<main class="auth-page">
+  <div class="auth-card login-card">
+    <!-- Brand side: right in RTL -->
+    <section class="brand" aria-label="עובדנט">
+      <div class="brand-logo">
+        <img class="brand-icon" src="logo-icon.svg" alt="" width="56" height="56" />
+        <div>
+          <p class="brand-name">עובדנט</p>
+          <p class="brand-slogan">הופכים פניות לפתרונות</p>
+        </div>
+      </div>
+
+      <ul class="features">
+        @for (feature of features; track feature.icon) {
+          <li>
+            <span class="feature-icon"><mat-icon aria-hidden="true">{{ feature.icon }}</mat-icon></span>
+            <span>{{ feature.text }}</span>
+          </li>
+        }
+      </ul>
+    </section>
+
+    <section class="form-side">
+      <h1 class="auth-title">התחברות</h1>
+      <p class="auth-subtitle">יש להזין את פרטי ההתחברות שקיבלתם מהארגון</p>
+
+      @if (alert(); as alert) {
+        <div #alertBox class="auth-alert" role="alert" tabindex="-1">
+          <mat-icon aria-hidden="true">error</mat-icon>
+          <div>
+            <p class="auth-alert-title">{{ alert.title }}</p>
+            @if (alert.detail) {
+              <p>{{ alert.detail }}</p>
+            }
+          </div>
+        </div>
+      }
+
+      <form class="auth-form" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+        <mat-form-field appearance="outline">
+          <mat-label>מייל או קוד עובד</mat-label>
+          <input
+            #identifierInput
+            matInput
+            formControlName="identifier"
+            autocomplete="username"
+            dir="auto"
+            required
+          />
+          @if (form.controls.identifier.hasError('required')) {
+            <mat-error>יש להזין מייל או קוד עובד</mat-error>
+          }
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>סיסמה</mat-label>
+          <input
+            #passwordInput
+            matInput
+            formControlName="password"
+            autocomplete="current-password"
+            dir="auto"
+            required
+            [type]="showPassword() ? 'text' : 'password'"
+          />
+          <button
+            mat-icon-button
+            matSuffix
+            type="button"
+            [attr.aria-label]="showPassword() ? 'הסתרת הסיסמה' : 'הצגת הסיסמה'"
+            [attr.aria-pressed]="showPassword()"
+            (click)="togglePassword()"
+          >
+            <mat-icon aria-hidden="true">{{ showPassword() ? 'visibility_off' : 'visibility' }}</mat-icon>
+          </button>
+          @if (form.controls.password.hasError('required')) {
+            <mat-error>יש להזין סיסמה</mat-error>
+          }
+        </mat-form-field>
+
+        <button
+          mat-flat-button
+          class="btn-primary-gradient auth-submit"
+          type="submit"
+          [disabled]="submitting()"
+          [attr.aria-busy]="submitting()"
+        >
+          <span class="auth-submit-content">
+            @if (submitting()) {
+              <mat-spinner diameter="20" aria-hidden="true" />
+              <span>מתחברים…</span>
+            } @else {
+              <span>התחברות</span>
+            }
+          </span>
+        </button>
+      </form>
+
+      <!-- Google sign-in (spec 7.1): reserved place, hidden in version 1. -->
+      <div class="google-signin" hidden></div>
+    </section>
+  </div>
+</main>
