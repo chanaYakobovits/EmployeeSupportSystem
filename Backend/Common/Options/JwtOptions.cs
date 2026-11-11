@@ -20,4 +20,7 @@ public sealed class JwtOptions
     public string Audience { get; set; } = string.Empty;
 
     public int AccessTokenMinutes { get; set; } = 15;
+
+    /// <summary>Refresh token lifetime (spec 6.1: 7 days).</summary>
+    public int RefreshTokenDays { get; set; } = 7;
 }

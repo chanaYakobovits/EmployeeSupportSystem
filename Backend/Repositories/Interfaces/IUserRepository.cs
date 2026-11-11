@@ -11,6 +11,9 @@ public interface IUserRepository
     /// <summary>Tracked user with Roles and Department, for the login flow. Null if not found.</summary>
     Task<User?> FindForLoginByEmployeeCodeAsync(string employeeCode, CancellationToken cancellationToken);
 
+    /// <summary>Tracked user with Roles and Department, within the signed-in user's organization. Null if not found.</summary>
+    Task<User?> FindForUpdateAsync(int userId, CancellationToken cancellationToken);
+
     /// <summary>Read-only projection of an active user. Null if not found or inactive.</summary>
     Task<CurrentUserDto?> GetCurrentUserAsync(int userId, CancellationToken cancellationToken);
 }

@@ -229,6 +229,7 @@ namespace Repositories.Data.Migrations
                         .HasColumnType("int");
 
                     b.Property<DateTime?>("RevokedAt")
+                        .IsConcurrencyToken()
                         .HasColumnType("datetime2");
 
                     b.Property<string>("TokenHash")

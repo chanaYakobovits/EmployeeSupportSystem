@@ -9,6 +9,12 @@ public class AuthenticationFailedException : AppException
 {
     public const string DefaultTitle = "פרטי ההתחברות שגויים";
 
+    /// <summary>Refresh token missing, expired, revoked or reused – the user must sign in again.</summary>
+    public const string SessionExpiredTitle = "פג תוקף ההתחברות, יש להתחבר מחדש";
+
+    /// <summary>A valid access token whose user no longer exists or is inactive.</summary>
+    public const string NotSignedInTitle = "נדרשת התחברות למערכת";
+
     public AuthenticationFailedException(string title = DefaultTitle, string? detail = null, string errorType = "invalid-credentials")
         : base(title, detail, errorType)
     {

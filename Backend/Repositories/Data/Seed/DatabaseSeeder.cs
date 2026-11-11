@@ -118,7 +118,9 @@ internal sealed class DatabaseSeeder(AppDbContext db, IPasswordHasher passwordHa
             random,
             now);
 
-        db.Tickets.AddRange(generator.Generate());
+        // Counted from the list: a query would return nothing here, since no user is signed in (organization filter).
+        var tickets = generator.Generate();
+        db.Tickets.AddRange(tickets);
         await db.SaveChangesAsync(cancellationToken);
 
         await transaction.CommitAsync(cancellationToken);
@@ -126,7 +128,7 @@ internal sealed class DatabaseSeeder(AppDbContext db, IPasswordHasher passwordHa
         // Counts only – never ticket content (spec 6.4).
         logger.LogInformation(
             "Seed completed: {Users} users, {Departments} departments, {Categories} categories, {Tickets} tickets",
-            users.Count, departments.Count, categories.Count, await db.Tickets.CountAsync(cancellationToken));
+            users.Count, departments.Count, categories.Count, tickets.Count);
     }
 
     /// <summary>

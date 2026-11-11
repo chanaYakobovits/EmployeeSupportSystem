@@ -1,48 +1,14 @@
 using Common.Constants;
-using Common.DTOs.Auth;
 using Common.Enums;
 using Common.Exceptions;
-using Common.Models;
-using Microsoft.Extensions.Caching.Memory;
 using Services.Implementations;
 using Services.Tests.Auth.Fakes;
-using Services.Tests.Fakes;
 
 namespace Services.Tests.Auth;
 
-public class AuthServiceTests
+public class LoginTests : AuthServiceTestBase
 {
-    private const string Password = "Demo1234";
-    private const string WrongPassword = "Wrong9999";
-    private const string Ip = "10.0.0.1";
     private const string UnknownEmail = "nobody@example.com";
-
-    private static readonly DateTime Start = new(2026, 11, 11, 8, 0, 0, DateTimeKind.Utc);
-
-    private readonly FakeUserRepository _users = new();
-    private readonly FakeAuditLogRepository _audit = new();
-    private readonly FakeUnitOfWork _unitOfWork = new();
-    private readonly FakePasswordHasher _hasher = new();
-    private readonly FakeAccessTokenIssuer _tokens = new();
-    private readonly FakeDateTimeProvider _clock = new(Start);
-    private readonly FakeCurrentUser _currentUser = new();
-    private readonly CapturingLogger<AuthService> _logger = new();
-    private readonly AuthService _service;
-
-    public AuthServiceTests()
-    {
-        _users.Users.Add(CreateUser(4, "EMP-00004", "noa.berkovich@example.com", isActive: true));
-        _users.Users.Add(CreateUser(9, "EMP-00009", "tomer.zilber@example.com", isActive: true, mustChangePassword: true));
-        _users.Users.Add(CreateUser(12, "EMP-00012", "orit.danon@example.com", isActive: false));
-
-        _service = new AuthService(_users, _audit, _unitOfWork, _hasher, _tokens, _clock,
-            new MemoryCache(new MemoryCacheOptions()), _currentUser, _logger);
-    }
-
-    private User Noa => _users.Users.Single(u => u.Id == 4);
-
-    private Task<LoginResponse> Login(string identifier, string password) =>
-        _service.LoginAsync(new LoginRequest(identifier, password), Ip, CancellationToken.None);
 
     // ---- identifier detection ----
 
@@ -51,7 +17,7 @@ public class AuthServiceTests
     {
         await Login("noa.berkovich@example.com", Password);
 
-        Assert.Equal(["email:noa.berkovich@example.com"], _users.Lookups);
+        Assert.Equal(["email:noa.berkovich@example.com"], UserRepository.Lookups);
     }
 
     [Fact]
@@ -59,7 +25,7 @@ public class AuthServiceTests
     {
         await Login("  EMP-00004  ", Password);
 
-        Assert.Equal(["code:EMP-00004"], _users.Lookups);
+        Assert.Equal(["code:EMP-00004"], UserRepository.Lookups);
     }
 
     // ---- success ----
@@ -69,11 +35,12 @@ public class AuthServiceTests
     {
         Noa.FailedLoginCount = 3;
 
-        var response = await Login("EMP-00004", Password);
+        var result = await Login("EMP-00004", Password);
+        var response = result.Body;
 
         Assert.Equal(FakeAccessTokenIssuer.Token, response.AccessToken);
         Assert.False(response.MustChangePassword);
-        Assert.Equal(4, response.User.Id);
+        Assert.Equal(NoaId, response.User.Id);
         Assert.Equal("פיתוח", response.User.Department.Name);
         Assert.Equal(["Employee", "Handler"], response.User.Roles);
 
@@ -81,23 +48,47 @@ public class AuthServiceTests
         Assert.Null(Noa.LockoutEnd);
         Assert.Equal(Start, Noa.LastLoginAt);
 
-        var subject = Assert.Single(_tokens.Issued);
+        var subject = Assert.Single(AccessTokens.Issued);
         Assert.Equal(new[] { Role.Employee, Role.Handler }, subject.Roles);
-        Assert.Equal((4, 1, 2), (subject.UserId, subject.OrganizationId, subject.DepartmentId));
+        Assert.Equal((NoaId, 1, 2), (subject.UserId, subject.OrganizationId, subject.DepartmentId));
 
-        var entry = Assert.Single(_audit.Entries);
+        var entry = Assert.Single(AuditLog.Entries);
         Assert.Equal(AuditActions.LoginSucceeded, entry.Action);
-        Assert.Equal((4, 1, 4, Ip), (entry.UserId, entry.OrganizationId, entry.EntityId, entry.IpAddress));
-        Assert.Equal(1, _unitOfWork.SaveCount);
+        Assert.Equal((NoaId, 1, NoaId, Ip), (entry.UserId, entry.OrganizationId, entry.EntityId, entry.IpAddress));
+        Assert.Equal(1, UnitOfWork.SaveCount);
+    }
+
+    [Fact]
+    public async Task Successful_login_issues_a_7_day_refresh_token_stored_only_as_hash()
+    {
+        var result = await Login("EMP-00004", Password);
+
+        Assert.Equal(Start.AddDays(7), result.RefreshToken.ExpiresAt);
+        Assert.True(result.RefreshToken.Value.Length >= 43); // 32 random bytes, base64url
+
+        var stored = Assert.Single(RefreshTokens.Tokens);
+        Assert.Equal(RefreshTokenGenerator.Hash(result.RefreshToken.Value), stored.TokenHash);
+        Assert.NotEqual(result.RefreshToken.Value, stored.TokenHash);
+        Assert.Equal((NoaId, Start, Start.AddDays(7)), (stored.UserId, stored.CreatedAt, stored.ExpiresAt));
+        Assert.Null(stored.RevokedAt);
+    }
+
+    [Fact]
+    public async Task Each_login_gets_a_different_refresh_token()
+    {
+        var first = await Login("EMP-00004", Password);
+        var second = await Login("EMP-00004", Password);
+
+        Assert.NotEqual(first.RefreshToken.Value, second.RefreshToken.Value);
     }
 
     [Fact]
     public async Task Successful_login_reports_pending_password_change()
     {
-        var response = await Login("tomer.zilber@example.com", Password);
+        var result = await Login("tomer.zilber@example.com", Password);
 
-        Assert.True(response.MustChangePassword);
-        Assert.True(Assert.Single(_tokens.Issued).MustChangePassword);
+        Assert.True(result.Body.MustChangePassword);
+        Assert.True(Assert.Single(AccessTokens.Issued).MustChangePassword);
     }
 
     // ---- failure ----
@@ -110,8 +101,9 @@ public class AuthServiceTests
         Assert.Equal("פרטי ההתחברות שגויים", exception.Title);
         Assert.Equal(1, Noa.FailedLoginCount);
         Assert.Null(Noa.LastLoginAt);
-        Assert.Empty(_tokens.Issued);
-        Assert.Equal(AuditActions.LoginFailedWrongPassword, Assert.Single(_audit.Entries).Action);
+        Assert.Empty(AccessTokens.Issued);
+        Assert.Empty(RefreshTokens.Tokens);
+        Assert.Equal(AuditActions.LoginFailedWrongPassword, Assert.Single(AuditLog.Entries).Action);
     }
 
     [Fact]
@@ -121,9 +113,9 @@ public class AuthServiceTests
         var wrongPassword = await Assert.ThrowsAsync<AuthenticationFailedException>(() => Login("EMP-00004", WrongPassword));
 
         AssertSameFailure(wrongPassword, inactive);
-        Assert.Equal(2, _hasher.VerifyCount); // the inactive user's password was still verified
-        Assert.Empty(_tokens.Issued);
-        Assert.Equal(AuditActions.LoginFailedInactive, _audit.Entries[0].Action);
+        Assert.Equal(2, Hasher.VerifyCount); // the inactive user's password was still verified
+        Assert.Empty(AccessTokens.Issued);
+        Assert.Equal(AuditActions.LoginFailedInactive, AuditLog.Entries[0].Action);
     }
 
     // ---- lockout ----
@@ -137,21 +129,21 @@ public class AuthServiceTests
         await Assert.ThrowsAsync<AuthenticationFailedException>(() => Login("EMP-00004", WrongPassword)); // 5th
         Assert.Equal(Start.AddMinutes(15), Noa.LockoutEnd);
 
-        var verifiesBefore = _hasher.VerifyCount;
+        var verifiesBefore = Hasher.VerifyCount;
         var locked = await Assert.ThrowsAsync<AccountLockedException>(() => Login("EMP-00004", Password));
 
         Assert.Equal(15, locked.RetryAfterMinutes);
         Assert.Contains("15 דקות", locked.Detail);
-        Assert.Equal(verifiesBefore, _hasher.VerifyCount); // nothing is verified while locked
-        Assert.Equal(AuditActions.LoginBlockedLockedOut, _audit.Entries[^1].Action);
-        Assert.Empty(_tokens.Issued);
+        Assert.Equal(verifiesBefore, Hasher.VerifyCount); // nothing is verified while locked
+        Assert.Equal(AuditActions.LoginBlockedLockedOut, AuditLog.Entries[^1].Action);
+        Assert.Empty(AccessTokens.Issued);
     }
 
     [Fact]
     public async Task Lockout_message_shows_the_remaining_minutes_rounded_up()
     {
         await FailTimes("EMP-00004", 5);
-        _clock.Advance(TimeSpan.FromMinutes(10).Add(TimeSpan.FromSeconds(30)));
+        Clock.Advance(TimeSpan.FromMinutes(10).Add(TimeSpan.FromSeconds(30)));
 
         var locked = await Assert.ThrowsAsync<AccountLockedException>(() => Login("EMP-00004", Password));
 
@@ -163,13 +155,13 @@ public class AuthServiceTests
     {
         await FailTimes("EMP-00004", 5);
 
-        _clock.Advance(TimeSpan.FromMinutes(15).Subtract(TimeSpan.FromSeconds(1)));
+        Clock.Advance(TimeSpan.FromMinutes(15).Subtract(TimeSpan.FromSeconds(1)));
         await Assert.ThrowsAsync<AccountLockedException>(() => Login("EMP-00004", Password));
 
-        _clock.Advance(TimeSpan.FromSeconds(1));
-        var response = await Login("EMP-00004", Password);
+        Clock.Advance(TimeSpan.FromSeconds(1));
+        var result = await Login("EMP-00004", Password);
 
-        Assert.Equal(FakeAccessTokenIssuer.Token, response.AccessToken);
+        Assert.Equal(FakeAccessTokenIssuer.Token, result.Body.AccessToken);
         Assert.Null(Noa.LockoutEnd);
         Assert.Equal(0, Noa.FailedLoginCount);
     }
@@ -180,7 +172,7 @@ public class AuthServiceTests
     public async Task Unknown_identifier_fails_like_a_wrong_password_and_still_verifies_a_hash()
     {
         var unknown = await Assert.ThrowsAsync<AuthenticationFailedException>(() => Login(UnknownEmail, Password));
-        Assert.Equal(1, _hasher.VerifyCount);
+        Assert.Equal(1, Hasher.VerifyCount);
 
         var wrongPassword = await Assert.ThrowsAsync<AuthenticationFailedException>(() => Login("EMP-00004", WrongPassword));
         AssertSameFailure(wrongPassword, unknown);
@@ -191,13 +183,13 @@ public class AuthServiceTests
     {
         await Assert.ThrowsAsync<AuthenticationFailedException>(() => Login(UnknownEmail, Password));
 
-        var entry = Assert.Single(_audit.Entries);
+        var entry = Assert.Single(AuditLog.Entries);
         Assert.Equal(AuditActions.LoginFailedUnknownUser, entry.Action);
         Assert.Null(entry.UserId);
         Assert.Null(entry.OrganizationId);
         Assert.Null(entry.EntityId);
         Assert.Equal(Ip, entry.IpAddress);
-        Assert.Equal(1, _unitOfWork.SaveCount);
+        Assert.Equal(1, UnitOfWork.SaveCount);
         Assert.DoesNotContain("nobody", string.Join("|", entry.Action, entry.EntityType, entry.IpAddress));
     }
 
@@ -227,10 +219,10 @@ public class AuthServiceTests
     {
         await FailTimes(UnknownEmail, 5);
 
-        _clock.Advance(TimeSpan.FromMinutes(15).Subtract(TimeSpan.FromSeconds(1)));
+        Clock.Advance(TimeSpan.FromMinutes(15).Subtract(TimeSpan.FromSeconds(1)));
         await Assert.ThrowsAsync<AccountLockedException>(() => Login(UnknownEmail, Password));
 
-        _clock.Advance(TimeSpan.FromSeconds(1));
+        Clock.Advance(TimeSpan.FromSeconds(1));
         var afterRelease = await Assert.ThrowsAsync<AuthenticationFailedException>(() => Login(UnknownEmail, Password));
         Assert.IsNotType<AccountLockedException>(afterRelease);
     }
@@ -238,18 +230,20 @@ public class AuthServiceTests
     // ---- logging ----
 
     [Fact]
-    public async Task Log_never_contains_password_hash_token_or_unknown_identifier()
+    public async Task Log_never_contains_password_hash_tokens_or_unknown_identifier()
     {
-        await Login("EMP-00004", Password);
+        var result = await Login("EMP-00004", Password);
         await Assert.ThrowsAsync<AuthenticationFailedException>(() => Login("EMP-00004", WrongPassword));
         await Assert.ThrowsAsync<AuthenticationFailedException>(() => Login(UnknownEmail, WrongPassword));
 
-        var log = _logger.AllText;
-        Assert.NotEmpty(_logger.Entries);
+        var log = Logger.AllText;
+        Assert.NotEmpty(Logger.Entries);
         Assert.DoesNotContain(Password, log);
         Assert.DoesNotContain(WrongPassword, log);
         Assert.DoesNotContain(FakePasswordHasher.Prefix, log);
         Assert.DoesNotContain(FakeAccessTokenIssuer.Token, log);
+        Assert.DoesNotContain(result.RefreshToken.Value, log);
+        Assert.DoesNotContain(RefreshTokenGenerator.Hash(result.RefreshToken.Value), log);
         Assert.DoesNotContain("nobody", log, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -258,9 +252,9 @@ public class AuthServiceTests
     [Fact]
     public async Task Current_user_is_read_by_the_id_from_ICurrentUser()
     {
-        _currentUser.SignedInUserId = 4;
+        CurrentUser.SignedInUserId = NoaId;
 
-        var me = await _service.GetCurrentUserAsync(CancellationToken.None);
+        var me = await Service.GetCurrentUserAsync(CancellationToken.None);
 
         Assert.Equal("EMP-00004", me.EmployeeCode);
     }
@@ -268,9 +262,9 @@ public class AuthServiceTests
     [Fact]
     public async Task Current_user_that_was_deactivated_is_rejected()
     {
-        _currentUser.SignedInUserId = 12;
+        CurrentUser.SignedInUserId = OritId;
 
-        await Assert.ThrowsAsync<AuthenticationFailedException>(() => _service.GetCurrentUserAsync(CancellationToken.None));
+        await Assert.ThrowsAsync<AuthenticationFailedException>(() => Service.GetCurrentUserAsync(CancellationToken.None));
     }
 
     // ---- helpers ----
@@ -289,28 +283,5 @@ public class AuthServiceTests
         Assert.Equal(expected.Title, actual.Title);
         Assert.Equal(expected.Detail, actual.Detail);
         Assert.Equal(expected.ErrorType, actual.ErrorType);
-    }
-
-    private User CreateUser(int id, string code, string email, bool isActive, bool mustChangePassword = false)
-    {
-        var user = new User
-        {
-            Id = id,
-            OrganizationId = 1,
-            DepartmentId = 2,
-            Department = new Department { Id = 2, OrganizationId = 1, Name = "פיתוח" },
-            EmployeeCode = code,
-            FirstName = "Test",
-            LastName = "User",
-            Email = email,
-            JobTitle = "Developer",
-            PasswordHash = _hasher.Hash(Password),
-            IsActive = isActive,
-            MustChangePassword = mustChangePassword,
-        };
-        // Deliberately unordered: the service returns roles sorted.
-        user.Roles.Add(new UserRole { UserId = id, Role = Role.Handler });
-        user.Roles.Add(new UserRole { UserId = id, Role = Role.Employee });
-        return user;
     }
 }

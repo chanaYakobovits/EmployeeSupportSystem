@@ -42,10 +42,10 @@ try
     app.UseDevelopmentSwagger();
 
     app.UseHttpsRedirection();
-    // Rate limiting before authentication: a rejected login attempt costs nothing.
-    app.UseRateLimiter();
     app.UseAuthentication();
     app.UseAuthorization();
+    // After authorization: the change-password limit is per user, so the user must already be known.
+    app.UseRateLimiter();
     app.MapControllers();
 
     app.Run();

@@ -10,17 +10,27 @@ public sealed class UserRepository(AppDbContext db) : IUserRepository
 {
     // Email and EmployeeCode are unique across the whole system (unique indexes), so at most one match.
     // The default SQL Server collation is case-insensitive.
+    // IgnoreQueryFilters: login happens before anyone is signed in, so the organization filter would hide every user.
     public Task<User?> FindForLoginByEmailAsync(string email, CancellationToken cancellationToken) =>
         db.Users
+            .IgnoreQueryFilters()
             .Include(u => u.Roles)
             .Include(u => u.Department)
             .SingleOrDefaultAsync(u => u.Email == email, cancellationToken);
 
     public Task<User?> FindForLoginByEmployeeCodeAsync(string employeeCode, CancellationToken cancellationToken) =>
         db.Users
+            .IgnoreQueryFilters()
             .Include(u => u.Roles)
             .Include(u => u.Department)
             .SingleOrDefaultAsync(u => u.EmployeeCode == employeeCode, cancellationToken);
+
+    // Signed in: the organization filter applies.
+    public Task<User?> FindForUpdateAsync(int userId, CancellationToken cancellationToken) =>
+        db.Users
+            .Include(u => u.Roles)
+            .Include(u => u.Department)
+            .SingleOrDefaultAsync(u => u.Id == userId, cancellationToken);
 
     public async Task<CurrentUserDto?> GetCurrentUserAsync(int userId, CancellationToken cancellationToken)
     {

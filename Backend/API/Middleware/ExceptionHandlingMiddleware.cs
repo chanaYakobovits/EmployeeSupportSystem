@@ -6,7 +6,7 @@ namespace API.Middleware;
 
 /// <summary>
 /// Single place that converts exceptions to ProblemDetails (spec 11.4):
-/// AuthenticationFailed → 401, NotFound → 404, Conflict → 409, BusinessRule → 422,
+/// Validation → 400, AuthenticationFailed → 401, NotFound → 404, Conflict → 409, BusinessRule → 422,
 /// anything else → 500 without technical details.
 /// </summary>
 public class ExceptionHandlingMiddleware
@@ -55,6 +55,7 @@ public class ExceptionHandlingMiddleware
         {
             var status = appException switch
             {
+                ValidationException => StatusCodes.Status400BadRequest,
                 AuthenticationFailedException => StatusCodes.Status401Unauthorized,
                 NotFoundException => StatusCodes.Status404NotFound,
                 ConflictException => StatusCodes.Status409Conflict,
@@ -64,13 +65,20 @@ public class ExceptionHandlingMiddleware
 
             if (status != StatusCodes.Status500InternalServerError)
             {
-                return new ProblemDetails
+                var problem = new ProblemDetails
                 {
                     Status = status,
                     Type = ProblemTitles.TypeBaseUri + appException.ErrorType,
                     Title = appException.Title,
                     Detail = appException.Detail,
                 };
+
+                if (appException is ValidationException { Errors.Count: > 0 } validation)
+                {
+                    problem.Extensions["errors"] = validation.Errors;
+                }
+
+                return problem;
             }
         }
 
@@ -89,6 +97,9 @@ public class ExceptionHandlingMiddleware
         // Expected errors: log the type only (messages are user-facing, no stack trace needed).
         switch (status)
         {
+            case StatusCodes.Status400BadRequest:
+                _logger.LogInformation("Validation failed: {ErrorType}", (exception as AppException)?.ErrorType);
+                break;
             case StatusCodes.Status401Unauthorized:
                 // The cause (unknown user / wrong password / lockout) is logged by AuthService, by user id only.
                 _logger.LogInformation("Authentication failed: {ErrorType}", (exception as AppException)?.ErrorType);

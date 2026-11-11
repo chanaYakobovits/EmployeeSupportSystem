@@ -115,3 +115,83 @@ Authorization: Bearer {{loginAdmin.response.body.$.accessToken}}
 
 ### Lockout: send "Wrong password" 5 times → the 6th attempt returns 401 "account-locked" with the wait time.
 ### Rate limit: more than 10 login requests within a minute from one IP → 429.
+
+### ============ Refresh token flow (cookie "refresh_token", Path=/api/auth) ============
+### The REST client keeps cookies between requests automatically. Run the requests in order.
+### (The cookie is Secure: VS Code / VS send it to http://localhost; if not, pass "Cookie: refresh_token=<value>"
+###  copied from the Set-Cookie header of the previous response.)
+
+### 1. Login → 200 + Set-Cookie refresh_token (HttpOnly; Secure; SameSite=Strict; Path=/api/auth; 7 days)
+# @name flowLogin
+POST {{API_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{ "identifier": "EMP-00004", "password": "{{password}}" }
+
+### 2. Refresh → 200, new access token + rotated cookie (the old token is now revoked, ReplacedByTokenId set)
+POST {{API_HostAddress}}/api/auth/refresh
+
+### 3. Refresh with the OLD token (paste the value from step 1's Set-Cookie):
+###    within 30 seconds → 401 "session-expired" only (two tabs); after 30 seconds → reuse detected:
+###    401 + every active token of the user is revoked + AuditLog "RefreshToken.ReuseDetected".
+###    (Only rotated tokens trigger this. A token revoked by logout or password change → 401 only.)
+POST {{API_HostAddress}}/api/auth/refresh
+Cookie: refresh_token=PASTE_OLD_TOKEN_FROM_STEP_1
+
+### 4. Logout → always 204, cookie deleted (also when the token is already revoked or missing)
+POST {{API_HostAddress}}/api/auth/logout
+
+### 5. Refresh after logout → 401 (no cookie any more)
+POST {{API_HostAddress}}/api/auth/refresh
+
+### ============ Change password – first login (Tomer Zilber, MustChangePassword) ============
+
+### 1. Login → 200, "mustChangePassword": true
+# @name tomerLogin
+POST {{API_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{ "identifier": "tomer.zilber@example.com", "password": "{{password}}" }
+
+### 2. Any other endpoint → 403 "password-change-required"
+GET {{API_HostAddress}}/api/dev/auth/protected
+Authorization: Bearer {{tomerLogin.response.body.$.accessToken}}
+
+### 3. Refresh still works while the change is pending → 200
+POST {{API_HostAddress}}/api/auth/refresh
+
+### 4. Weak new password → 400 with "errors"
+POST {{API_HostAddress}}/api/auth/change-password
+Authorization: Bearer {{tomerLogin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "currentPassword": "{{password}}", "newPassword": "short" }
+
+### 5. Wrong current password → 400 "הסיסמה הנוכחית שגויה" (audited; 5 attempts per 15 minutes per user → 429)
+POST {{API_HostAddress}}/api/auth/change-password
+Authorization: Bearer {{tomerLogin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "currentPassword": "Wrong9999", "newPassword": "NewPass42" }
+
+### 6. Valid change → 200, "mustChangePassword": false, new cookie; all older refresh tokens revoked
+# @name tomerChanged
+POST {{API_HostAddress}}/api/auth/change-password
+Authorization: Bearer {{tomerLogin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "currentPassword": "{{password}}", "newPassword": "NewPass42" }
+
+### 7. Protected endpoint with the new access token → 200
+GET {{API_HostAddress}}/api/dev/auth/protected
+Authorization: Bearer {{tomerChanged.response.body.$.accessToken}}
+
+### 8. "Old phone": refresh with a cookie from before the change (paste from step 1/3's Set-Cookie)
+###    → 401 only. No revoke-all: the new session from step 6 is NOT affected.
+POST {{API_HostAddress}}/api/auth/refresh
+Cookie: refresh_token=PASTE_TOKEN_FROM_BEFORE_THE_CHANGE
+
+### 9. Refresh with the new cookie from step 6 (kept by the REST client) → still 200
+POST {{API_HostAddress}}/api/auth/refresh
+
+### Reset Tomer to first-login state (drops and recreates the dev database): dotnet run --project API -- --seed

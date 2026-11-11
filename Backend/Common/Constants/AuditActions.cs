@@ -8,6 +8,12 @@ public static class AuditActions
     public const string LoginFailedInactive = "LoginFailed.Inactive";
     public const string LoginFailedUnknownUser = "LoginFailed.UnknownUser";
     public const string LoginBlockedLockedOut = "LoginBlocked.LockedOut";
+    public const string Logout = "Logout";
+    public const string RefreshTokenReuseDetected = "RefreshToken.ReuseDetected";
+    public const string RefreshFailedInactive = "RefreshFailed.Inactive";
+    public const string PasswordChanged = "PasswordChanged";
+    public const string PasswordChangeFailedWrongCurrent = "PasswordChangeFailed.WrongCurrent";
+    public const string PasswordChangeFailedPolicy = "PasswordChangeFailed.Policy";
 }
 
 /// <summary>Values of <c>AuditLog.EntityType</c>.</summary>

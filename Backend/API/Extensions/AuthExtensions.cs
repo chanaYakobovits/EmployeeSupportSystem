@@ -18,6 +18,11 @@ namespace API.Extensions;
 public static class AuthExtensions
 {
     public const string LoginRateLimitPolicy = "login";
+    public const string ChangePasswordRateLimitPolicy = "change-password";
+
+    /// <summary>Decision in CLAUDE.md: 5 change-password attempts per 15 minutes per user (against guessing the current password).</summary>
+    private const int ChangePasswordPermitsPerWindow = 5;
+    private static readonly TimeSpan ChangePasswordWindow = TimeSpan.FromMinutes(15);
 
     /// <summary>Spec 6.1: 10 login attempts per minute per IP address.</summary>
     private const int LoginPermitsPerWindow = 10;
@@ -85,7 +90,7 @@ public static class AuthExtensions
         services.AddSingleton<Microsoft.AspNetCore.Authorization.IAuthorizationMiddlewareResultHandler,
             ProblemDetailsAuthorizationResultHandler>();
 
-        services.AddLoginRateLimit();
+        services.AddAuthRateLimits();
 
         return services;
     }
@@ -111,9 +116,14 @@ public static class AuthExtensions
         {
             throw new InvalidOperationException("Jwt:AccessTokenMinutes must be between 1 and 60.");
         }
+
+        if (jwt.RefreshTokenDays is < 1 or > 30)
+        {
+            throw new InvalidOperationException("Jwt:RefreshTokenDays must be between 1 and 30.");
+        }
     }
 
-    private static void AddLoginRateLimit(this IServiceCollection services)
+    private static void AddAuthRateLimits(this IServiceCollection services)
     {
         services.AddRateLimiter(options =>
         {
@@ -125,6 +135,17 @@ public static class AuthExtensions
                     {
                         PermitLimit = LoginPermitsPerWindow,
                         Window = LoginWindow,
+                        QueueLimit = 0,
+                    }));
+
+            // Per user, not per IP. Runs after authorization, so the user is always known here.
+            options.AddPolicy(ChangePasswordRateLimitPolicy, context =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    "user:" + (context.User.FindFirst(AuthClaimTypes.UserId)?.Value ?? "anonymous"),
+                    _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = ChangePasswordPermitsPerWindow,
+                        Window = ChangePasswordWindow,
                         QueueLimit = 0,
                     }));
 
