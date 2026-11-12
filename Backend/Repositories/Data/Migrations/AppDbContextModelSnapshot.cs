@@ -152,6 +152,11 @@ namespace Repositories.Data.Migrations
 
                     b.HasIndex("HandlingDepartmentId");
 
+                    b.HasIndex("OrganizationId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_Categories_OrganizationId_Fallback")
+                        .HasFilter("[IsFallback] = 1");
+
                     b.HasIndex("OrganizationId", "Code")
                         .IsUnique();
 

@@ -1,0 +1,78 @@
+<app-page-header heading="קטגוריות" subtitle="סיווג הפניות, הניתוב לגורם המטפל, והתיאור שמשמש את ה-AI">
+  <button pageActions mat-flat-button type="button" class="btn-primary-gradient" (click)="openDialog(null)">
+    <mat-icon aria-hidden="true">add</mat-icon>
+    קטגוריה חדשה
+  </button>
+</app-page-header>
+
+@if (warning(); as alert) {
+  <app-form-alert [alert]="alert" [dismissible]="true" (dismissed)="warning.set(null)" />
+}
+
+<app-data-table
+  caption="רשימת הקטגוריות"
+  [columns]="columns"
+  [rows]="store.categories()"
+  [status]="store.status()"
+  [paginated]="false"
+  [rowClickable]="true"
+  (rowActivate)="openDialog($event)"
+  (retry)="store.load()"
+>
+  <ng-template appCell="code" let-category>
+    <span class="code" dir="ltr">{{ category.code }}</span>
+  </ng-template>
+
+  <ng-template appCell="name" let-category>
+    <span class="name">{{ category.name }}</span>
+    @if (category.isFallback) {
+      <app-badge tone="primary" class="fallback-badge" title="פניות שלא סווגו מגיעות לקטגוריה זו">גיבוי</app-badge>
+    }
+  </ng-template>
+
+  <ng-template appCell="routingType" let-category>
+    {{ category.routingType | routingTypeLabel }}
+  </ng-template>
+
+  <ng-template appCell="handlingDepartment" let-category>
+    @if (category.handlingDepartment; as department) {
+      {{ department.name }}
+    } @else {
+      <span class="muted">לפי מחלקת העובד</span>
+    }
+  </ng-template>
+
+  <ng-template appCell="isActive" let-category>
+    <app-active-badge [active]="category.isActive" activeText="פעילה" inactiveText="לא פעילה" />
+  </ng-template>
+
+  <ng-template appCell="actions" let-category>
+    <span class="actions">
+      <button mat-button type="button" [attr.aria-label]="'עריכת הקטגוריה ' + category.name" (click)="openDialog(category)">
+        <mat-icon aria-hidden="true">edit</mat-icon>
+        עריכה
+      </button>
+      @if (category.isFallback) {
+        <span class="always-active">תמיד פעילה</span>
+      } @else {
+        <button
+          mat-button
+          type="button"
+          [class.danger]="category.isActive"
+          [disabled]="store.changingId() === category.id"
+          [attr.aria-label]="(category.isActive ? 'השבתת הקטגוריה ' : 'הפעלת הקטגוריה ') + category.name"
+          (click)="toggleActive(category)"
+        >
+          <mat-icon aria-hidden="true">{{ category.isActive ? 'block' : 'check_circle' }}</mat-icon>
+          {{ category.isActive ? 'השבתה' : 'הפעלה' }}
+        </button>
+      }
+    </span>
+  </ng-template>
+
+  <div tableEmpty>
+    <app-empty-state icon="category" heading="אין קטגוריות" description="עדיין לא הוגדרו קטגוריות בארגון.">
+      <button mat-flat-button type="button" class="btn-primary-gradient" (click)="openDialog(null)">קטגוריה חדשה</button>
+    </app-empty-state>
+  </div>
+</app-data-table>

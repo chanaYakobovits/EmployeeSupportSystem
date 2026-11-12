@@ -1,0 +1,48 @@
+.field {
+  width: 100%;
+  margin-top: 4px;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  gap: 12px;
+  margin-top: 4px;
+
+  @media (max-width: 599px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.note {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border-radius: var(--radius-field);
+  background: var(--primary-soft);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-primary);
+
+  mat-icon {
+    flex-shrink: 0;
+    color: var(--primary);
+  }
+
+  // Right under the description field: part of it, so no gap above.
+  &.privacy {
+    margin-top: 4px;
+  }
+}
+
+.hint-error {
+  color: var(--error-text);
+}
+
+mat-spinner {
+  display: inline-block;
+  margin-inline-end: 8px;
+  --mat-progress-spinner-active-indicator-color: currentColor;
+}

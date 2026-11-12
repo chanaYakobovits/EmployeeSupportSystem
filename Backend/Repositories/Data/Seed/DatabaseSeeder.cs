@@ -1,3 +1,4 @@
+using Common.Constants;
 using Common.Enums;
 using Common.Interfaces;
 using Common.Models;
@@ -101,7 +102,7 @@ internal sealed class DatabaseSeeder(AppDbContext db, IPasswordHasher passwordHa
             });
         db.Categories.AddRange(categories.Values);
 
-        db.SlaPolicies.AddRange(ReferenceSeedData.SlaHours.Select(sla => new SlaPolicy
+        db.SlaPolicies.AddRange(SlaDefaults.Hours.Select(sla => new SlaPolicy
         {
             OrganizationId = organization.Id,
             Urgency = sla.Key,

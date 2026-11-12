@@ -27,6 +27,12 @@
   --success-text: #1b6e3a;
   --success-soft: rgba(27, 110, 58, 0.1); // badge background (10% of the text colour)
   --warning-soft: rgba(161, 78, 0, 0.1);
+  --warning-border: rgba(161, 78, 0, 0.25);
+  // Urgency dots (design guide): Low green, Medium orange, High red, Critical dark red.
+  --urgency-low: var(--success-text);
+  --urgency-medium: var(--warning-text);
+  --urgency-high: var(--error-text);
+  --urgency-critical: #7a1712;
   --accent-text: #00737a; // darker teal: --accent as text fails WCAG AA
   --accent-soft: rgba(0, 163, 173, 0.1);
   --auth-bg-start: #f0f7ff;
@@ -194,6 +200,23 @@ html {
 
   .app-alert-title {
     font-weight: 600;
+  }
+
+  // A warning that did not block the action (e.g. a saved category whose department has no handlers).
+  &.app-alert-warning {
+    border-color: var(--warning-border);
+    background: var(--warning-soft);
+    color: var(--warning-text);
+
+    &:focus {
+      outline-color: var(--warning-text);
+    }
+  }
+
+  .app-alert-dismiss {
+    margin-inline-start: auto;
+    flex-shrink: 0;
+    color: inherit;
   }
 }
 

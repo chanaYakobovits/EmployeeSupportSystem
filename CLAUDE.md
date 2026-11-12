@@ -6,8 +6,9 @@
 
 ## מצב משימות (לפי פרק 12 באפיון שב-docs/)
 - הושלמו: 1.1–1.5 (תשתית), 4.1 PiiRedactor, 4.2 לקוח OpenAI (נבנו מוקדם, לפני שלב ב'),
-  2.1 אימות, 2.2 מסכי התחברות, 2.3א API לניהול עובדים ומחלקות, 2.3ב מסכי ניהול עובדים ומחלקות.
-- הבא בתור: 2.4 ניהול קטגוריות ו-SLA (API + מסכים; לשוניות נוספות ב-`features/admin/admin-layout`).
+  2.1 אימות, 2.2 מסכי התחברות, 2.3א API לניהול עובדים ומחלקות, 2.3ב מסכי ניהול עובדים ומחלקות,
+  2.4 ניהול קטגוריות ו-SLA (API + מסכים).
+- הבא בתור: 3.1 יצירת פנייה וצפייה של עובד.
 - תוספת שלא באפיון: בדיקת איכות סיווג AI על 30 פניות לדוגמה – אחרי משימה 4.3.
 
 ## שפה
@@ -102,6 +103,19 @@
   `USERS_LIST.defaultSort`; לשנות בשניהם יחד. בלי sortDir: עמודת ברירת המחדל יורדת, כל עמודה אחרת עולה.
 - 422 `manages-other-department` (עובד כבר מנהל מחלקה אחרת) נשאר 422 בשרת; ה-Frontend מציג אותו ליד שדה המנהל
   (`typeFields` של applyServerErrors).
+- Cache של נתוני ייחוס (משימה 2.4, 11.3): `IReferenceDataCache` (מימוש `MemoryReferenceDataCache`), מפתח אחד לכל ארגון
+  וסוג (`departments:{org}`, `categories:{org}`) עם הרשימה המלאה, 10 דקות. הסינון לפעילות בלבד נעשה על הרשימה שב-Cache.
+  הארגון מועבר במפורש (ה-Worker של 4.3 בלי משתמש). שינוי מחלקה או קטגוריה מנקה את המפתח, וגם שינוי עובד ב-UserService
+  מנקה את המחלקות (ב-DTO יש מונים ומנהל).
+- קטגוריות: קוד `^[A-Z][A-Z_]{1,29}$`, ייחודי בארגון, לא קיים ב-UpdateCategoryRequest. IsFallback לא נמצא באף בקשה;
+  אינדקס ייחודי מסונן `IX_Categories_OrganizationId_Fallback` (לכל היותר גיבוי אחד). השבתת הגיבוי ← 422
+  `fallback-category-deactivation`. FixedDepartment ⇒ מחלקה פעילה (400 על handlingDepartmentId), נבדק בכל שמירה של
+  קטגוריה פעילה. RequesterDepartmentHr ⇒ handlingDepartmentId null (400). POST/PUT מחזירים
+  `CategorySaveResult { category, warnings }`; אזהרה כשאין במחלקה מטפלים פעילים.
+- SLA: GET לכל משתמש מחובר (האפיון 9.3: מנהל מערכת). PUT בצורה שטוחה `{ critical, high, medium, low }`,
+  שעות שלמות 1–8760, Critical ≤ High ≤ Medium ≤ Low (השגיאה על הרמה הפחות דחופה). לא מעדכן DueAt קיים.
+  ברירות המחדל ב-`Common/Constants/SlaDefaults` (גם ל-Seed וגם לרמה חסרה).
+- `FormAlert.tone: 'warning'` + `dismissible` – לאזהרה שלא חסמה פעולה ונשארת במסך.
 - `NotificationService` טוען את MatSnackBar ב-dynamic import (נטען מיד בעלייה), כדי שה-CDK overlay לא ייכנס
   ל-bundle הראשוני. לא לייבא MatSnackBar/MatDialog בקוד שנטען בעלייה (core, app.config).
 

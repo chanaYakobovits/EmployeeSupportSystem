@@ -24,11 +24,17 @@ public static class DependencyInjection
         services.AddSingleton<IPiiRedactor, PiiRedactor>();
         services.AddSingleton<IDateTimeProvider, SystemDateTimeProvider>();
 
-        // Failed-login counters of unknown identifiers (spec 4.1). The real users' counters live in the database.
+        // Failed-login counters of unknown identifiers (spec 4.1; the real users' counters live in the database)
+        // and the reference data cache.
         services.AddMemoryCache();
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IUserService, UserService>();
         services.AddScoped<IDepartmentService, DepartmentService>();
+        services.AddScoped<ICategoryService, CategoryService>();
+        services.AddScoped<ISlaPolicyService, SlaPolicyService>();
+
+        // Departments and categories per organization, 10 minutes (spec 11.3).
+        services.AddSingleton<IReferenceDataCache, MemoryReferenceDataCache>();
 
         // Request validators (spec 11.4), run by the services. Stateless, so one instance each.
         services.AddValidatorsFromAssemblyContaining<Validators.UserListQueryValidator>(ServiceLifetime.Singleton);

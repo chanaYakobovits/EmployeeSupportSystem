@@ -1,0 +1,35 @@
+.code {
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.name {
+  font-weight: 600;
+}
+
+.fallback-badge {
+  margin-inline-start: 8px;
+}
+
+.muted {
+  color: var(--text-secondary);
+}
+
+.actions {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  white-space: nowrap;
+
+  .danger:not(:disabled) {
+    color: var(--error-text);
+  }
+}
+
+// Takes the place of the deactivate button on the fallback row.
+.always-active {
+  padding-inline: 12px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}

@@ -2,7 +2,7 @@ import { Routes } from '@angular/router';
 
 /**
  * Lazy-loaded area: administration (spec 7.8), Admin only (guarded by the area route).
- * Every screen is lazy too. Categories and SLA are added in task 2.4.
+ * Every screen is lazy too.
  */
 export const ADMIN_ROUTES: Routes = [
   {
@@ -26,6 +26,14 @@ export const ADMIN_ROUTES: Routes = [
       {
         path: 'departments',
         loadComponent: () => import('./departments/departments-page/departments-page').then((m) => m.DepartmentsPage),
+      },
+      {
+        path: 'categories',
+        loadComponent: () => import('./categories/categories-page/categories-page').then((m) => m.CategoriesPage),
+      },
+      {
+        path: 'sla',
+        loadComponent: () => import('./sla/sla-page/sla-page').then((m) => m.SlaPage),
       },
     ],
   },

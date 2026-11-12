@@ -26,5 +26,12 @@ public class CategoryConfiguration : IEntityTypeConfiguration<Category>
 
         // Routing and AI resolve categories by code.
         builder.HasIndex(c => new { c.OrganizationId, c.Code }).IsUnique();
+
+        // At most one fallback category (GENERAL) per organization. "At least one" is kept by the services:
+        // no endpoint sets or clears IsFallback.
+        builder.HasIndex(c => c.OrganizationId)
+            .HasDatabaseName("IX_Categories_OrganizationId_Fallback")
+            .IsUnique()
+            .HasFilter("[IsFallback] = 1");
     }
 }

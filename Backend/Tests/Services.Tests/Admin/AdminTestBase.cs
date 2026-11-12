@@ -10,9 +10,10 @@ using Services.Validators;
 namespace Services.Tests.Admin;
 
 /// <summary>
-/// UserService and DepartmentService over hand-written fakes, with a small organization (ids as in the demo seed):
-/// Management (CEO Avner, Executive), Development (manager Ron, Noa, handler Liat), HR (manager + admin Yael),
-/// and an inactive department. The signed-in admin is Yael.
+/// The admin services over hand-written fakes, with a small organization (ids as in the demo seed):
+/// Management (CEO Avner, Executive, no handlers), Development (manager Ron, Noa, handler Liat), HR (manager + admin
+/// + handler Yael), and an inactive department. Categories: PAYROLL → Development, ATTENDANCE → requester's HR,
+/// GENERAL (fallback) → HR, and an inactive OLD_CATEGORY. The signed-in admin is Yael.
 /// </summary>
 public abstract class AdminTestBase
 {
@@ -31,6 +32,11 @@ public abstract class AdminTestBase
     protected const int YaelId = 23;   // Admin + Handler + DepartmentManager of HR – the signed-in admin
     protected const int OritId = 12;   // inactive, in the inactive department
 
+    protected const int PayrollId = 1;
+    protected const int AttendanceId = 2;
+    protected const int GeneralId = 8;
+    protected const int OldCategoryId = 9;
+
     protected static readonly DateTime Now = new(2026, 11, 12, 9, 0, 0, DateTimeKind.Utc);
 
     protected readonly FakeUserRepository Users = new();
@@ -43,13 +49,20 @@ public abstract class AdminTestBase
     protected readonly FakeDateTimeProvider Clock = new(Now);
     protected readonly FakeCurrentUser CurrentUser = new() { SignedInUserId = YaelId, SignedInRoles = [Role.Employee, Role.Admin] };
     protected readonly MemoryCache Cache = new(new MemoryCacheOptions());
+    protected readonly MemoryReferenceDataCache ReferenceData;
+    protected readonly FakeCategoryRepository Categories;
+    protected readonly FakeSlaPolicyRepository SlaPolicies = new();
     protected readonly CapturingLogger<UserService> UserLogger = new();
     protected readonly UserService UserService;
     protected readonly DepartmentService DepartmentService;
+    protected readonly CategoryService CategoryService;
+    protected readonly SlaPolicyService SlaPolicyService;
 
     protected AdminTestBase()
     {
         Departments = new FakeDepartmentRepository(Users);
+        ReferenceData = new MemoryReferenceDataCache(Cache);
+        Categories = new FakeCategoryRepository(Departments);
         AddDepartment(ManagementId, "הנהלה", AvnerId);
         AddDepartment(DevelopmentId, "פיתוח", RonId);
         AddDepartment(HrId, "משאבי אנוש מרכזי", YaelId);
@@ -63,12 +76,24 @@ public abstract class AdminTestBase
         AddUser(OritId, "orit.danon", InactiveDepartmentId).IsActive = false;
 
         UserService = new UserService(Users, Departments, RefreshTokens, Tickets, AuditLog, UnitOfWork, Hasher, Clock,
-            CurrentUser, new UserListQueryValidator(), new CreateUserRequestValidator(), new UpdateUserRequestValidator(),
+            CurrentUser, ReferenceData, new UserListQueryValidator(), new CreateUserRequestValidator(), new UpdateUserRequestValidator(),
             new SetUserActiveRequestValidator(), UserLogger);
 
-        DepartmentService = new DepartmentService(Departments, Users, AuditLog, UnitOfWork, Clock, CurrentUser, Cache,
+        DepartmentService = new DepartmentService(Departments, Users, AuditLog, UnitOfWork, Clock, CurrentUser, ReferenceData,
             new CreateDepartmentRequestValidator(), new UpdateDepartmentRequestValidator(),
             new CapturingLogger<DepartmentService>());
+
+        AddCategory(PayrollId, "PAYROLL", RoutingType.FixedDepartment, DevelopmentId);
+        AddCategory(AttendanceId, "ATTENDANCE", RoutingType.RequesterDepartmentHr, null);
+        AddCategory(GeneralId, "GENERAL", RoutingType.FixedDepartment, HrId, isFallback: true);
+        AddCategory(OldCategoryId, "OLD_CATEGORY", RoutingType.FixedDepartment, DevelopmentId, isActive: false);
+
+        CategoryService = new CategoryService(Categories, Departments, AuditLog, UnitOfWork, Clock, CurrentUser,
+            ReferenceData, new CreateCategoryRequestValidator(), new UpdateCategoryRequestValidator(),
+            new CapturingLogger<CategoryService>());
+
+        SlaPolicyService = new SlaPolicyService(SlaPolicies, AuditLog, UnitOfWork, Clock, CurrentUser,
+            new UpdateSlaPoliciesRequestValidator(), new CapturingLogger<SlaPolicyService>());
     }
 
     protected User UserById(int id) => Users.Users.Single(u => u.Id == id);
@@ -117,6 +142,15 @@ public abstract class AdminTestBase
             });
         }
     }
+
+    private void AddCategory(int id, string code, RoutingType routingType, int? handlingDepartmentId,
+        bool isFallback = false, bool isActive = true) =>
+        Categories.Categories[id] = new Category
+        {
+            Id = id, OrganizationId = OrgId, Code = code, Name = "שם " + code, Description = "תיאור " + code,
+            RoutingType = routingType, HandlingDepartmentId = handlingDepartmentId, IsFallback = isFallback,
+            IsActive = isActive,
+        };
 
     private void AddDepartment(int id, string name, int? managerId, bool isActive = true) =>
         Departments.Departments[id] = new Department

@@ -1,6 +1,7 @@
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Unicode;
+using Common.Constants;
 using Common.Enums;
 using Common.Models;
 using static Repositories.Data.Seed.ReferenceSeedData;
@@ -138,7 +139,7 @@ internal sealed class TicketSeedGenerator(SeedOrganization organization, Random 
     {
         var isFallback = source is Source.AiFailedFallback or Source.LowConfidenceFallback;
         var finalUrgency = isFallback ? (Urgency?)null : template.Urgency;
-        var slaHours = SlaHours[finalUrgency ?? Urgency.Medium]; // spec 3.4: no urgency yet -> Medium target
+        var slaHours = SlaDefaults.Hours[finalUrgency ?? Urgency.Medium]; // spec 3.4: no urgency yet -> Medium target
 
         var steps = PlanSteps(finalStatus, source, out var hasPause, out var wasReopened);
         var gaps = steps.Select(StepGap).ToList();
@@ -305,7 +306,7 @@ internal sealed class TicketSeedGenerator(SeedOrganization organization, Random 
         ticket.ResolvedAt = resolvedAt;
         ticket.ClosedAt = closedAt;
         ticket.UpdatedAt = time;
-        ticket.DueAt = created + TimeSpan.FromHours(SlaHours[ticket.Urgency ?? Urgency.Medium]) + pausedTotal;
+        ticket.DueAt = created + TimeSpan.FromHours(SlaDefaults.Hours[ticket.Urgency ?? Urgency.Medium]) + pausedTotal;
 
         if (ticket.AssignedToUserId is int assignee)
         {

@@ -9,4 +9,5 @@ public static class UniqueIndexes
     public const string UserEmail = "IX_Users_Email";
     public const string UserEmployeeCode = "IX_Users_EmployeeCode";
     public const string DepartmentName = "IX_Departments_OrganizationId_Name";
+    public const string CategoryCode = "IX_Categories_OrganizationId_Code";
 }

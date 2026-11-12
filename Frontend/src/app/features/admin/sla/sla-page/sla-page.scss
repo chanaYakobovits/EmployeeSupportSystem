@@ -1,0 +1,78 @@
+.form-card {
+  max-width: 720px;
+  padding: 24px;
+}
+
+.card-title {
+  margin: 0 0 20px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.levels {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.level {
+  display: grid;
+  grid-template-columns: 110px 160px minmax(0, 1fr);
+  gap: 16px;
+  align-items: center;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  @media (max-width: 599px) {
+    grid-template-columns: minmax(0, 1fr) 140px;
+
+    .duration {
+      grid-column: 1 / -1;
+    }
+  }
+}
+
+// The error of the hours field can be long (order message): let it wrap under the field.
+.hours {
+  width: 100%;
+}
+
+.duration {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.note {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 20px 0 0;
+  padding: 12px 14px;
+  border-radius: var(--radius-field);
+  background: var(--primary-soft);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-primary);
+
+  mat-icon {
+    flex-shrink: 0;
+    color: var(--primary);
+  }
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 24px;
+
+  mat-spinner {
+    display: inline-block;
+    margin-inline-end: 8px;
+    --mat-progress-spinner-active-indicator-color: currentColor;
+  }
+}

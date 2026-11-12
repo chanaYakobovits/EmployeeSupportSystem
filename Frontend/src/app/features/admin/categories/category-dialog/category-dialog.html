@@ -1,0 +1,138 @@
+<h2 mat-dialog-title id="category-dialog-title">{{ isEdit ? 'עריכת קטגוריה' : 'קטגוריה חדשה' }}</h2>
+
+<form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+  <mat-dialog-content>
+    @if (alert(); as alert) {
+      <app-form-alert [alert]="alert" />
+    }
+
+    <div class="row">
+      <mat-form-field appearance="outline" class="code">
+        <mat-label>קוד</mat-label>
+        <input
+          matInput
+          formControlName="code"
+          autocomplete="off"
+          dir="ltr"
+          required
+          [attr.maxlength]="limits.codeMaxLength"
+          aria-describedby="code-hint"
+          (input)="upperCaseCode()"
+          [attr.cdkFocusInitial]="isEdit ? null : ''"
+        />
+        <mat-hint id="code-hint">{{ isEdit ? 'הקוד נקבע ביצירה ואינו ניתן לשינוי' : 'לדוגמה: HOME_OFFICE' }}</mat-hint>
+        @let code = form.controls.code;
+        @if (code.hasError('required')) {
+          <mat-error>יש להזין קוד</mat-error>
+        } @else if (code.hasError('pattern')) {
+          <mat-error>אותיות אנגליות גדולות וקו תחתון בלבד, מתחיל באות</mat-error>
+        } @else if (code.hasError('server')) {
+          <mat-error>{{ code.getError('server') }}</mat-error>
+        }
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="name">
+        <mat-label>שם הקטגוריה</mat-label>
+        <input
+          matInput
+          formControlName="name"
+          autocomplete="off"
+          dir="auto"
+          required
+          [attr.maxlength]="limits.nameMaxLength"
+          [attr.cdkFocusInitial]="isEdit ? '' : null"
+        />
+        @let name = form.controls.name;
+        @if (name.hasError('required')) {
+          <mat-error>יש להזין שם קטגוריה</mat-error>
+        } @else if (name.hasError('server')) {
+          <mat-error>{{ name.getError('server') }}</mat-error>
+        }
+      </mat-form-field>
+    </div>
+
+    <mat-form-field appearance="outline" class="field">
+      <mat-label>תיאור</mat-label>
+      <textarea
+        matInput
+        formControlName="description"
+        dir="auto"
+        rows="3"
+        required
+        [attr.maxlength]="limits.descriptionMaxLength"
+        aria-describedby="description-ai-note"
+      ></textarea>
+      <mat-hint>דוגמאות לפניות שמתאימות לקטגוריה</mat-hint>
+      <mat-hint align="end" aria-live="polite">{{ descriptionLength() }}/{{ limits.descriptionMaxLength }}</mat-hint>
+      @let description = form.controls.description;
+      @if (description.hasError('required')) {
+        <mat-error>יש להזין תיאור</mat-error>
+      } @else if (description.hasError('server')) {
+        <mat-error>{{ description.getError('server') }}</mat-error>
+      }
+    </mat-form-field>
+    <p class="note privacy" id="description-ai-note">
+      <mat-icon aria-hidden="true">smart_toy</mat-icon>
+      <span>התיאור נשלח ל-AI לצורך סיווג. אין לכלול בו שמות או פרטים אישיים.</span>
+    </p>
+
+    <mat-form-field appearance="outline" class="field">
+      <mat-label>סוג ניתוב</mat-label>
+      <mat-select formControlName="routingType" required>
+        @for (type of routingTypes; track type) {
+          <mat-option [value]="type">{{ type | routingTypeLabel }}</mat-option>
+        }
+      </mat-select>
+      @let routingType = form.controls.routingType;
+      @if (routingType.hasError('required')) {
+        <mat-error>יש לבחור סוג ניתוב</mat-error>
+      } @else if (routingType.hasError('server')) {
+        <mat-error>{{ routingType.getError('server') }}</mat-error>
+      }
+    </mat-form-field>
+
+    @if (showsHandlingDepartment()) {
+      <mat-form-field appearance="outline" class="field handling-department">
+        <mat-label>מחלקה מטפלת</mat-label>
+        <mat-select formControlName="handlingDepartment" required>
+          @for (department of departmentOptions(); track department.id) {
+            <mat-option [value]="department.id">
+              {{ department.name }}{{ department.inactive ? ' (לא פעילה)' : '' }}
+            </mat-option>
+          }
+        </mat-select>
+        @if (store.departmentsFailed()) {
+          <mat-hint class="hint-error">לא הצלחנו לטעון את המחלקות</mat-hint>
+        }
+        @let department = form.controls.handlingDepartment;
+        @if (department.hasError('required')) {
+          <mat-error>יש לבחור מחלקה מטפלת</mat-error>
+        } @else if (department.hasError('server')) {
+          <mat-error>{{ department.getError('server') }}</mat-error>
+        }
+      </mat-form-field>
+    } @else if (form.controls.routingType.value === 'RequesterDepartmentHr') {
+      <p class="note">
+        <mat-icon aria-hidden="true">info</mat-icon>
+        <span>הפנייה תנותב לגורם ה-HR של מחלקת העובד. אם אין במחלקה גורם כזה – לתור משאבי אנוש מרכזי.</span>
+      </p>
+    }
+
+    @if (category?.isFallback) {
+      <p class="note">
+        <mat-icon aria-hidden="true">shield</mat-icon>
+        <span>זו קטגוריית הגיבוי: פניות שלא סווגו מגיעות אליה. לא ניתן להשבית אותה.</span>
+      </p>
+    }
+  </mat-dialog-content>
+
+  <mat-dialog-actions align="end">
+    <button mat-button type="button" mat-dialog-close>ביטול</button>
+    <button mat-flat-button type="submit" class="btn-primary-gradient" [disabled]="store.saving()">
+      @if (store.saving()) {
+        <mat-spinner diameter="18" aria-hidden="true" />
+      }
+      {{ isEdit ? 'שמירה' : 'יצירת קטגוריה' }}
+    </button>
+  </mat-dialog-actions>
+</form>

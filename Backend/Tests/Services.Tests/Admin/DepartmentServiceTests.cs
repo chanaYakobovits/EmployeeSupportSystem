@@ -1,5 +1,6 @@
 using Common.Constants;
 using Common.DTOs.Departments;
+using Common.DTOs.Users;
 using Common.Enums;
 using Common.Exceptions;
 using Repositories.Interfaces;
@@ -177,6 +178,18 @@ public sealed class DepartmentServiceTests : AdminTestBase
         var after = await DepartmentService.GetAllAsync(includeInactive: false, CancellationToken.None);
 
         Assert.Equal(before.Count + 1, after.Count);
+    }
+
+    [Fact]
+    public async Task A_change_to_an_employee_evicts_the_cached_department_counts()
+    {
+        var before = await DepartmentService.GetAllAsync(includeInactive: false, CancellationToken.None);
+        Assert.Equal(3, before.Single(d => d.Id == DevelopmentId).ActiveUserCount);
+
+        await UserService.SetActiveAsync(NoaId, new SetUserActiveRequest(false), Ip, CancellationToken.None);
+        var after = await DepartmentService.GetAllAsync(includeInactive: false, CancellationToken.None);
+
+        Assert.Equal(2, after.Single(d => d.Id == DevelopmentId).ActiveUserCount);
     }
 
     [Fact]

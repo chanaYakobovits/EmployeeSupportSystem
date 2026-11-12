@@ -37,6 +37,7 @@ public sealed class UserService : IUserService
     private readonly IPasswordHasher _passwordHasher;
     private readonly IDateTimeProvider _clock;
     private readonly ICurrentUser _currentUser;
+    private readonly IReferenceDataCache _referenceData;
     private readonly IValidator<UserListQuery> _listValidator;
     private readonly IValidator<CreateUserRequest> _createValidator;
     private readonly IValidator<UpdateUserRequest> _updateValidator;
@@ -53,6 +54,7 @@ public sealed class UserService : IUserService
         IPasswordHasher passwordHasher,
         IDateTimeProvider clock,
         ICurrentUser currentUser,
+        IReferenceDataCache referenceData,
         IValidator<UserListQuery> listValidator,
         IValidator<CreateUserRequest> createValidator,
         IValidator<UpdateUserRequest> updateValidator,
@@ -68,6 +70,7 @@ public sealed class UserService : IUserService
         _passwordHasher = passwordHasher;
         _clock = clock;
         _currentUser = currentUser;
+        _referenceData = referenceData;
         _listValidator = listValidator;
         _createValidator = createValidator;
         _updateValidator = updateValidator;
@@ -121,6 +124,7 @@ public sealed class UserService : IUserService
             return newUser;
         }, cancellationToken);
 
+        InvalidateDepartments();
         _logger.LogInformation("User {UserId} created by admin {AdminUserId}", user.Id, _currentUser.UserId);
         return new CreateUserResponse(await GetAsync(user.Id, cancellationToken), temporaryPassword);
     }
@@ -178,6 +182,7 @@ public sealed class UserService : IUserService
             return true;
         }, cancellationToken);
 
+        InvalidateDepartments();
         _logger.LogInformation("User {UserId} updated by admin {AdminUserId}", user.Id, _currentUser.UserId);
         return await GetAsync(user.Id, cancellationToken);
     }
@@ -247,6 +252,7 @@ public sealed class UserService : IUserService
         Audit(AuditActions.UserActivated, user.Id, ipAddress, now);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
+        InvalidateDepartments();
         _logger.LogInformation("User {UserId} activated by admin {AdminUserId}", user.Id, _currentUser.UserId);
         return 0;
     }
@@ -284,6 +290,7 @@ public sealed class UserService : IUserService
             return count;
         }, cancellationToken);
 
+        InvalidateDepartments();
         _logger.LogInformation("User {UserId} deactivated by admin {AdminUserId}; {Count} tickets returned to the queue",
             user.Id, _currentUser.UserId, unassigned);
         return unassigned;
@@ -346,4 +353,10 @@ public sealed class UserService : IUserService
     private static ConflictException DuplicateEmail() =>
         new(DuplicateEmailMessage, "כל עובד צריך כתובת מייל משלו.", "duplicate-email",
             new Dictionary<string, string[]> { ["email"] = [DuplicateEmailMessage] });
+
+    /// <summary>
+    /// The cached department list shows active employee and handler counts and the manager's name (spec 11.3),
+    /// so a change to a user makes it stale.
+    /// </summary>
+    private void InvalidateDepartments() => _referenceData.Invalidate(ReferenceData.Departments, _currentUser.OrganizationId);
 }

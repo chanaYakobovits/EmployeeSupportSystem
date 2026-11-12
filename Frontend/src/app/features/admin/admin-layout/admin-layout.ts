@@ -9,7 +9,7 @@ interface AdminTab {
   icon: string;
 }
 
-/** The administration area (spec 7.8): tabs + the selected screen. Categories and SLA are added in task 2.4. */
+/** The administration area (spec 7.8): tabs + the selected screen. */
 @Component({
   selector: 'app-admin-layout',
   imports: [MatTabsModule, MatIconModule, RouterLink, RouterLinkActive, RouterOutlet],
@@ -21,5 +21,7 @@ export class AdminLayout {
   protected readonly tabs: readonly AdminTab[] = [
     { path: 'users', label: 'עובדים', icon: 'group' },
     { path: 'departments', label: 'מחלקות', icon: 'apartment' },
+    { path: 'categories', label: 'קטגוריות', icon: 'category' },
+    { path: 'sla', label: 'SLA', icon: 'timer' },
   ];
 }

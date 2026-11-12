@@ -10,7 +10,7 @@ internal sealed record CategorySeed(
     DepartmentKey? HandlingDepartment,
     bool IsFallback = false);
 
-/// <summary>Categories and routing (spec 3.5) and SLA targets (spec 3.4).</summary>
+/// <summary>Categories and routing (spec 3.5). SLA targets: <see cref="Common.Constants.SlaDefaults"/>.</summary>
 internal static class ReferenceSeedData
 {
     public const string Payroll = "PAYROLL";
@@ -41,13 +41,4 @@ internal static class ReferenceSeedData
         new(General, "כללי", "תור גיבוי – כל מה שלא סווג",
             RoutingType.FixedDepartment, DepartmentKey.HumanResources, IsFallback: true)
     ];
-
-    /// <summary>Default resolution targets in calendar hours (spec 3.4).</summary>
-    public static readonly IReadOnlyDictionary<Urgency, int> SlaHours = new Dictionary<Urgency, int>
-    {
-        [Urgency.Critical] = 4,
-        [Urgency.High] = 24,
-        [Urgency.Medium] = 72,
-        [Urgency.Low] = 120
-    };
 }

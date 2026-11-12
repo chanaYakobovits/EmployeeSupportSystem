@@ -544,3 +544,132 @@ Content-Type: application/json
 { "name": "x", "isActive": true }
 
 ### Reset all of the above: dotnet run --project API -- --seed
+
+### ======================================================================================
+### ============ Categories and SLA (task 2.4). Run the two logins at the top of "User administration" first ============
+### ======================================================================================
+### Seed category ids: 1 PAYROLL, 2 ATTENDANCE, 3 LEAVE, 4 EQUIPMENT, 5 ADMIN, 6 BENEFITS, 7 TRAINING, 8 GENERAL (fallback).
+
+### ---------- Categories (spec 3.5, 9.3) ----------
+
+### Any signed-in user → 200, active categories by name, GENERAL last; includeInactive is ignored for non-admins
+GET {{API_HostAddress}}/api/categories?includeInactive=true
+Authorization: Bearer {{employee.response.body.$.accessToken}}
+
+### Employee cannot create → 403
+POST {{API_HostAddress}}/api/categories
+Authorization: Bearer {{employee.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "code": "PARKING", "name": "חניה", "description": "חניה ותווי חניה", "routingType": "FixedDepartment", "handlingDepartmentId": 4 }
+
+### Create, FixedDepartment → 201, { category, warnings: [] }
+# @name parking
+POST {{API_HostAddress}}/api/categories
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "code": "PARKING", "name": "חניה", "description": "חניה ותווי חניה", "routingType": "FixedDepartment", "handlingDepartmentId": 4 }
+
+### Same code again → 409 "duplicate-category-code", errors.code
+POST {{API_HostAddress}}/api/categories
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "code": "PARKING", "name": "חניה 2", "description": "x", "routingType": "RequesterDepartmentHr" }
+
+### Lower-case / hyphen code → 400, errors.code
+POST {{API_HostAddress}}/api/categories
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "code": "home-office", "name": "עבודה מהבית", "description": "x", "routingType": "RequesterDepartmentHr" }
+
+### FixedDepartment without a department → 400, errors.handlingDepartmentId
+POST {{API_HostAddress}}/api/categories
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "code": "HOME_OFFICE", "name": "עבודה מהבית", "description": "x", "routingType": "FixedDepartment" }
+
+### RequesterDepartmentHr with a department → 400, errors.handlingDepartmentId
+POST {{API_HostAddress}}/api/categories
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "code": "HOME_OFFICE", "name": "עבודה מהבית", "description": "x", "routingType": "RequesterDepartmentHr", "handlingDepartmentId": 6 }
+
+### Handling department without active handlers (1 הנהלה) → 201 + warnings: ["אין במחלקה הנהלה גורמים מטפלים פעילים..."]
+POST {{API_HostAddress}}/api/categories
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "code": "EXECUTIVE_REQUESTS", "name": "פניות להנהלה", "description": "בקשות שדורשות אישור הנהלה", "routingType": "FixedDepartment", "handlingDepartmentId": 1 }
+
+### Edit PARKING → 200; the code is not part of the request and stays PARKING
+PUT {{API_HostAddress}}/api/categories/{{parking.response.body.$.category.id}}
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "name": "חניה ותחבורה", "description": "חניה, תווי חניה והסעות", "routingType": "RequesterDepartmentHr", "handlingDepartmentId": null, "isActive": true }
+
+### Deactivate PARKING → 200, isActive false (tickets keep it; no longer offered to AI / manual classification)
+PUT {{API_HostAddress}}/api/categories/{{parking.response.body.$.category.id}}
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "name": "חניה ותחבורה", "description": "חניה, תווי חניה והסעות", "routingType": "RequesterDepartmentHr", "isActive": false }
+
+### Deactivate GENERAL (fallback) → 422 "fallback-category-deactivation"
+PUT {{API_HostAddress}}/api/categories/8
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "name": "כללי", "description": "תור גיבוי – כל מה שלא סווג", "routingType": "FixedDepartment", "handlingDepartmentId": 6, "isActive": false }
+
+### Admin, including inactive → PARKING listed with isActive false
+GET {{API_HostAddress}}/api/categories?includeInactive=true
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+
+### Unknown category → 404
+PUT {{API_HostAddress}}/api/categories/99999
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "name": "x", "description": "y", "routingType": "RequesterDepartmentHr", "isActive": true }
+
+### ---------- SLA policies (spec 3.4) ----------
+
+### Any signed-in user → 200 { critical: 4, high: 24, medium: 72, low: 120 }
+GET {{API_HostAddress}}/api/sla-policies
+Authorization: Bearer {{employee.response.body.$.accessToken}}
+
+### Employee cannot change → 403
+PUT {{API_HostAddress}}/api/sla-policies
+Authorization: Bearer {{employee.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "critical": 2, "high": 8, "medium": 48, "low": 96 }
+
+### Valid change → 200 (new tickets only; existing DueAt values are kept). AuditLog "SlaPolicies.Updated".
+PUT {{API_HostAddress}}/api/sla-policies
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "critical": 2, "high": 8, "medium": 48, "low": 96 }
+
+### Out of order (high < critical) → 400, errors.high
+PUT {{API_HostAddress}}/api/sla-policies
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "critical": 24, "high": 8, "medium": 48, "low": 96 }
+
+### Zero, a fraction and a missing level → 400, errors.critical / high / low
+PUT {{API_HostAddress}}/api/sla-policies
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "critical": 0, "high": 1.5, "medium": 48 }
+
+### Reset all of the above: dotnet run --project API -- --seed

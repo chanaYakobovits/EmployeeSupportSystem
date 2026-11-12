@@ -1,0 +1,73 @@
+<app-page-header heading="יעדי SLA" subtitle="זמן היעד לפתרון פנייה, בשעות קלנדריות, לכל רמת דחיפות" />
+
+@switch (store.status()) {
+  @case ('loading') {
+    <app-loading-state message="טוען את יעדי ה-SLA..." />
+  }
+  @case ('error') {
+    <app-error-state (retry)="store.load()" />
+  }
+  @default {
+    @if (alert(); as alert) {
+      <app-form-alert [alert]="alert" />
+    }
+
+    <form class="surface-card form-card" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+      <h2 class="card-title">יעד פתרון לפי דחיפות</h2>
+
+      <div class="levels" role="group" aria-label="יעדי SLA לפי רמת דחיפות">
+        @for (level of levels; track level.field) {
+          @let control = form.controls[level.field];
+          <div class="level">
+            <app-urgency-badge class="level-name" [urgency]="level.urgency" [id]="'sla-label-' + level.field" />
+
+            <mat-form-field appearance="outline" class="hours" subscriptSizing="dynamic">
+              <mat-label>שעות</mat-label>
+              <input
+                matInput
+                type="number"
+                inputmode="numeric"
+                step="1"
+                min="1"
+                [max]="maxHours"
+                required
+                dir="ltr"
+                [formControlName]="level.field"
+                [attr.aria-describedby]="'sla-label-' + level.field + ' sla-duration-' + level.field"
+              />
+              @if (control.hasError('required')) {
+                <mat-error>יש להזין מספר שעות</mat-error>
+              } @else if (control.hasError('min') || control.hasError('max') || control.hasError('wholeNumber')) {
+                <mat-error>מספר שעות שלם בין 1 ל-{{ maxHours }}</mat-error>
+              } @else if (control.hasError(orderError)) {
+                <mat-error>{{ control.getError(orderError) }}</mat-error>
+              } @else if (control.hasError('server')) {
+                <mat-error>{{ control.getError('server') }}</mat-error>
+              }
+            </mat-form-field>
+
+            <span class="duration" [id]="'sla-duration-' + level.field">{{ duration(level.field) }}</span>
+          </div>
+        }
+      </div>
+
+      <p class="note">
+        <mat-icon aria-hidden="true">info</mat-icon>
+        <span>
+          השינוי חל על פניות חדשות בלבד. פניות קיימות שומרות על מועד היעד שלהן, אלא אם הדחיפות שלהן משתנה.
+          הסדר נשמר: קריטית ≤ גבוהה ≤ בינונית ≤ נמוכה.
+        </span>
+      </p>
+
+      <div class="form-actions">
+        <button mat-button type="button" [disabled]="form.pristine || store.saving()" (click)="reset()">ביטול שינויים</button>
+        <button mat-flat-button type="submit" class="btn-primary-gradient" [disabled]="store.saving()">
+          @if (store.saving()) {
+            <mat-spinner diameter="18" aria-hidden="true" />
+          }
+          שמירה
+        </button>
+      </div>
+    </form>
+  }
+}

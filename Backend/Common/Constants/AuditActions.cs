@@ -22,10 +22,21 @@ public static class AuditActions
     public const string UserDeactivated = "User.Deactivated";
     public const string UserActivated = "User.Activated";
     public const string UserPasswordReset = "User.PasswordReset";
+
+    // Categories and SLA (task 2.4). Only actor / entity / IP – never the description text.
+    public const string CategoryCreated = "Category.Created";
+    public const string CategoryUpdated = "Category.Updated";
+    public const string CategoryDeactivated = "Category.Deactivated";
+    public const string CategoryActivated = "Category.Activated";
+    public const string SlaPoliciesUpdated = "SlaPolicies.Updated";
 }
 
 /// <summary>Values of <c>AuditLog.EntityType</c>.</summary>
 public static class AuditEntityTypes
 {
     public const string User = "User";
+    public const string Category = "Category";
+
+    /// <summary>The organization's SLA policies as a whole (EntityId null).</summary>
+    public const string SlaPolicy = "SlaPolicy";
 }

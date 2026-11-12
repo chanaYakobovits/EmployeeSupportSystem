@@ -1,5 +1,6 @@
 import { HttpErrorResponse } from '@angular/common/http';
 
+import { Category } from '../../../core/models/category.models';
 import { Department } from '../../../core/models/department.models';
 import { UserDetails } from '../../../core/models/user.models';
 
@@ -32,6 +33,20 @@ export function fakeDepartment(overrides: Partial<Department> = {}): Department 
     manager: null,
     activeUserCount: 4,
     handlerCount: 1,
+    ...overrides,
+  };
+}
+
+export function fakeCategory(overrides: Partial<Category> = {}): Category {
+  return {
+    id: 1,
+    code: 'PAYROLL',
+    name: 'שכר ותלושים',
+    description: 'טעות בתלוש, שעות נוספות שלא שולמו',
+    routingType: 'FixedDepartment',
+    handlingDepartment: { id: 3, name: 'הנהלת חשבונות' },
+    isFallback: false,
+    isActive: true,
     ...overrides,
   };
 }

@@ -6,7 +6,6 @@ using Common.Interfaces;
 using Common.Models;
 using FluentValidation;
 using ValidationException = Common.Exceptions.ValidationException;
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Repositories.Interfaces;
 using Services.Interfaces;
@@ -26,15 +25,13 @@ public sealed class DepartmentService : IDepartmentService
     public const string DuplicateNameMessage = "כבר קיימת מחלקה בשם זה";
     public const string InvalidManagerMessage = "יש לבחור עובד פעיל בארגון";
 
-    private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(10);
-
     private readonly IDepartmentRepository _departments;
     private readonly IUserRepository _users;
     private readonly IAuditLogRepository _auditLogs;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IDateTimeProvider _clock;
     private readonly ICurrentUser _currentUser;
-    private readonly IMemoryCache _cache;
+    private readonly IReferenceDataCache _cache;
     private readonly IValidator<CreateDepartmentRequest> _createValidator;
     private readonly IValidator<UpdateDepartmentRequest> _updateValidator;
     private readonly ILogger<DepartmentService> _logger;
@@ -46,7 +43,7 @@ public sealed class DepartmentService : IDepartmentService
         IUnitOfWork unitOfWork,
         IDateTimeProvider clock,
         ICurrentUser currentUser,
-        IMemoryCache cache,
+        IReferenceDataCache cache,
         IValidator<CreateDepartmentRequest> createValidator,
         IValidator<UpdateDepartmentRequest> updateValidator,
         ILogger<DepartmentService> logger)
@@ -68,15 +65,10 @@ public sealed class DepartmentService : IDepartmentService
         // Inactive departments are an admin concern; everyone else always gets the active ones.
         includeInactive &= _currentUser.IsInRole(Role.Admin);
 
-        var key = CacheKey(_currentUser.OrganizationId, includeInactive);
-        if (_cache.TryGetValue(key, out IReadOnlyList<DepartmentDto>? cached) && cached is not null)
-        {
-            return cached;
-        }
-
-        var departments = await _departments.GetAllAsync(includeInactive, cancellationToken);
-        _cache.Set(key, departments, CacheDuration);
-        return departments;
+        // One cache entry per organization (spec 11.3) holding every department; a handful of rows.
+        var all = await _cache.GetOrCreateAsync(ReferenceData.Departments, _currentUser.OrganizationId,
+            ct => _departments.GetAllAsync(includeInactive: true, ct), cancellationToken);
+        return includeInactive ? all : all.Where(d => d.IsActive).ToList();
     }
 
     public async Task<DepartmentDto> CreateAsync(CreateDepartmentRequest request, string ipAddress,
@@ -239,14 +231,7 @@ public sealed class DepartmentService : IDepartmentService
         _auditLogs.Add(AuditEntries.ForUser(action, _currentUser.OrganizationId, _currentUser.UserId, targetUserId,
             ipAddress, now));
 
-    private void EvictCache()
-    {
-        _cache.Remove(CacheKey(_currentUser.OrganizationId, includeInactive: true));
-        _cache.Remove(CacheKey(_currentUser.OrganizationId, includeInactive: false));
-    }
-
-    private static string CacheKey(int organizationId, bool includeInactive) =>
-        $"departments:{organizationId}:{(includeInactive ? "all" : "active")}";
+    private void EvictCache() => _cache.Invalidate(ReferenceData.Departments, _currentUser.OrganizationId);
 
     private static ConflictException DuplicateName() =>
         new(DuplicateNameMessage, null, "duplicate-department-name",
