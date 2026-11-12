@@ -1,0 +1,168 @@
+<app-page-header heading="הפניות שלי" subtitle="כאן אפשר לפתוח פנייה חדשה ולעקוב אחרי הפניות שלך">
+  <a pageActions mat-flat-button class="btn-primary-gradient new-ticket-button" [routerLink]="newTicketUrl">
+    <mat-icon aria-hidden="true">add</mat-icon>
+    פנייה חדשה
+  </a>
+</app-page-header>
+
+<section class="summary" aria-label="סיכום הפניות">
+  @for (card of cards; track card.view) {
+    <button
+      type="button"
+      class="summary-card"
+      [class]="'tone-' + card.tone"
+      [class.active]="state().filters.view === card.view"
+      [attr.aria-pressed]="state().filters.view === card.view"
+      [attr.data-view]="card.view"
+      (click)="onCard(card.view)"
+    >
+      <span class="summary-icon" aria-hidden="true"><mat-icon>{{ card.icon }}</mat-icon></span>
+      <span class="summary-text">
+        <span class="summary-label">{{ card.label }}</span>
+        <span class="summary-value">
+          @if (store.summary(); as summary) {
+            {{ card.value(summary) }}
+          } @else {
+            <span aria-hidden="true">—</span>
+            <span class="visually-hidden">{{ store.summaryStatus() === 'error' ? 'לא זמין' : 'בטעינה' }}</span>
+          }
+        </span>
+      </span>
+    </button>
+  }
+</section>
+
+<app-filter-bar label="סינון פניות">
+  <app-search-field
+    class="grow"
+    label="חיפוש בנושא"
+    [value]="state().filters.search"
+    (search)="onSearch($event)"
+  />
+
+  <mat-button-toggle-group
+    class="segmented"
+    aria-label="סטטוס הפנייה"
+    hideSingleSelectionIndicator
+    [value]="viewFilter()"
+    (change)="onView($event.value)"
+  >
+    <mat-button-toggle value="all">הכל</mat-button-toggle>
+    <mat-button-toggle value="open">פתוחות</mat-button-toggle>
+    <mat-button-toggle value="waiting">ממתינות לתגובתי</mat-button-toggle>
+    <mat-button-toggle value="closed">סגורות</mat-button-toggle>
+  </mat-button-toggle-group>
+
+  @if (list.hasActiveFilters()) {
+    <button mat-button type="button" class="clear-button" (click)="list.clearFilters()">
+      <mat-icon aria-hidden="true">filter_alt_off</mat-icon>
+      ניקוי סינון
+    </button>
+  }
+</app-filter-bar>
+
+<app-data-table
+  caption="רשימת הפניות שלי"
+  [columns]="columns"
+  [rows]="list.items()"
+  [status]="list.status()"
+  [sort]="state().sort"
+  [totalCount]="list.totalCount()"
+  [page]="state().page"
+  [pageSize]="state().pageSize"
+  [rowClickable]="true"
+  [rowClass]="rowClass"
+  (sortChange)="list.setSort($event)"
+  (pageChange)="list.setPage($event.page, $event.pageSize)"
+  (rowActivate)="openTicket($event)"
+  (retry)="store.reload()"
+>
+  <ng-template appCell="id" let-ticket>
+    <a class="ticket-number" [routerLink]="ticketUrl(ticket.id)">
+      <span class="visually-hidden">פנייה מספר</span>
+      <span dir="ltr">#{{ ticket.id }}</span>
+    </a>
+  </ng-template>
+
+  <ng-template appCell="subject" let-ticket>
+    @if (ticket.isSubjectExcerpt) {
+      <span class="subject excerpt" dir="auto">
+        <span class="visually-hidden">תקציר התיאור: </span>{{ ticket.subject }}…
+      </span>
+    } @else {
+      <span class="subject" dir="auto">{{ ticket.subject }}</span>
+    }
+    @if (ticket.status === 'WaitingForEmployee') {
+      <span class="attention-note">
+        <mat-icon aria-hidden="true">reply</mat-icon>
+        נדרשת תגובתך
+      </span>
+    }
+  </ng-template>
+
+  <ng-template appCell="category" let-ticket>
+    @if (ticket.categoryName) {
+      {{ ticket.categoryName }}
+    } @else {
+      <span class="muted">מתבצע שיוך...</span>
+    }
+  </ng-template>
+
+  <ng-template appCell="status" let-ticket>
+    <app-status-badge [status]="ticket.status" />
+  </ng-template>
+
+  <ng-template appCell="handler" let-ticket>
+    @if (ticket.handlerName) {
+      {{ ticket.handlerName }}
+    } @else {
+      <span class="muted">טרם שויך</span>
+    }
+  </ng-template>
+
+  <ng-template appCell="createdAt" let-ticket>
+    <span class="date">{{ ticket.createdAt | dateTime }}</span>
+  </ng-template>
+
+  <ng-template appCell="updatedAt" let-ticket>
+    <app-relative-time [value]="ticket.updatedAt" />
+  </ng-template>
+
+  <!-- Phones: one card per ticket – number, subject, status, last update. The whole card is one link. -->
+  <ng-template appRowCard let-ticket>
+    <a class="ticket-card" [routerLink]="ticketUrl(ticket.id)">
+      <span class="ticket-card-top">
+        <span class="ticket-number" dir="ltr"><span class="visually-hidden">פנייה מספר </span>#{{ ticket.id }}</span>
+        <app-status-badge [status]="ticket.status" />
+      </span>
+      <span class="subject" dir="auto" [class.excerpt]="ticket.isSubjectExcerpt">
+        @if (ticket.isSubjectExcerpt) {
+          <span class="visually-hidden">תקציר התיאור: </span>{{ ticket.subject }}…
+        } @else {
+          {{ ticket.subject }}
+        }
+      </span>
+      <span class="ticket-card-updated">עודכנה <app-relative-time [value]="ticket.updatedAt" /></span>
+    </a>
+  </ng-template>
+
+  <div tableEmpty>
+    @if (list.hasActiveFilters()) {
+      <app-empty-state
+        icon="search_off"
+        heading="לא נמצאו פניות"
+        description="אף פנייה אינה מתאימה לחיפוש או לסינון שנבחרו."
+      >
+        <button mat-stroked-button type="button" (click)="list.clearFilters()">ניקוי סינון</button>
+      </app-empty-state>
+    } @else {
+      <app-empty-state
+        icon="inbox"
+        heading="אין לך פניות עדיין"
+        description="יש שאלה או בעיה? פותחים פנייה, והיא מגיעה לגורם המתאים."
+      >
+        <a mat-flat-button class="btn-primary-gradient" [routerLink]="newTicketUrl">פנייה חדשה</a>
+      </app-empty-state>
+    }
+  </div>
+</app-data-table>

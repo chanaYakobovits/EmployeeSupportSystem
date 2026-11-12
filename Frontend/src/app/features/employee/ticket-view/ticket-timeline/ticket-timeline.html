@@ -1,0 +1,23 @@
+<ol class="timeline">
+  @for (item of items(); track $index) {
+    <li class="entry" [class.opening]="item.previousStatus === null">
+      <span class="marker" aria-hidden="true">
+        <mat-icon>{{ item.previousStatus === null ? 'flag' : 'sync_alt' }}</mat-icon>
+      </span>
+      <div class="content">
+        <p class="what">
+          @if (item.previousStatus === null) {
+            הפנייה נפתחה
+          } @else {
+            הסטטוס שונה ל-<app-status-badge [status]="item.newStatus" />
+          }
+        </p>
+        <p class="meta">
+          <span>{{ item.changedByName ?? 'מערכת' }}</span>
+          <span aria-hidden="true">·</span>
+          <app-relative-time [value]="item.changedAt" />
+        </p>
+      </div>
+    </li>
+  }
+</ol>

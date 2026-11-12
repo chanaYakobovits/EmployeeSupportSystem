@@ -1,3 +1,4 @@
+import { BreakpointObserver, Breakpoints } from '@angular/cdk/layout';
 import { NgTemplateOutlet } from '@angular/common';
 import {
   ChangeDetectionStrategy,
@@ -5,14 +6,17 @@ import {
   Directive,
   TemplateRef,
   computed,
+  contentChild,
   contentChildren,
   inject,
   input,
   output,
 } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { MatIconModule } from '@angular/material/icon';
 import { MatPaginatorIntl, MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { map } from 'rxjs';
 
 import { PAGE_SIZE_OPTIONS } from '../../../core/models/paging.models';
 import { HebrewPaginatorIntl } from '../../i18n/hebrew-paginator-intl';
@@ -46,6 +50,16 @@ export class DataTableCell {
 }
 
 /**
+ * Optional card layout of a row for narrow screens (phones): <ng-template appRowCard let-row>…</ng-template>.
+ * When present, the table is replaced by a list of these cards below the XSmall breakpoint.
+ * The card should contain a link, so keyboard users can open the row.
+ */
+@Directive({ selector: 'ng-template[appRowCard]' })
+export class DataTableRowCard {
+  readonly template = inject<TemplateRef<{ $implicit: unknown }>>(TemplateRef);
+}
+
+/**
  * Table in a card with server-side sort and paging (spec 9.4) and the view states of 7.10.
  * The table never sorts or pages by itself: it emits sortChange / pageChange and shows what it is given
  * (typically a ListStore's state). The "empty" content is projected with the tableEmpty attribute, so the screen
@@ -73,6 +87,8 @@ export class DataTable<T> {
   /** Rows react to a click (e.g. open the details). Keyboard users use the link inside the row. */
   readonly rowClickable = input(false);
   readonly trackBy = input<(row: T) => unknown>((row) => (row as { id?: unknown }).id ?? row);
+  /** Extra CSS class of a row (or its card). Styled here: "row-attention" (needs the user's action). */
+  readonly rowClass = input<(row: T) => string | null>(() => null);
 
   readonly sortChange = output<ListSort>();
   readonly pageChange = output<DataTablePage>();
@@ -82,6 +98,16 @@ export class DataTable<T> {
   protected readonly pageSizeOptions = PAGE_SIZE_OPTIONS;
   private readonly cells = contentChildren(DataTableCell);
   protected readonly templates = computed(() => new Map(this.cells().map((cell) => [cell.key(), cell.template])));
+  protected readonly rowCard = contentChild(DataTableRowCard);
+
+  private readonly isNarrow = toSignal(
+    inject(BreakpointObserver)
+      .observe(Breakpoints.XSmall)
+      .pipe(map((state) => state.matches)),
+    { initialValue: false },
+  );
+  /** Cards instead of the table: a card template was given and the screen is narrow. */
+  protected readonly cardLayout = computed(() => this.rowCard() !== undefined && this.isNarrow());
 
   protected readonly view = computed<'loading' | 'error' | 'empty' | 'data'>(() => {
     if (this.status() === 'error') {

@@ -18,15 +18,21 @@ const FORMATTER = new Intl.DateTimeFormat('en-GB', {
  * The API sends UTC ("…Z"); a value without a zone is read as UTC too, never as browser-local time.
  */
 export function formatDateTime(value: string | Date | null | undefined): string {
-  if (value === null || value === undefined || value === '') {
-    return '';
-  }
-  const date = typeof value === 'string' ? new Date(hasZone(value) ? value : `${value}Z`) : value;
-  if (Number.isNaN(date.getTime())) {
+  const date = parseApiDate(value);
+  if (date === null) {
     return '';
   }
   const parts = Object.fromEntries(FORMATTER.formatToParts(date).map((part) => [part.type, part.value]));
   return `${parts['day']}/${parts['month']}/${parts['year']} ${parts['hour']}:${parts['minute']}`;
+}
+
+/** A date from the API (UTC; a value without a zone is read as UTC too), or null for no / invalid value. */
+export function parseApiDate(value: string | Date | null | undefined): Date | null {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+  const date = typeof value === 'string' ? new Date(hasZone(value) ? value : `${value}Z`) : value;
+  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 function hasZone(value: string): boolean {

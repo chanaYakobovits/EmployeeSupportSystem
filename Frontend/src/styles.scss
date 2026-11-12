@@ -34,6 +34,14 @@
   --urgency-high: var(--error-text);
   --urgency-critical: #7a1712;
   --accent-text: #00737a; // darker teal: --accent as text fails WCAG AA
+  // Ticket status colours (design guide) – text colours that pass WCAG AA on their 10% tint.
+  --status-new: var(--primary);
+  --status-assigned: var(--accent-text);
+  --status-in-progress: var(--primary-dark);
+  --status-waiting: var(--warning-text);
+  --status-resolved: var(--success-text);
+  --status-closed: var(--text-secondary);
+  --status-cancelled: #737373; // lighter grey, outline only (no tint)
   --accent-soft: rgba(0, 163, 173, 0.1);
   --auth-bg-start: #f0f7ff;
   --on-primary-overlay: rgba(255, 255, 255, 0.15);

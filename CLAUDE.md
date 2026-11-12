@@ -7,8 +7,9 @@
 ## מצב משימות (לפי פרק 12 באפיון שב-docs/)
 - הושלמו: 1.1–1.5 (תשתית), 4.1 PiiRedactor, 4.2 לקוח OpenAI (נבנו מוקדם, לפני שלב ב'),
   2.1 אימות, 2.2 מסכי התחברות, 2.3א API לניהול עובדים ומחלקות, 2.3ב מסכי ניהול עובדים ומחלקות,
-  2.4 ניהול קטגוריות ו-SLA (API + מסכים), 3.1 חלק א' (API ליצירת פנייה וצפייה של עובד).
-- הבא בתור: 3.1 חלק ב' – מסכי "הפניות שלי", "פנייה חדשה", "צפייה" ב-Angular.
+  2.4 ניהול קטגוריות ו-SLA (API + מסכים), 3.1 חלק א' (API ליצירת פנייה וצפייה של עובד),
+  3.1 חלק ב' (מסכי "הפניות שלי", "פנייה חדשה", "צפייה בפנייה" ב-Angular).
+- הבא בתור: 3.2 – קבצים ותגובות.
 - תוספת שלא באפיון: בדיקת איכות סיווג AI על 30 פניות לדוגמה – אחרי משימה 4.3.
 - תוספת שלא באפיון: הזמנת עובד במייל (האפיון 14 שאלה 3, "בעתיד"). שלב א' (שרת) ושלב ב' (מסך set-password, סטטוס הזמנה
   ברשימה ובעריכה, שליחה מחדש, סינון לפי סטטוס הזמנה) – הושלמו.
@@ -185,6 +186,22 @@
     ציר הזמן: שינויי סטטוס בלבד, בלי `Reason` (עלול להיות פנימי – להחליט ב-3.5), `changedByName` null = מערכת.
   * DTOs של הפונה (`Common/DTOs/Tickets/RequesterTicketDtos.cs`) – אסור להוסיף Urgency, DueAt, AiStatus, ניתוח AI,
     ClassificationSource, Reason או הערות פנימיות. `RequesterJsonTests` בודק את ה-JSON ואת הטיפוסים.
+
+- פניות – צד העובד ב-Frontend (משימה 3.1ב):
+  * נתיבים: `/employee` (הפניות שלי), `/employee/tickets/new` (עם `unsavedChangesGuard`), `/employee/tickets/:id`.
+    ה-URL-ים ב-`features/employee/employee-urls.ts`.
+  * קבוצות סטטוס (כרטיסי מדד + כפתורי פלח) – `REQUESTER_STATUS_GROUPS` ב-`core/models/ticket.models.ts`, מקום אחד:
+    open = ‏New/Assigned/InProgress/Resolved (כמו `TicketStatuses.RequesterOpen`), waiting = WaitingForEmployee,
+    closed = Closed + Cancelled. ב-URL ‏`?view=open|waiting|closed`, לשרת נשלח `status` חוזר.
+    כרטיס "נסגרו החודש" מסנן ל-closed ומציג את כל הסגורות והמבוטלות (אין סינון תאריך בשרת).
+  * `toHttpParams` שולח מערך כפרמטר חוזר (`?status=New&status=Assigned`).
+  * `app-data-table`: ‏`rowClass` (מעוצב שם: `row-attention`) ו-`<ng-template appRowCard>` – ברוחב XSmall כרטיסים במקום טבלה.
+    לשימוש גם בתור המטפל (3.4).
+  * `unsavedChangesGuard` + `HasUnsavedChanges` (shared/forms): confirm ביציאה עם טקסט. במסך פנייה חדשה גם `beforeunload`.
+    אחרי שליחה מוצלחת – בלי confirm, ומעבר לצפייה עם `replaceUrl`.
+  * `app-status-badge` (צבעים `--status-*` ב-styles.scss), `statusLabel` pipe, `app-relative-time` (טקסט יחסי + tooltip ותאריך
+    מלא לקורא מסך). `formatRelativeTime` כתוב ידנית בעברית (צורת זוגי) – `Intl.RelativeTimeFormat('he')` נותן "לפני שעתיים (2)".
+  * מונה התווים מוכרז ב-`aria-live` רק 800ms אחרי הפסקת הקלדה.
 
 ## בהמשך
 - משימה 2.2: לטעון את Shell ב-loadComponent (lazy), מסך ההתחברות מחוצה לו –

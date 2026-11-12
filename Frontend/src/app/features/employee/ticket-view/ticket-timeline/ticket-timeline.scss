@@ -1,0 +1,78 @@
+:host {
+  display: block;
+}
+
+.timeline {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.entry {
+  position: relative;
+  display: flex;
+  gap: 12px;
+  padding-bottom: 18px;
+
+  // The line that joins the markers.
+  &:not(:last-child)::before {
+    content: '';
+    position: absolute;
+    inset-inline-start: 15px;
+    top: 32px;
+    bottom: 0;
+    width: 2px;
+    background: var(--border);
+  }
+
+  &:last-child {
+    padding-bottom: 0;
+  }
+}
+
+.marker {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--primary-soft);
+  color: var(--primary);
+
+  mat-icon {
+    width: 18px;
+    height: 18px;
+    font-size: 18px;
+  }
+
+  .opening & {
+    background: var(--accent-soft);
+    color: var(--accent-text);
+  }
+}
+
+.content {
+  min-width: 0;
+  padding-top: 4px;
+}
+
+.what {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+}

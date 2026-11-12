@@ -32,6 +32,11 @@ describe('app routes', () => {
     expect(guardedPaths).toEqual(areaPaths);
   });
 
+  it('the home page of a signed-in user is "my tickets"', () => {
+    const home = shellChildren.find((child) => child.path === '' && child.pathMatch === 'full');
+    expect(home?.redirectTo).toBe('employee');
+  });
+
   it('voluntary password change is inside the shell, the mandatory one outside it', () => {
     expect(shellChildren.find((child) => child.path === 'account/change-password')?.data?.['mode']).toBe('voluntary');
     expect(routes.find((route) => route.path === 'change-password')?.data?.['mode']).toBeUndefined();

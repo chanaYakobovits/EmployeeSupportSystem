@@ -1,0 +1,99 @@
+<a class="back-link" [routerLink]="myTicketsUrl">
+  <mat-icon class="icon-mirror-rtl" aria-hidden="true">arrow_forward</mat-icon>
+  חזרה לפניות שלי
+</a>
+
+@switch (store.status()) {
+  @case ('loading') {
+    <app-loading-state message="טוען את הפנייה..." />
+  }
+  @case ('notFound') {
+    <app-empty-state icon="search_off" heading="הפנייה לא נמצאה" description="ייתכן שהקישור שגוי, או שהפנייה אינה שלך.">
+      <a mat-stroked-button [routerLink]="myTicketsUrl">חזרה לפניות שלי</a>
+    </app-empty-state>
+  }
+  @case ('error') {
+    <app-error-state (retry)="reload()" />
+  }
+  @default {
+    @if (ticket(); as ticket) {
+      <header class="ticket-header">
+        <p class="ticket-number" dir="ltr">#{{ ticket.id }}</p>
+        <h1 class="ticket-title" dir="auto">
+          <span class="visually-hidden">פנייה מספר {{ ticket.id }}: </span>
+          @if (ticket.subject) {
+            {{ ticket.subject }}
+          } @else {
+            <span class="no-subject">ללא נושא</span>
+          }
+        </h1>
+        <app-status-badge class="header-status" [status]="ticket.status" />
+      </header>
+
+      <div class="layout">
+        <div class="main">
+          <section class="surface-card card" aria-labelledby="description-title">
+            <h2 id="description-title" class="card-title">תיאור הפנייה</h2>
+            <!-- Plain text (interpolation, never innerHTML); line breaks kept by white-space: pre-wrap. -->
+            <p class="description" dir="auto">{{ ticket.description }}</p>
+          </section>
+
+          <section class="surface-card card" aria-labelledby="timeline-title">
+            <h2 id="timeline-title" class="card-title">מה קרה עם הפנייה</h2>
+            <app-ticket-timeline [items]="ticket.timeline" />
+          </section>
+        </div>
+
+        <aside class="surface-card card details" aria-labelledby="details-title">
+          <h2 id="details-title" class="card-title">פרטי הפנייה</h2>
+          <dl class="facts">
+            <div class="fact">
+              <dt>סטטוס</dt>
+              <dd><app-status-badge [status]="ticket.status" /></dd>
+            </div>
+            <div class="fact">
+              <dt>קטגוריה</dt>
+              <dd>
+                @if (ticket.categoryName) {
+                  {{ ticket.categoryName }}
+                } @else {
+                  <span class="muted">מתבצע שיוך...</span>
+                }
+              </dd>
+            </div>
+            <div class="fact">
+              <dt>מטפל</dt>
+              <dd>
+                @if (ticket.handlerName) {
+                  {{ ticket.handlerName }}
+                } @else {
+                  <span class="muted">טרם שויך</span>
+                }
+              </dd>
+            </div>
+            <div class="fact">
+              <dt>נפתחה</dt>
+              <dd>{{ ticket.createdAt | dateTime }}</dd>
+            </div>
+            <div class="fact">
+              <dt>עדכון אחרון</dt>
+              <dd>{{ ticket.updatedAt | dateTime }}</dd>
+            </div>
+            @if (ticket.resolvedAt) {
+              <div class="fact">
+                <dt>נפתרה</dt>
+                <dd>{{ ticket.resolvedAt | dateTime }}</dd>
+              </div>
+            }
+            @if (ticket.closedAt) {
+              <div class="fact">
+                <dt>נסגרה</dt>
+                <dd>{{ ticket.closedAt | dateTime }}</dd>
+              </div>
+            }
+          </dl>
+        </aside>
+      </div>
+    }
+  }
+}

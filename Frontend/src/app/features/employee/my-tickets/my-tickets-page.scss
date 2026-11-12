@@ -1,0 +1,187 @@
+// Summary cards (design guide "כרטיסי מדד"): icon in a tinted rounded square + label + big number.
+.summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.summary-card {
+  --tone: var(--primary);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px;
+  border: 2px solid transparent;
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  font: inherit;
+  color: var(--text-primary);
+  text-align: start;
+  cursor: pointer;
+  transition:
+    transform var(--transition),
+    box-shadow var(--transition),
+    border-color var(--transition);
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+  }
+
+  &.active {
+    border-color: var(--tone);
+  }
+
+  &.tone-warning {
+    --tone: var(--warning-text);
+  }
+
+  &.tone-success {
+    --tone: var(--success-text);
+  }
+}
+
+.summary-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--tone) 10%, transparent);
+  color: var(--tone);
+}
+
+.summary-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.summary-label {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.summary-value {
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.segmented {
+  border-radius: var(--radius-field);
+}
+
+// Table cells and phone cards (templates declared here, so styled here).
+.ticket-number {
+  font-weight: 700;
+  color: var(--primary);
+  text-decoration: none;
+  white-space: nowrap;
+
+  &:hover,
+  &:focus-visible {
+    text-decoration: underline;
+  }
+}
+
+.subject {
+  display: block;
+  max-width: 360px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  &.excerpt {
+    font-style: italic;
+    color: var(--text-secondary);
+  }
+}
+
+.attention-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--warning-text);
+
+  mat-icon {
+    width: 16px;
+    height: 16px;
+    font-size: 16px;
+  }
+}
+
+.muted {
+  color: var(--text-secondary);
+}
+
+.date {
+  white-space: nowrap;
+}
+
+.ticket-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+  color: var(--text-primary);
+  text-decoration: none;
+
+  &:hover {
+    background: var(--primary-soft-hover);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: -2px;
+  }
+
+  .subject {
+    max-width: none;
+    white-space: normal;
+  }
+}
+
+.ticket-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ticket-card-updated {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+@media (max-width: 767.98px) {
+  .summary {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .summary-card {
+    padding: 14px 16px;
+  }
+
+  .summary-value {
+    font-size: 24px;
+  }
+
+  // The segmented filter scrolls sideways rather than squeezing four labels.
+  .segmented {
+    overflow-x: auto;
+  }
+}

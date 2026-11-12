@@ -16,48 +16,58 @@
       <ng-content select="[tableEmpty]" />
     }
     @default {
-      <!-- Focusable so keyboard users can scroll a wide table sideways (mobile). -->
-      <div class="table-scroll" tabindex="0" role="region" [attr.aria-label]="caption()">
-        <table class="data-table">
-          <caption class="visually-hidden">{{ caption() }}</caption>
-          <thead>
-            <tr>
-              @for (column of columns(); track column.key) {
-                <th scope="col" [attr.aria-sort]="ariaSort(column)" [class]="'align-' + (column.align ?? 'start')">
-                  @if (column.sortKey) {
-                    <button
-                      type="button"
-                      class="sort-button"
-                      [class.sorted]="sort()?.by === column.sortKey"
-                      (click)="toggleSort(column)"
-                    >
-                      <span>{{ column.header }}</span>
-                      <mat-icon class="sort-icon" aria-hidden="true">{{ sortIcon(column) }}</mat-icon>
-                    </button>
-                  } @else {
-                    {{ column.header }}
-                  }
-                </th>
-              }
-            </tr>
-          </thead>
-          <tbody>
-            @for (row of rows(); track trackBy()(row)) {
-              <tr [class.clickable]="rowClickable()" (click)="onRowClick(row, $event)">
+      @if (cardLayout() && rowCard(); as card) {
+        <ul class="card-list" [attr.aria-label]="caption()">
+          @for (row of rows(); track trackBy()(row)) {
+            <li class="row-card" [class]="rowClass()(row)">
+              <ng-container [ngTemplateOutlet]="card.template" [ngTemplateOutletContext]="{ $implicit: row }" />
+            </li>
+          }
+        </ul>
+      } @else {
+        <!-- Focusable so keyboard users can scroll a wide table sideways (mobile). -->
+        <div class="table-scroll" tabindex="0" role="region" [attr.aria-label]="caption()">
+          <table class="data-table">
+            <caption class="visually-hidden">{{ caption() }}</caption>
+            <thead>
+              <tr>
                 @for (column of columns(); track column.key) {
-                  <td [class]="'align-' + (column.align ?? 'start')">
-                    @if (templates().get(column.key); as template) {
-                      <ng-container [ngTemplateOutlet]="template" [ngTemplateOutletContext]="{ $implicit: row }" />
+                  <th scope="col" [attr.aria-sort]="ariaSort(column)" [class]="'align-' + (column.align ?? 'start')">
+                    @if (column.sortKey) {
+                      <button
+                        type="button"
+                        class="sort-button"
+                        [class.sorted]="sort()?.by === column.sortKey"
+                        (click)="toggleSort(column)"
+                      >
+                        <span>{{ column.header }}</span>
+                        <mat-icon class="sort-icon" aria-hidden="true">{{ sortIcon(column) }}</mat-icon>
+                      </button>
                     } @else {
-                      {{ cellText(row, column.key) }}
+                      {{ column.header }}
                     }
-                  </td>
+                  </th>
                 }
               </tr>
-            }
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              @for (row of rows(); track trackBy()(row)) {
+                <tr [class]="rowClass()(row)" [class.clickable]="rowClickable()" (click)="onRowClick(row, $event)">
+                  @for (column of columns(); track column.key) {
+                    <td [class]="'align-' + (column.align ?? 'start')">
+                      @if (templates().get(column.key); as template) {
+                        <ng-container [ngTemplateOutlet]="template" [ngTemplateOutletContext]="{ $implicit: row }" />
+                      } @else {
+                        {{ cellText(row, column.key) }}
+                      }
+                    </td>
+                  }
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
 
       @if (paginated()) {
         <mat-paginator

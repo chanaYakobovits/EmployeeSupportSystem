@@ -117,3 +117,40 @@ tbody tr {
 .paginator {
   border-top: 1px solid var(--border);
 }
+
+// Narrow screens (phones): one card per row instead of the table.
+.card-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row-card {
+  border-bottom: 1px solid var(--border);
+  transition: background var(--transition);
+
+  &:last-child {
+    border-bottom: 0;
+  }
+}
+
+// rowClass "row-attention": a row that needs the user's action (e.g. a ticket waiting for the employee).
+// Tinted, with a stripe on the start side – the row also says why in text, so colour is not the only cue.
+tr.row-attention {
+  background: var(--warning-soft);
+
+  &:hover {
+    background: var(--warning-soft);
+  }
+
+  td:first-child {
+    border-inline-start: 4px solid var(--warning-text);
+  }
+}
+
+.row-card.row-attention {
+  background: var(--warning-soft);
+  border-inline-start: 4px solid var(--warning-text);
+}

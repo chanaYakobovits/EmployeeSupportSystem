@@ -1,0 +1,78 @@
+<a class="back-link" [routerLink]="myTicketsUrl">
+  <mat-icon class="icon-mirror-rtl" aria-hidden="true">arrow_forward</mat-icon>
+  חזרה לפניות שלי
+</a>
+
+<app-page-header heading="פנייה חדשה" subtitle="מתארים במילים שלך מה קרה, והפנייה תגיע לגורם המתאים" />
+
+<form class="surface-card form-card" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+  @if (alert(); as alert) {
+    <app-form-alert [alert]="alert" />
+  }
+
+  <p id="privacy-note" class="privacy-note">
+    <mat-icon aria-hidden="true">info</mat-icon>
+    <span>אין צורך לכתוב פרטים אישיים כמו תעודת זהות או מספר חשבון – הפנייה מזוהה אוטומטית.</span>
+  </p>
+
+  <mat-form-field appearance="outline" class="field">
+    <mat-label>נושא (רשות)</mat-label>
+    <input
+      matInput
+      formControlName="subject"
+      autocomplete="off"
+      dir="auto"
+      [attr.maxlength]="limits.subjectMaxLength"
+    />
+    <mat-hint align="end" class="counter">{{ subjectLength() }} / {{ limits.subjectMaxLength }}</mat-hint>
+    @let subject = form.controls.subject;
+    @if (subject.hasError('maxlength')) {
+      <mat-error>הנושא יכול להכיל עד {{ limits.subjectMaxLength }} תווים</mat-error>
+    } @else if (subject.hasError('server')) {
+      <mat-error>{{ subject.getError('server') }}</mat-error>
+    }
+  </mat-form-field>
+
+  <mat-form-field appearance="outline" class="field">
+    <mat-label>תיאור הפנייה</mat-label>
+    <textarea
+      matInput
+      formControlName="description"
+      dir="auto"
+      required
+      cdkTextareaAutosize
+      cdkAutosizeMinRows="6"
+      cdkAutosizeMaxRows="18"
+      aria-describedby="privacy-note"
+      [attr.maxlength]="limits.descriptionMaxLength"
+    ></textarea>
+    <mat-hint align="start">לפחות {{ limits.descriptionMinLength }} תווים</mat-hint>
+    <mat-hint align="end" class="counter">{{ descriptionLength() }} / {{ descriptionMaxText }}</mat-hint>
+    @let description = form.controls.description;
+    @if (description.hasError('required')) {
+      <mat-error>יש לתאר את הפנייה</mat-error>
+    } @else if (description.hasError('minlength')) {
+      <mat-error>התיאור צריך להכיל לפחות {{ limits.descriptionMinLength }} תווים</mat-error>
+    } @else if (description.hasError('maxlength')) {
+      <mat-error>התיאור יכול להכיל עד {{ descriptionMaxText }} תווים</mat-error>
+    } @else if (description.hasError('server')) {
+      <mat-error>{{ description.getError('server') }}</mat-error>
+    }
+  </mat-form-field>
+  <p class="visually-hidden" aria-live="polite" aria-atomic="true">{{ counterAnnouncement() }}</p>
+
+  <!-- Reserved for attachments (task 3.2: up to 3 files, 5MB each). -->
+  <section class="attachments-slot" aria-hidden="true"></section>
+
+  <div class="form-actions">
+    <a mat-button [routerLink]="myTicketsUrl">ביטול</a>
+    <button mat-flat-button type="submit" class="btn-primary-gradient submit-button" [disabled]="store.saving()">
+      @if (store.saving()) {
+        <mat-spinner diameter="18" aria-hidden="true" />
+      } @else {
+        <mat-icon aria-hidden="true">send</mat-icon>
+      }
+      {{ store.saving() ? 'שולח...' : 'שליחת הפנייה' }}
+    </button>
+  </div>
+</form>
