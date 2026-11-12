@@ -10,7 +10,16 @@ public class User
     public string LastName { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
     public string JobTitle { get; set; } = string.Empty;
-    public string PasswordHash { get; set; } = string.Empty;
+    /// <summary>
+    /// Null for an invited user who has not set a password yet: no password can sign in (AuthService treats it as a
+    /// wrong password).
+    /// </summary>
+    public string? PasswordHash { get; set; }
+
+    /// <summary>
+    /// True until the user chose a password of their own (invited, or a temporary password from the admin).
+    /// An invitation can be (re)sent only while this is true.
+    /// </summary>
     public bool MustChangePassword { get; set; }
     public int FailedLoginCount { get; set; }
     public DateTime? LockoutEnd { get; set; }

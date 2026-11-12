@@ -9,6 +9,7 @@ using FluentValidation;
 using ValidationException = Common.Exceptions.ValidationException;
 using Microsoft.Extensions.Logging;
 using Repositories.Interfaces;
+using Services.Implementations.Invitations;
 using Services.Interfaces;
 using Services.Mapping;
 using Services.Validators;
@@ -20,7 +21,9 @@ namespace Services.Implementations;
 /// Protection rules (all → 422): an admin cannot deactivate themself or remove their own Admin role; the organization
 /// always keeps an active Admin (checked under a lock); the DepartmentManager role follows the departments
 /// (<see cref="DepartmentManagerRules"/>); a department manager cannot be deactivated.
-/// Temporary passwords exist only in the response: never logged, audited or stored except as a hash.
+/// A new user gets no password but an invitation e-mail (queued in the same transaction); a password reset gives a
+/// temporary password and cancels open invitations. Temporary passwords exist only in the response: never logged,
+/// audited or stored except as a hash.
 /// </summary>
 public sealed class UserService : IUserService
 {
@@ -32,6 +35,7 @@ public sealed class UserService : IUserService
     private readonly IDepartmentRepository _departments;
     private readonly IRefreshTokenRepository _refreshTokens;
     private readonly ITicketRepository _tickets;
+    private readonly IUserInvitationRepository _invitations;
     private readonly IAuditLogRepository _auditLogs;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IPasswordHasher _passwordHasher;
@@ -49,6 +53,7 @@ public sealed class UserService : IUserService
         IDepartmentRepository departments,
         IRefreshTokenRepository refreshTokens,
         ITicketRepository tickets,
+        IUserInvitationRepository invitations,
         IAuditLogRepository auditLogs,
         IUnitOfWork unitOfWork,
         IPasswordHasher passwordHasher,
@@ -65,6 +70,7 @@ public sealed class UserService : IUserService
         _departments = departments;
         _refreshTokens = refreshTokens;
         _tickets = tickets;
+        _invitations = invitations;
         _auditLogs = auditLogs;
         _unitOfWork = unitOfWork;
         _passwordHasher = passwordHasher;
@@ -83,7 +89,7 @@ public sealed class UserService : IUserService
     public async Task<PagedResult<UserListItemDto>> GetPageAsync(UserListQuery query, CancellationToken cancellationToken)
     {
         await _listValidator.EnsureValidAsync(query, cancellationToken);
-        return await _users.GetPageAsync(query, cancellationToken);
+        return await _users.GetPageAsync(query, _clock.UtcNow, cancellationToken);
     }
 
     public async Task<UserDetailsDto> GetAsync(int userId, CancellationToken cancellationToken) =>
@@ -91,7 +97,7 @@ public sealed class UserService : IUserService
 
     // ===================== Create =====================
 
-    public async Task<CreateUserResponse> CreateAsync(CreateUserRequest request, string ipAddress,
+    public async Task<UserDetailsDto> CreateAsync(CreateUserRequest request, string ipAddress,
         CancellationToken cancellationToken)
     {
         await _createValidator.EnsureValidAsync(request, cancellationToken);
@@ -108,14 +114,15 @@ public sealed class UserService : IUserService
         }
 
         var now = _clock.UtcNow;
-        var temporaryPassword = TemporaryPasswordGenerator.Generate();
 
         var user = await _unitOfWork.ExecuteInTransactionAsync(async ct =>
         {
             var employeeCode = EmployeeCodeFormat.Format(await _users.NextEmployeeNumberAsync(ct));
-            var newUser = request.ToNewUser(_currentUser.OrganizationId, employeeCode,
-                _passwordHasher.Hash(temporaryPassword), roles, now);
+            // No password: the employee sets one through the invitation e-mail. The job is saved with the user,
+            // so a user never exists without their invitation (the worker sends it moments later).
+            var newUser = request.ToNewUser(_currentUser.OrganizationId, employeeCode, roles, now);
             _users.Add(newUser);
+            _invitations.AddJob(InvitationQueue.NewJob(newUser, now));
             await SaveTranslatingDuplicatesAsync(ct);
 
             // Second save in the same transaction: the audit record needs the new user's id.
@@ -125,8 +132,41 @@ public sealed class UserService : IUserService
         }, cancellationToken);
 
         InvalidateDepartments();
-        _logger.LogInformation("User {UserId} created by admin {AdminUserId}", user.Id, _currentUser.UserId);
-        return new CreateUserResponse(await GetAsync(user.Id, cancellationToken), temporaryPassword);
+        _logger.LogInformation("User {UserId} created by admin {AdminUserId}; invitation queued", user.Id, _currentUser.UserId);
+        return await GetAsync(user.Id, cancellationToken);
+    }
+
+    // ===================== Invitation =====================
+
+    public async Task<UserDetailsDto> ResendInvitationAsync(int userId, string ipAddress, CancellationToken cancellationToken)
+    {
+        var user = await _users.FindForUpdateAsync(userId, cancellationToken) ?? throw UserNotFound();
+
+        if (!user.IsActive)
+        {
+            throw new BusinessRuleException("העובד אינו פעיל",
+                "יש להפעיל את העובד לפני שליחת הזמנה.", "inactive-user");
+        }
+
+        if (!user.MustChangePassword)
+        {
+            throw new BusinessRuleException("העובד כבר קבע סיסמה",
+                "אפשר לאפס לו סיסמה במקום לשלוח הזמנה.", "password-already-set");
+        }
+
+        var now = _clock.UtcNow;
+        await _unitOfWork.ExecuteInTransactionAsync(async ct =>
+        {
+            // Earlier links stop working and a queued e-mail is not sent twice.
+            await InvitationQueue.CancelOpenAsync(_invitations, user.Id, now, ct);
+            _invitations.AddJob(InvitationQueue.NewJob(user, now));
+            Audit(AuditActions.InvitationResent, user.Id, ipAddress, now);
+            await _unitOfWork.SaveChangesAsync(ct);
+            return true;
+        }, cancellationToken);
+
+        _logger.LogInformation("Invitation of user {UserId} resent by admin {AdminUserId}", user.Id, _currentUser.UserId);
+        return await GetAsync(user.Id, cancellationToken);
     }
 
     // ===================== Update =====================
@@ -206,9 +246,15 @@ public sealed class UserService : IUserService
         user.MustChangePassword = true;
         user.FailedLoginCount = 0;
         user.LockoutEnd = null;
-        var revoked = await RevokeAllRefreshTokensAsync(user.Id, now, cancellationToken);
-        Audit(AuditActions.UserPasswordReset, user.Id, ipAddress, now);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        var revoked = await _unitOfWork.ExecuteInTransactionAsync(async ct =>
+        {
+            // The temporary password replaces any invitation: open links stop working, queued e-mails are not sent.
+            await InvitationQueue.CancelOpenAsync(_invitations, user.Id, now, ct);
+            var count = await RevokeAllRefreshTokensAsync(user.Id, now, ct);
+            Audit(AuditActions.UserPasswordReset, user.Id, ipAddress, now);
+            await _unitOfWork.SaveChangesAsync(ct);
+            return count;
+        }, cancellationToken);
 
         _logger.LogInformation("Password of user {UserId} reset by admin {AdminUserId}; revoked {Count} refresh tokens",
             user.Id, _currentUser.UserId, revoked);

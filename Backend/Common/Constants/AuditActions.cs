@@ -29,6 +29,14 @@ public static class AuditActions
     public const string CategoryDeactivated = "Category.Deactivated";
     public const string CategoryActivated = "Category.Activated";
     public const string SlaPoliciesUpdated = "SlaPolicies.Updated";
+
+    // Invitation e-mails. Never the token or the e-mail address. Sent / SendFailed are system actions (UserId null).
+    public const string InvitationSent = "Invitation.Sent";
+    public const string InvitationSendFailed = "Invitation.SendFailed";
+    public const string InvitationResent = "Invitation.Resent";
+    public const string InvitationPasswordSet = "Invitation.PasswordSet";
+    public const string InvitationPasswordSetFailed = "Invitation.PasswordSetFailed";
+    public const string LoginFailedPasswordNotSet = "LoginFailed.PasswordNotSet";
 }
 
 /// <summary>Values of <c>AuditLog.EntityType</c>.</summary>

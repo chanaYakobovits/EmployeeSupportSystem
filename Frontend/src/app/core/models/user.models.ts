@@ -23,6 +23,17 @@ export interface UserListItem {
   isActive: boolean;
   createdAt: string;
   lastLoginAt: string | null;
+  /** State of the latest invitation e-mail, or null if the user was never invited. */
+  invitation: InvitationStatusInfo | null;
+}
+
+/** Backend InvitationStatus (derived, not stored). */
+export type InvitationStatus = 'Pending' | 'Sent' | 'Used' | 'Expired' | 'Failed' | 'Revoked';
+
+/** Backend InvitationStatusDto. `at`: when the invitation reached this state (UTC ISO). */
+export interface InvitationStatusInfo {
+  status: InvitationStatus;
+  at: string;
 }
 
 /** GET / PUT /api/users/{id} (Backend UserDetailsDto). */
@@ -63,11 +74,6 @@ export interface CreateUserRequest {
 export type UpdateUserRequest = CreateUserRequest;
 
 /** The temporary password appears only in this response – show it once, never keep it. */
-export interface CreateUserResponse {
-  user: UserDetails;
-  temporaryPassword: string;
-}
-
 export interface ResetPasswordResponse {
   temporaryPassword: string;
 }

@@ -1,5 +1,7 @@
-using System.Data;
+﻿using System.Data;
+using System.Linq.Expressions;
 using Common.DTOs.Auth;
+using Common.DTOs.Invitations;
 using Common.DTOs.Paging;
 using Common.DTOs.Users;
 using Common.Enums;
@@ -75,9 +77,11 @@ public sealed class UserRepository(AppDbContext db) : IUserRepository
 
     // ===================== User administration (task 2.3) =====================
 
-    public Task<PagedResult<UserListItemDto>> GetPageAsync(UserListQuery query, CancellationToken cancellationToken)
+    public Task<PagedResult<UserListItemDto>> GetPageAsync(UserListQuery query, DateTime now,
+        CancellationToken cancellationToken)
     {
         var users = db.Users.AsNoTracking();
+        var invitationStatus = InvitationStatusProjection(now);
 
         var search = query.Search?.Trim();
         if (!string.IsNullOrEmpty(search))
@@ -134,11 +138,17 @@ public sealed class UserRepository(AppDbContext db) : IUserRepository
             u.Roles.OrderBy(r => r.Role).Select(r => r.Role).ToList(),
             u.IsActive,
             u.CreatedAt,
-            u.LastLoginAt), query, cancellationToken);
+            u.LastLoginAt,
+            db.InvitationEmailJobs
+                .Where(j => j.UserId == u.Id && j.Status != InvitationJobStatus.Cancelled)
+                .OrderByDescending(j => j.CreatedAt).ThenByDescending(j => j.Id)
+                .Select(invitationStatus).FirstOrDefault()), query, cancellationToken);
     }
 
-    public Task<UserDetailsDto?> GetDetailsAsync(int userId, DateTime now, CancellationToken cancellationToken) =>
-        db.Users
+    public Task<UserDetailsDto?> GetDetailsAsync(int userId, DateTime now, CancellationToken cancellationToken)
+    {
+        var invitationStatus = InvitationStatusProjection(now);
+        return db.Users
             .AsNoTracking()
             .Where(u => u.Id == userId)
             .Select(u => new UserDetailsDto(
@@ -158,8 +168,34 @@ public sealed class UserRepository(AppDbContext db) : IUserRepository
                 db.Departments
                     .Where(d => d.ManagerUserId == u.Id)
                     .Select(d => new DepartmentSummaryDto(d.Id, d.Name))
-                    .FirstOrDefault()))
+                    .FirstOrDefault(),
+                db.InvitationEmailJobs
+                    .Where(j => j.UserId == u.Id && j.Status != InvitationJobStatus.Cancelled)
+                    .OrderByDescending(j => j.CreatedAt).ThenByDescending(j => j.Id)
+                    .Select(invitationStatus).FirstOrDefault()))
             .SingleOrDefaultAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Job + its invitation → the state shown to the admin, as CASE expressions in SQL (EF inlines the captured
+    /// expression into the projection). Applied to the user's newest job that is not cancelled: a cancelled job was
+    /// replaced or never sent, so the state comes from the job before it.
+    /// A succeeded job always has an invitation. Order matters: used, then revoked (password reset), then expired.
+    /// </summary>
+    private static Expression<Func<InvitationEmailJob, InvitationStatusDto>> InvitationStatusProjection(DateTime now) =>
+        j => new InvitationStatusDto(
+            j.Status == InvitationJobStatus.Pending || j.Status == InvitationJobStatus.Processing ? InvitationStatus.Pending
+            : j.Status == InvitationJobStatus.Failed ? InvitationStatus.Failed
+            : j.Invitation!.UsedAt != null ? InvitationStatus.Used
+            : j.Invitation.RevokedAt != null ? InvitationStatus.Revoked
+            : j.Invitation.ExpiresAt <= now ? InvitationStatus.Expired
+            : InvitationStatus.Sent,
+            j.Status == InvitationJobStatus.Pending || j.Status == InvitationJobStatus.Processing ? j.CreatedAt
+            : j.Status == InvitationJobStatus.Failed ? j.CompletedAt ?? j.CreatedAt
+            : j.Invitation!.UsedAt != null ? j.Invitation.UsedAt.Value
+            : j.Invitation.RevokedAt != null ? j.Invitation.RevokedAt.Value
+            : j.Invitation.ExpiresAt <= now ? j.Invitation.ExpiresAt
+            : j.CompletedAt ?? j.Invitation.CreatedAt);
 
     // IgnoreQueryFilters: e-mail is unique across all organizations (it is the login identifier).
     // Only a bool leaves this method, so nothing about the other organization is exposed.

@@ -21,6 +21,7 @@ export function fakeUserDetails(overrides: Partial<UserDetails> = {}): UserDetai
     mustChangePassword: false,
     isLockedOut: false,
     managedDepartment: null,
+    invitation: null,
     ...overrides,
   };
 }

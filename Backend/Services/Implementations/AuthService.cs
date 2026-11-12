@@ -32,7 +32,8 @@ public sealed class AuthService : IAuthService
 
     private const string UnknownIdentifierCacheKeyPrefix = "login-failures:";
 
-    // Verified against when the user does not exist, so the response takes as long as for a real user.
+    // Verified against when the user does not exist or has no password yet (invited), so the response takes as long
+    // as for a real user.
     // Hash of a random value, so no password can ever match it.
     // Static: computed once per process, so the unknown-user path never pays for an extra Hash() call.
     private static string? _dummyHash;
@@ -111,13 +112,17 @@ public sealed class AuthService : IAuthService
             throw new AccountLockedException(lockoutEnd - now);
         }
 
-        // Always verify – also for an inactive user – so timing does not reveal the account state.
-        var passwordValid = _passwordHasher.Verify(user.PasswordHash, password);
+        // Always verify – also for an inactive user, or an invited one without a password (against the dummy hash) –
+        // so timing does not reveal the account state.
+        var passwordSet = user.PasswordHash is not null;
+        var passwordValid = _passwordHasher.Verify(user.PasswordHash ?? GetDummyHash(), password) && passwordSet;
 
         if (!passwordValid || !user.IsActive)
         {
             var lockedNow = RegisterFailure(user, now);
-            var action = user.IsActive ? AuditActions.LoginFailedWrongPassword : AuditActions.LoginFailedInactive;
+            var action = !user.IsActive ? AuditActions.LoginFailedInactive
+                : !passwordSet ? AuditActions.LoginFailedPasswordNotSet
+                : AuditActions.LoginFailedWrongPassword;
             Audit(action, user, ipAddress, now);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
             _logger.LogWarning("Login failed for user {UserId}: {Action}, locked out: {LockedOut}", user.Id, action, lockedNow);
@@ -198,7 +203,7 @@ public sealed class AuthService : IAuthService
         }
 
         var now = _clock.UtcNow;
-        var stored = await _refreshTokens.FindByHashAsync(RefreshTokenGenerator.Hash(refreshToken), cancellationToken);
+        var stored = await _refreshTokens.FindByHashAsync(SecureTokenGenerator.Hash(refreshToken), cancellationToken);
         if (stored is null)
         {
             _logger.LogWarning("Refresh failed: unknown token");
@@ -282,7 +287,7 @@ public sealed class AuthService : IAuthService
         }
 
         var now = _clock.UtcNow;
-        var stored = await _refreshTokens.FindByHashAsync(RefreshTokenGenerator.Hash(refreshToken), cancellationToken);
+        var stored = await _refreshTokens.FindByHashAsync(SecureTokenGenerator.Hash(refreshToken), cancellationToken);
         if (stored is null || stored.RevokedAt is not null || stored.ExpiresAt <= now)
         {
             // Already invalid: logging out is still a success for the caller.
@@ -311,7 +316,8 @@ public sealed class AuthService : IAuthService
 
         var now = _clock.UtcNow;
 
-        if (!_passwordHasher.Verify(user.PasswordHash, request.CurrentPassword))
+        // A user without a password cannot be signed in, so this is only defensive.
+        if (user.PasswordHash is null || !_passwordHasher.Verify(user.PasswordHash, request.CurrentPassword))
         {
             Audit(AuditActions.PasswordChangeFailedWrongCurrent, user, ipAddress, now);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -358,13 +364,13 @@ public sealed class AuthService : IAuthService
     /// <summary>Stages a new refresh token for the user and issues an access token. The caller saves.</summary>
     private AuthResult StartSession(User user, DateTime now, out RefreshToken refreshTokenEntity)
     {
-        var value = RefreshTokenGenerator.NewValue();
+        var value = SecureTokenGenerator.NewValue();
         var expiresAt = now.AddDays(_jwtOptions.RefreshTokenDays);
         refreshTokenEntity = new RefreshToken
         {
             UserId = user.Id,
             User = user,
-            TokenHash = RefreshTokenGenerator.Hash(value),
+            TokenHash = SecureTokenGenerator.Hash(value),
             CreatedAt = now,
             ExpiresAt = expiresAt,
         };

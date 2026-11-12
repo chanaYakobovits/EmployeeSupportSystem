@@ -1,11 +1,15 @@
 using FluentValidation;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 using Common.Interfaces;
 using Common.Options;
 using Repositories.Extensions;
 using Services.Implementations;
 using Services.Implementations.Ai;
+using Services.Implementations.Email;
+using Services.Implementations.Invitations;
 using Services.Interfaces;
 
 namespace Services.Extensions;
@@ -39,11 +43,62 @@ public static class DependencyInjection
         // Request validators (spec 11.4), run by the services. Stateless, so one instance each.
         services.AddValidatorsFromAssemblyContaining<Validators.UserListQueryValidator>(ServiceLifetime.Singleton);
 
+        // Organization of the query filters: the signed-in user's, or one entered explicitly by a background job.
+        // One instance per scope behind both interfaces.
+        services.AddScoped<OrganizationContext>();
+        services.AddScoped<IOrganizationContext>(sp => sp.GetRequiredService<OrganizationContext>());
+        services.AddScoped<ISystemOrganizationContext>(sp => sp.GetRequiredService<OrganizationContext>());
+
         services.AddAi(configuration);
+        services.AddInvitations(configuration);
 
         // Later tasks: services (Scoped); TicketStatusRules (Singleton).
-        // Required from the host: ICurrentUser and IAccessTokenIssuer (registered by API).
+        // Required from the host: ICurrentUser, IAccessTokenIssuer and IHostEnvironment (registered by API).
         return services;
+    }
+
+    internal static void AddInvitations(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddOptions<EmailOptions>()
+            .Bind(configuration.GetSection(EmailOptions.SectionName))
+            .Validate(o => !string.IsNullOrWhiteSpace(o.FromAddress), "Email:FromAddress is required.")
+            .Validate(o => o.Provider != EmailProvider.Smtp || !string.IsNullOrWhiteSpace(o.Smtp.Host),
+                "Email:Smtp:Host is required when Email:Provider is Smtp.")
+            .Validate(o => o.Smtp.Port is > 0 and <= 65535 && o.Smtp.TimeoutSeconds is >= 1 and <= 300,
+                "Email:Smtp:Port must be 1-65535 and Email:Smtp:TimeoutSeconds 1-300.")
+            .Validate(o => o.Provider != EmailProvider.File || !string.IsNullOrWhiteSpace(o.File.Directory),
+                "Email:File:Directory is required when Email:Provider is File.")
+            // The .eml files contain the invitation links in clear text.
+            .Validate<IHostEnvironment>((o, environment) => o.Provider != EmailProvider.File || environment.IsDevelopment(),
+                "Email:Provider 'File' is allowed only in Development. Configure Email:Provider 'Smtp'.")
+            .ValidateOnStart();
+
+        services.AddOptions<InvitationOptions>()
+            .Bind(configuration.GetSection(InvitationOptions.SectionName))
+            .Validate(o => Uri.TryCreate(o.FrontendBaseUrl, UriKind.Absolute, out var uri)
+                           && (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp),
+                "Invitations:FrontendBaseUrl must be an absolute http(s) address of the Angular app.")
+            .Validate<IHostEnvironment>((o, environment) => environment.IsDevelopment()
+                    || o.FrontendBaseUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase),
+                "Invitations:FrontendBaseUrl must use https outside Development (the link carries a secret token).")
+            .Validate(o => o.ExpiryHours is >= 1 and <= 720, "Invitations:ExpiryHours must be between 1 and 720.")
+            .Validate(o => o.WorkerIntervalSeconds >= 1 && o.BatchSize >= 1 && o.MaxAttempts >= 1 && o.LockMinutes >= 1,
+                "Invitations:WorkerIntervalSeconds, BatchSize, MaxAttempts and LockMinutes must be positive.")
+            .Validate(o => o.RetryDelaysMinutes.Length > 0 && o.RetryDelaysMinutes.All(d => d >= 1),
+                "Invitations:RetryDelaysMinutes needs at least one value, each at least 1.")
+            .ValidateOnStart();
+
+        // Stateless senders; a new SMTP connection per message.
+        services.AddSingleton<SmtpEmailSender>();
+        services.AddSingleton<FileEmailSender>();
+        services.AddSingleton<IEmailSender>(sp =>
+            sp.GetRequiredService<IOptions<EmailOptions>>().Value.Provider == EmailProvider.Smtp
+                ? sp.GetRequiredService<SmtpEmailSender>()
+                : sp.GetRequiredService<FileEmailSender>());
+
+        services.AddSingleton<InvitationEmailComposer>();
+        services.AddScoped<IInvitationEmailProcessor, InvitationEmailProcessor>();
+        services.AddScoped<IInvitationService, InvitationService>();
     }
 
     internal static void AddAi(this IServiceCollection services, IConfiguration configuration)

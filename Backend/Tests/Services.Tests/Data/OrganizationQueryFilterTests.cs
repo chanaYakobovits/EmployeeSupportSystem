@@ -3,6 +3,7 @@ using Common.Models;
 using Microsoft.EntityFrameworkCore;
 using Repositories.Data;
 using Repositories.Implementations;
+using Services.Implementations;
 using Services.Tests.Auth.Fakes;
 
 namespace Services.Tests.Data;
@@ -44,7 +45,52 @@ public sealed class OrganizationQueryFilterTests
             .Select(e => e.ClrType.Name)
             .ToList();
 
-        Assert.Empty(unfiltered);
+        // The one deliberate exception: the worker claims queue rows of every organization (ids only), then enters
+        // each job's organization.
+        Assert.Equal([nameof(InvitationEmailJob)], unfiltered);
+    }
+
+    // ---- explicit organization for background jobs (no signed-in user) ----
+
+    [Fact]
+    public async Task A_background_scope_that_entered_an_organization_sees_only_that_organization()
+    {
+        await using var db = CreateBackgroundContext(enter: OrgB);
+
+        Assert.Equal([OrgB], await db.Organizations.Select(o => o.Id).ToListAsync());
+        Assert.Equal([UserIdOf(OrgB)], await db.Users.Select(u => u.Id).ToListAsync());
+        Assert.Equal([TicketIdOf(OrgB)], await db.Tickets.Select(t => t.Id).ToListAsync());
+        Assert.Null(await new UserRepository(db).FindForUpdateAsync(UserIdOf(OrgA), CancellationToken.None));
+        Assert.NotNull(await new UserRepository(db).FindForUpdateAsync(UserIdOf(OrgB), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task A_background_scope_that_entered_no_organization_sees_nothing()
+    {
+        await using var db = CreateBackgroundContext(enter: null);
+
+        Assert.Empty(await db.Users.ToListAsync());
+        Assert.Empty(await db.Tickets.ToListAsync());
+    }
+
+    [Fact]
+    public void Entering_an_organization_is_refused_when_a_user_is_signed_in()
+    {
+        var context = new OrganizationContext(new FakeCurrentUser { SignedInUserId = 1, SignedInOrganizationId = OrgA });
+
+        Assert.Throws<InvalidOperationException>(() => context.Enter(OrgB));
+        Assert.Equal(OrgA, context.OrganizationId);
+    }
+
+    [Fact]
+    public void A_scope_cannot_switch_to_another_organization()
+    {
+        var context = new OrganizationContext(new FakeCurrentUser());
+        context.Enter(OrgA);
+        context.Enter(OrgA); // the same one again is harmless
+
+        Assert.Throws<InvalidOperationException>(() => context.Enter(OrgB));
+        Assert.Equal(OrgA, context.OrganizationId);
     }
 
     [Fact]
@@ -141,7 +187,20 @@ public sealed class OrganizationQueryFilterTests
         var options = new DbContextOptionsBuilder<AppDbContext>()
             .UseInMemoryDatabase(_databaseName)
             .Options;
-        return new AppDbContext(options, currentUser);
+        return new AppDbContext(options, new OrganizationContext(currentUser));
+    }
+
+    /// <summary>As a background job's scope: nobody signed in, optionally an organization entered explicitly.</summary>
+    private AppDbContext CreateBackgroundContext(int? enter)
+    {
+        var organizationContext = new OrganizationContext(new FakeCurrentUser());
+        if (enter is { } org)
+        {
+            organizationContext.Enter(org);
+        }
+
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(_databaseName).Options;
+        return new AppDbContext(options, organizationContext);
     }
 
     private static int UserIdOf(int org) => org * 10;

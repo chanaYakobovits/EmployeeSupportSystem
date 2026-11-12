@@ -13,6 +13,10 @@
   <ItemGroup>
     <PackageReference Include="FluentValidation" Version="12.0.0" />
     <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="12.0.0" />
+    <!-- SMTP for invitation e-mails (the replacement Microsoft recommends for System.Net.Mail.SmtpClient).
+         Brings MimeKit, which also writes the .eml files of FileEmailSender. netstandard2.0/net8.0, fine for net9.0.
+         4.8.0 was the first choice; it has a known advisory (NU1902), so the latest patched 4.x is used. -->
+    <PackageReference Include="MailKit" Version="4.18.2" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="9.0.10" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.10" />
     <!-- Official OpenAI .NET SDK (spec 10.1). Targets net8.0, compatible with net9.0. -->
@@ -22,6 +26,8 @@
   <ItemGroup>
     <!-- Versioned system prompts (spec 5.4), loaded by AiPrompt. -->
     <EmbeddedResource Include="Implementations\Ai\Prompts\*.md" />
+    <!-- E-mail templates, loaded by InvitationEmailComposer. -->
+    <EmbeddedResource Include="Implementations\Invitations\Templates\*.html" />
   </ItemGroup>
 
   <ItemGroup>

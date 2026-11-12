@@ -19,6 +19,14 @@ public static class AuthExtensions
 {
     public const string LoginRateLimitPolicy = "login";
     public const string ChangePasswordRateLimitPolicy = "change-password";
+    public const string SetPasswordRateLimitPolicy = "set-password";
+
+    /// <summary>
+    /// Decision in CLAUDE.md: 10 set-password attempts per 15 minutes per IP. Tokens cannot be guessed (256 bits);
+    /// this only stops hammering the endpoint.
+    /// </summary>
+    private const int SetPasswordPermitsPerWindow = 10;
+    private static readonly TimeSpan SetPasswordWindow = TimeSpan.FromMinutes(15);
 
     /// <summary>Decision in CLAUDE.md: 5 change-password attempts per 15 minutes per user (against guessing the current password).</summary>
     private const int ChangePasswordPermitsPerWindow = 5;
@@ -135,6 +143,17 @@ public static class AuthExtensions
                     {
                         PermitLimit = LoginPermitsPerWindow,
                         Window = LoginWindow,
+                        QueueLimit = 0,
+                    }));
+
+            // Anonymous endpoint: per IP, like login.
+            options.AddPolicy(SetPasswordRateLimitPolicy, context =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    "set-password:" + (context.Connection.RemoteIpAddress?.ToString() ?? "unknown"),
+                    _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = SetPasswordPermitsPerWindow,
+                        Window = SetPasswordWindow,
                         QueueLimit = 0,
                     }));
 

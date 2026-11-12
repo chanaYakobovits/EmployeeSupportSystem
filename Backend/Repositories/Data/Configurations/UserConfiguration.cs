@@ -17,7 +17,8 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(u => u.LastName).IsRequired().HasMaxLength(50);
         builder.Property(u => u.Email).IsRequired().HasMaxLength(256);
         builder.Property(u => u.JobTitle).IsRequired().HasMaxLength(100);
-        builder.Property(u => u.PasswordHash).IsRequired().HasMaxLength(256);
+        // Null while an invited user has not set a password yet.
+        builder.Property(u => u.PasswordHash).IsRequired(false).HasMaxLength(256);
 
         builder.HasOne(u => u.Organization)
             .WithMany(o => o.Users)

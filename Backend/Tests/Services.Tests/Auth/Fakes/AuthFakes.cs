@@ -1,4 +1,5 @@
 using Common.DTOs.Auth;
+using Common.DTOs.Invitations;
 using Common.DTOs.Paging;
 using Common.DTOs.Users;
 using Common.Enums;
@@ -52,8 +53,12 @@ public sealed class FakeUserRepository : IUserRepository
                 user.Roles.Select(r => r.Role.ToString()).ToList(), user.MustChangePassword));
     }
 
-    public Task<PagedResult<UserListItemDto>> GetPageAsync(UserListQuery query, CancellationToken cancellationToken) =>
+    public Task<PagedResult<UserListItemDto>> GetPageAsync(UserListQuery query, DateTime now,
+        CancellationToken cancellationToken) =>
         throw new NotSupportedException("Tested with EF Core InMemory in UserRepositoryTests.");
+
+    /// <summary>The invitation status of a user, as the real projection computes it (set by tests that need it).</summary>
+    public Func<int, DateTime, InvitationStatusDto?> InvitationStatusOf { get; set; } = (_, _) => null;
 
     public Task<UserDetailsDto?> GetDetailsAsync(int userId, DateTime now, CancellationToken cancellationToken)
     {
@@ -65,7 +70,8 @@ public sealed class FakeUserRepository : IUserRepository
                 new DepartmentSummaryDto(user.DepartmentId, user.Department?.Name ?? ""),
                 user.Roles.Select(r => r.Role).Order().ToList(), user.IsActive, user.MustChangePassword,
                 user.LockoutEnd > now, user.CreatedAt, user.LastLoginAt,
-                managed is null ? null : new DepartmentSummaryDto(managed.Id, managed.Name)));
+                managed is null ? null : new DepartmentSummaryDto(managed.Id, managed.Name),
+                InvitationStatusOf(user.Id, now)));
     }
 
     public Task<bool> EmailExistsAsync(string email, int? excludeUserId, CancellationToken cancellationToken) =>

@@ -33,18 +33,32 @@ public class UsersController(IUserService userService) : ControllerBase
     public async Task<ActionResult<UserDetailsDto>> Get(int id, CancellationToken cancellationToken) =>
         Ok(await userService.GetAsync(id, cancellationToken));
 
-    /// <summary>Creates a user (spec 4.2). The temporary password is in this response only – show it once.</summary>
+    /// <summary>
+    /// Creates a user (spec 4.2) without a password; an invitation e-mail with a link for setting one is queued
+    /// (invitation status Pending in the response).
+    /// </summary>
     [HttpPost]
-    [ProducesResponseType<CreateUserResponse>(StatusCodes.Status201Created)]
+    [ProducesResponseType<UserDetailsDto>(StatusCodes.Status201Created)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)]
-    public async Task<ActionResult<CreateUserResponse>> Create(CreateUserRequest request,
+    public async Task<ActionResult<UserDetailsDto>> Create(CreateUserRequest request,
         CancellationToken cancellationToken)
     {
-        var response = await userService.CreateAsync(request, HttpContext.ClientIp(), cancellationToken);
-        return CreatedAtAction(nameof(Get), new { id = response.User.Id }, response);
+        var user = await userService.CreateAsync(request, HttpContext.ClientIp(), cancellationToken);
+        return CreatedAtAction(nameof(Get), new { id = user.Id }, user);
     }
+
+    /// <summary>
+    /// Sends the invitation e-mail again: earlier links stop working. 422 if the user already chose a password
+    /// (use reset-password instead) or is inactive.
+    /// </summary>
+    [HttpPost("{id:int}/invitation")]
+    [ProducesResponseType<UserDetailsDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<ActionResult<UserDetailsDto>> ResendInvitation(int id, CancellationToken cancellationToken) =>
+        Ok(await userService.ResendInvitationAsync(id, HttpContext.ClientIp(), cancellationToken));
 
     [HttpPut("{id:int}")]
     [ProducesResponseType<UserDetailsDto>(StatusCodes.Status200OK)]
@@ -56,7 +70,9 @@ public class UsersController(IUserService userService) : ControllerBase
         CancellationToken cancellationToken) =>
         Ok(await userService.UpdateAsync(id, request, HttpContext.ClientIp(), cancellationToken));
 
-    /// <summary>New temporary password; the user must change it and is signed out everywhere.</summary>
+    /// <summary>
+    /// New temporary password; the user must change it and is signed out everywhere. Open invitation links stop working.
+    /// </summary>
     [HttpPost("{id:int}/reset-password")]
     [ProducesResponseType<ResetPasswordResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]

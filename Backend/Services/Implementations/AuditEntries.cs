@@ -6,6 +6,21 @@ namespace Services.Implementations;
 /// <summary>Audit records of administrative actions (spec 6.4): who did what to which entity. Never any content.</summary>
 internal static class AuditEntries
 {
+    /// <summary>IpAddress of actions done by a background job (no request, no client).</summary>
+    public const string SystemIpAddress = "system";
+
+    /// <summary>An action of the system itself (background job): no actor.</summary>
+    public static AuditLog ForSystem(string action, int organizationId, int targetUserId, DateTime now) => new()
+    {
+        OrganizationId = organizationId,
+        UserId = null,
+        Action = action,
+        EntityType = AuditEntityTypes.User,
+        EntityId = targetUserId,
+        IpAddress = SystemIpAddress,
+        CreatedAt = now,
+    };
+
     public static AuditLog ForUser(string action, int organizationId, int actorUserId, int targetUserId,
         string ipAddress, DateTime now) =>
         ForEntity(action, AuditEntityTypes.User, targetUserId, organizationId, actorUserId, ipAddress, now);

@@ -5,6 +5,7 @@ using Services.Implementations;
 using Services.Tests.Admin.Fakes;
 using Services.Tests.Auth.Fakes;
 using Services.Tests.Fakes;
+using Services.Tests.Invitations.Fakes;
 using Services.Validators;
 
 namespace Services.Tests.Admin;
@@ -43,6 +44,7 @@ public abstract class AdminTestBase
     protected readonly FakeDepartmentRepository Departments;
     protected readonly FakeRefreshTokenRepository RefreshTokens = new();
     protected readonly FakeTicketRepository Tickets = new();
+    protected readonly FakeUserInvitationRepository Invitations;
     protected readonly FakeAuditLogRepository AuditLog = new();
     protected readonly FakeUnitOfWork UnitOfWork = new();
     protected readonly FakePasswordHasher Hasher = new();
@@ -61,6 +63,8 @@ public abstract class AdminTestBase
     protected AdminTestBase()
     {
         Departments = new FakeDepartmentRepository(Users);
+        Invitations = new FakeUserInvitationRepository(Users);
+        Users.InvitationStatusOf = Invitations.StatusOf;
         ReferenceData = new MemoryReferenceDataCache(Cache);
         Categories = new FakeCategoryRepository(Departments);
         AddDepartment(ManagementId, "הנהלה", AvnerId);
@@ -75,7 +79,7 @@ public abstract class AdminTestBase
         AddUser(YaelId, "yael.harpaz", HrId, Role.Admin, Role.Handler, Role.DepartmentManager);
         AddUser(OritId, "orit.danon", InactiveDepartmentId).IsActive = false;
 
-        UserService = new UserService(Users, Departments, RefreshTokens, Tickets, AuditLog, UnitOfWork, Hasher, Clock,
+        UserService = new UserService(Users, Departments, RefreshTokens, Tickets, Invitations, AuditLog, UnitOfWork, Hasher, Clock,
             CurrentUser, ReferenceData, new UserListQueryValidator(), new CreateUserRequestValidator(), new UpdateUserRequestValidator(),
             new SetUserActiveRequestValidator(), UserLogger);
 

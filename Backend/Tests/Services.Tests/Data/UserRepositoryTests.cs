@@ -4,6 +4,7 @@ using Common.Models;
 using Microsoft.EntityFrameworkCore;
 using Repositories.Data;
 using Repositories.Implementations;
+using Services.Implementations;
 using Services.Tests.Auth.Fakes;
 
 namespace Services.Tests.Data;
@@ -53,9 +54,9 @@ public sealed class UserRepositoryTests
         await using var db = CreateContext();
         var repository = new UserRepository(db);
 
-        var first = await repository.GetPageAsync(new UserListQuery { PageSize = 25 }, CancellationToken.None);
-        var second = await repository.GetPageAsync(new UserListQuery { PageSize = 25, Page = 2 }, CancellationToken.None);
-        var beyond = await repository.GetPageAsync(new UserListQuery { PageSize = 25, Page = 9 }, CancellationToken.None);
+        var first = await repository.GetPageAsync(new UserListQuery { PageSize = 25 }, DateTime.UtcNow, CancellationToken.None);
+        var second = await repository.GetPageAsync(new UserListQuery { PageSize = 25, Page = 2 }, DateTime.UtcNow, CancellationToken.None);
+        var beyond = await repository.GetPageAsync(new UserListQuery { PageSize = 25, Page = 9 }, DateTime.UtcNow, CancellationToken.None);
 
         Assert.Equal(34, first.TotalCount);
         Assert.Equal(25, first.Items.Count);
@@ -71,7 +72,7 @@ public sealed class UserRepositoryTests
         await using var db = CreateContext();
 
         var page = await new UserRepository(db).GetPageAsync(new UserListQuery { Search = "יעל", PageSize = 100 },
-            CancellationToken.None);
+            DateTime.UtcNow, CancellationToken.None);
 
         Assert.Equal([1], page.Items.Select(u => u.Id));
     }
@@ -85,7 +86,7 @@ public sealed class UserRepositoryTests
     {
         await using var db = CreateContext();
 
-        var page = await new UserRepository(db).GetPageAsync(new UserListQuery { Search = search }, CancellationToken.None);
+        var page = await new UserRepository(db).GetPageAsync(new UserListQuery { Search = search }, DateTime.UtcNow, CancellationToken.None);
 
         Assert.Equal([expectedId], page.Items.Select(u => u.Id));
     }
@@ -98,8 +99,8 @@ public sealed class UserRepositoryTests
 
         var handlersInHr = await repository.GetPageAsync(
             new UserListQuery { DepartmentId = HrId, Role = Role.Handler, SortBy = UserSortFields.Name },
-            CancellationToken.None);
-        var inactive = await repository.GetPageAsync(new UserListQuery { IsActive = false }, CancellationToken.None);
+            DateTime.UtcNow, CancellationToken.None);
+        var inactive = await repository.GetPageAsync(new UserListQuery { IsActive = false }, DateTime.UtcNow, CancellationToken.None);
 
         Assert.Equal([1, 2], handlersInHr.Items.Select(u => u.Id)); // by last name: הרפז, שמעוני
         Assert.Equal([4], inactive.Items.Select(u => u.Id));
@@ -110,7 +111,7 @@ public sealed class UserRepositoryTests
     {
         await using var db = CreateContext();
 
-        var page = await new UserRepository(db).GetPageAsync(new UserListQuery { PageSize = 3 }, CancellationToken.None);
+        var page = await new UserRepository(db).GetPageAsync(new UserListQuery { PageSize = 3 }, DateTime.UtcNow, CancellationToken.None);
 
         Assert.Equal(["EMP-00130", "EMP-00129", "EMP-00128"], page.Items.Select(u => u.EmployeeCode));
     }
@@ -121,7 +122,7 @@ public sealed class UserRepositoryTests
         await using var db = CreateContext();
 
         var page = await new UserRepository(db).GetPageAsync(new UserListQuery { SortDir = "asc", PageSize = 3 },
-            CancellationToken.None);
+            DateTime.UtcNow, CancellationToken.None);
 
         Assert.Equal(["EMP-00001", "EMP-00002", "EMP-00003"], page.Items.Select(u => u.EmployeeCode));
     }
@@ -132,7 +133,7 @@ public sealed class UserRepositoryTests
         await using var db = CreateContext();
 
         var page = await new UserRepository(db).GetPageAsync(
-            new UserListQuery { SortBy = UserSortFields.Name, DepartmentId = HrId }, CancellationToken.None);
+            new UserListQuery { SortBy = UserSortFields.Name, DepartmentId = HrId }, DateTime.UtcNow, CancellationToken.None);
 
         Assert.Equal([1, 3, 2], page.Items.Select(u => u.Id)); // הרפז, כהן, שמעוני
     }
@@ -143,7 +144,7 @@ public sealed class UserRepositoryTests
         await using var db = CreateContext();
 
         var page = await new UserRepository(db).GetPageAsync(
-            new UserListQuery { SortBy = UserSortFields.EmployeeCode, SortDir = "desc", PageSize = 3 }, CancellationToken.None);
+            new UserListQuery { SortBy = UserSortFields.EmployeeCode, SortDir = "desc", PageSize = 3 }, DateTime.UtcNow, CancellationToken.None);
 
         Assert.Equal(["EMP-00130", "EMP-00129", "EMP-00128"], page.Items.Select(u => u.EmployeeCode));
     }
@@ -153,7 +154,7 @@ public sealed class UserRepositoryTests
     {
         await using var db = CreateContext();
 
-        var page = await new UserRepository(db).GetPageAsync(new UserListQuery { Search = "הרפז" }, CancellationToken.None);
+        var page = await new UserRepository(db).GetPageAsync(new UserListQuery { Search = "הרפז" }, DateTime.UtcNow, CancellationToken.None);
 
         var yael = Assert.Single(page.Items);
         Assert.Equal("משאבי אנוש", yael.Department.Name);
@@ -168,6 +169,55 @@ public sealed class UserRepositoryTests
         var ron = await new UserRepository(db).GetDetailsAsync(3, DateTime.UtcNow, CancellationToken.None);
 
         Assert.Equal(HrId, ron?.ManagedDepartment?.Id);
+    }
+
+    [Fact]
+    public async Task Invitation_status_comes_from_the_newest_job_that_is_not_cancelled()
+    {
+        var now = DateTime.UtcNow;
+        await using (var setup = CreateContext())
+        {
+            UserInvitation Link(int userId, DateTime sent, DateTime? used = null, DateTime? revoked = null) => new()
+            {
+                UserId = userId, TokenHash = Guid.NewGuid().ToString("N"), CreatedAt = sent, ExpiresAt = sent.AddHours(72),
+                UsedAt = used, RevokedAt = revoked,
+            };
+            InvitationEmailJob Job(int userId, InvitationJobStatus status, DateTime created, UserInvitation? link = null) => new()
+            {
+                OrganizationId = OrgA, UserId = userId, Status = status, CreatedAt = created, NextAttemptAt = created,
+                CompletedAt = status == InvitationJobStatus.Pending ? null : created, Invitation = link,
+            };
+
+            setup.InvitationEmailJobs.AddRange(
+                Job(101, InvitationJobStatus.Pending, now.AddMinutes(-1)),
+                Job(102, InvitationJobStatus.Succeeded, now.AddHours(-1), Link(102, now.AddHours(-1))),
+                Job(103, InvitationJobStatus.Succeeded, now.AddHours(-2), Link(103, now.AddHours(-2), used: now.AddHours(-1))),
+                Job(104, InvitationJobStatus.Succeeded, now.AddHours(-80), Link(104, now.AddHours(-80))),
+                Job(105, InvitationJobStatus.Failed, now.AddHours(-1)),
+                Job(106, InvitationJobStatus.Succeeded, now.AddHours(-3), Link(106, now.AddHours(-3), revoked: now.AddHours(-2))),
+                // Sent, then a resend was cancelled before sending: the status still comes from the sent one.
+                Job(107, InvitationJobStatus.Succeeded, now.AddHours(-3), Link(107, now.AddHours(-3))),
+                Job(107, InvitationJobStatus.Cancelled, now.AddHours(-1)),
+                Job(108, InvitationJobStatus.Cancelled, now.AddHours(-1)));
+            await setup.SaveChangesAsync();
+        }
+
+        await using var db = CreateContext();
+        var page = await new UserRepository(db).GetPageAsync(new UserListQuery { PageSize = 100 }, now, CancellationToken.None);
+        var details = await new UserRepository(db).GetDetailsAsync(103, now, CancellationToken.None);
+
+        InvitationStatus? StatusOf(int id) => page.Items.Single(u => u.Id == id).Invitation?.Status;
+        Assert.Equal(InvitationStatus.Pending, StatusOf(101));
+        Assert.Equal(InvitationStatus.Sent, StatusOf(102));
+        Assert.Equal(InvitationStatus.Used, StatusOf(103));
+        Assert.Equal(InvitationStatus.Expired, StatusOf(104));
+        Assert.Equal(InvitationStatus.Failed, StatusOf(105));
+        Assert.Equal(InvitationStatus.Revoked, StatusOf(106));
+        Assert.Equal(InvitationStatus.Sent, StatusOf(107));
+        Assert.Null(StatusOf(108));
+        Assert.Null(StatusOf(1)); // never invited
+        Assert.Equal(InvitationStatus.Used, details?.Invitation?.Status);
+        Assert.Equal(now.AddHours(-1), details?.Invitation?.At);
     }
 
     [Fact]
@@ -215,7 +265,7 @@ public sealed class UserRepositoryTests
         }
 
         var options = new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(_databaseName).Options;
-        return new AppDbContext(options, currentUser);
+        return new AppDbContext(options, new OrganizationContext(currentUser));
     }
 
     private static User NewUser(int id, int org, int departmentId, string firstName, string lastName, string email,

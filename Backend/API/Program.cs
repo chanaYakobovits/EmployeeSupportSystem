@@ -19,6 +19,8 @@ try
     builder.Services.AddApi(builder.Configuration);
     builder.Services.AddApiAuth(builder.Configuration);
     builder.Services.AddServices(builder.Configuration);
+    // Background queue workers. Not started by the --seed command (it never runs the host).
+    builder.Services.AddHostedService<API.BackgroundJobs.InvitationEmailWorker>();
 
     var app = builder.Build();
 

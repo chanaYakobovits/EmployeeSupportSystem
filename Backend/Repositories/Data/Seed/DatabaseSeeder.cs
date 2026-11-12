@@ -61,7 +61,7 @@ internal sealed class DatabaseSeeder(AppDbContext db, IPasswordHasher passwordHa
                 LastName = person.LastName,
                 Email = $"{person.EmailLocalPart}@{OrganizationSeedData.EmailDomain}",
                 JobTitle = person.JobTitle,
-                PasswordHash = passwordHasher.Hash(OrganizationSeedData.DemoPassword),
+                PasswordHash = person.IsInvited ? null : passwordHasher.Hash(OrganizationSeedData.DemoPassword),
                 MustChangePassword = person.MustChangePassword,
                 IsActive = person.IsActive,
                 CreatedAt = person.MustChangePassword ? now.AddDays(-2) : now.AddDays(-400 + i),
@@ -80,6 +80,17 @@ internal sealed class DatabaseSeeder(AppDbContext db, IPasswordHasher passwordHa
 
         // The demo users have fixed codes (README); new users continue after the last one.
         await db.Database.ExecuteSqlRawAsync(EmployeeCodeSequence.RestartAfterExistingCodesSql, cancellationToken);
+
+        // Invited users: a pending invitation job, sent by the API's background worker on its first run.
+        // No token here – it is created only when the e-mail is sent.
+        db.InvitationEmailJobs.AddRange(users.Where(u => u.Person.IsInvited).Select(u => new InvitationEmailJob
+        {
+            OrganizationId = organization.Id,
+            UserId = u.User.Id,
+            Status = InvitationJobStatus.Pending,
+            NextAttemptAt = now,
+            CreatedAt = now,
+        }));
 
         foreach (var manager in users.Where(u => u.Person.IsDepartmentManager))
         {

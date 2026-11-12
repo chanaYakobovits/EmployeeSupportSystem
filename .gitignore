@@ -9,6 +9,9 @@
 **/bin/
 **/obj/
 
+# Local runtime data (Development e-mails written as .eml – they contain invitation links)
+**/App_Data/
+
 # Angular / Node
 **/node_modules/
 **/dist/

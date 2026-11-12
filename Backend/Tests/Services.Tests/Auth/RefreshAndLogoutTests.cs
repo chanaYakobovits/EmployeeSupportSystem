@@ -248,7 +248,7 @@ public class RefreshAndLogoutTests : AuthServiceTestBase
         foreach (var value in new[] { login.RefreshToken.Value, refreshed.RefreshToken.Value })
         {
             Assert.DoesNotContain(value, log);
-            Assert.DoesNotContain(Services.Implementations.RefreshTokenGenerator.Hash(value), log);
+            Assert.DoesNotContain(Services.Implementations.SecureTokenGenerator.Hash(value), log);
         }
     }
 }

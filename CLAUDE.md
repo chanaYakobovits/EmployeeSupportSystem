@@ -10,6 +10,8 @@
   2.4 ניהול קטגוריות ו-SLA (API + מסכים).
 - הבא בתור: 3.1 יצירת פנייה וצפייה של עובד.
 - תוספת שלא באפיון: בדיקת איכות סיווג AI על 30 פניות לדוגמה – אחרי משימה 4.3.
+- תוספת שלא באפיון: הזמנת עובד במייל (האפיון 14 שאלה 3, "בעתיד"). שלב א' (שרת + תיקון מינימלי במסך עובד חדש) – הושלם.
+  שלב ב' (מסך set-password ב-Angular, הצגת סטטוס הזמנה וכפתור "שליחה מחדש") – פתוח.
 
 ## שפה
 - הסברים, תוכניות ושאלות אליי – בעברית.
@@ -119,12 +121,41 @@
 - `NotificationService` טוען את MatSnackBar ב-dynamic import (נטען מיד בעלייה), כדי שה-CDK overlay לא ייכנס
   ל-bundle הראשוני. לא לייבא MatSnackBar/MatDialog בקוד שנטען בעלייה (core, app.config).
 
+- הזמנת עובד במייל (תוספת, במקום סיסמה זמנית ביצירת עובד; האפיון 4.2 מדבר על סיסמה זמנית):
+  * POST /users יוצר עובד עם `PasswordHash = null` ו-`MustChangePassword = true`, ומחזיר `UserDetailsDto` (בלי סיסמה זמנית).
+    באותה טרנזקציה נוספת שורה ל-`InvitationEmailJobs`: רק "הזמנה לעובד X" – בלי טוקן, בלי מייל ובלי תוכן.
+  * `MustChangePassword` = "העובד עוד לא בחר סיסמה משלו". שליחה מחדש (`POST /users/{id}/invitation`) מותרת רק כשהוא true
+    (אחרת 422 `password-already-set`; עובד לא פעיל ← 422 `inactive-user`). reset-password עדיין נותן סיסמה זמנית ומבטל הזמנות פתוחות.
+  * login עם `PasswordHash` null ← אימות מול ה-Dummy Hash ואותו 401 אחיד, נספר לנעילה. AuditLog `LoginFailed.PasswordNotSet`.
+  * הטוקן נוצר רק ברגע השליחה (`InvitationEmailProcessor`), ו-`UserInvitations` שומר רק SHA-256 (`SecureTokenGenerator`,
+    לשעבר RefreshTokenGenerator). כל ניסיון שליחה יוצר טוקן חדש ומבטל את הקודם – לכל עובד לכל היותר קישור תקף אחד.
+    תוקף 72 שעות מרגע השליחה. הקישור: `{FrontendBaseUrl}/set-password#token=...` (אחרי #).
+  * תור כמו AiAnalysisJobs: claim ב-`UPDATE ... OUTPUT` עם READPAST, ‏Attempts עולה בכל claim, נעילה של 5 דקות.
+    ניסיונות חוזרים אחרי 1/5/30 דקות, ‏MaxAttempts=4. כישלון קבוע (נמען נדחה 5xx) ← Failed מיד. שגיאות SMTP אחרות, כולל אימות,
+    נחשבות זמניות. Attempts > Max (קריסות חוזרות) ← Failed. `Status` הוא Concurrency Token: ביטול באמצע ← ה-Worker לא שולח.
+  * set-password (אנונימי, ‏Rate Limit של 10 ל-15 דקות לכל IP): קישור לא קיים / נוצל / בוטל / פג / עובד לא פעיל ← 400
+    `invalid-invitation` עם "הקישור אינו בתוקף. יש לפנות למנהל המערכת." (כולל טוקן חסר או ארוך מדי, על השדה token).
+    סימון הנוצל ב-UPDATE מותנה (`TryMarkUsedAsync`). בהצלחה 204 בלי התחברות אוטומטית, ביטול שאר ההזמנות, המשימות וה-Refresh Tokens.
+  * סטטוס ב-`UserListItemDto`/`UserDetailsDto` (`invitation: { status, at }` או null): לפי המשימה האחרונה שאינה Cancelled.
+    Pending/Sent/Used/Expired/Failed + ‏Revoked (קישור שבוטל באיפוס סיסמה). משימה שבוטלה לפני שליחה ← הסטטוס מהקודמת, או null.
+  * מייל: `IEmailSender` – ‏`SmtpEmailSender` (MailKit 4.18.2; ‏4.8.0 שתוכננה מסומנת בפגיעות NU1902) או `FileEmailSender`
+    (קבצי .eml ב-`App_Data/emails`, מותר רק ב-Development, אחרת האפליקציה לא עולה). ‏`Email:Smtp:Password` רק ב-user-secrets.
+    `Invitations:FrontendBaseUrl` חייב https מחוץ ל-Development. בלוג רק קוד שגיאה וסוג חריגה – לא טוקן, לא מייל, לא הודעת SMTP.
+  * AuditLog: `Invitation.Sent` / `Invitation.SendFailed` (מערכת: UserId null, ‏IpAddress "system"), `Invitation.Resent`,
+    `Invitation.PasswordSet`, `Invitation.PasswordSetFailed` (בלי actor).
+  * תבנית המייל: `Services/Implementations/Invitations/Templates/invitation.html` (לא `*.he.html` – MSBuild מתייחס ל-he כתרבות).
+- הקשר ארגון לשירותי רקע (לשימוש גם ב-4.3): `AppDbContext` תלוי ב-`IOrganizationContext` (לא ב-ICurrentUser).
+  `OrganizationContext` (Scoped): המשתמש המחובר, אחרת הארגון שנקבע ב-`ISystemOrganizationContext.Enter` (זורק אם יש משתמש
+  או ארגון אחר). ‏`API/BackgroundJobs`: ‏`PollingBackgroundService` (בסיס ל-Worker) ו-`CreateOrganizationScope(orgId)`.
+  `InvitationEmailJobs` היא הישות היחידה עם OrganizationId בלי Query Filter (ה-claim חוצה ארגונים ומחזיר רק מזהים).
+  טבלת תור של 4.3 תעבוד באותו דפוס: OrganizationId בשורה, claim בלי סינון, עיבוד בתוך Scope של הארגון.
+
 ## בהמשך
 - משימה 2.2: לטעון את Shell ב-loadComponent (lazy), מסך ההתחברות מחוצה לו –
   כדי להוריד את ה-bundle הראשוני מתחת ל-500KB. לא להגדיל את ה-budget.
 
-  - משימה 4.3: ה-Worker רץ בלי משתמש ← ה-Query Filter מחזיר 0 שורות. להגדיר הקשר ארגון מפורש לכל משימה
-  (לא IgnoreQueryFilters כללי).
+  - משימה 4.3: ה-Worker רץ בלי משתמש ← ה-Query Filter מחזיר 0 שורות. הפתרון כבר קיים (הזמנות במייל):
+  לרשת מ-`PollingBackgroundService` ולעבד כל משימה ב-`CreateOrganizationScope(job.OrganizationId)`. לא IgnoreQueryFilters כללי.
 
 ## מגבלה ידועה
   - מגבלה ידועה: אחרי השבתה או שינוי תפקידים, Access Token קיים תקף עד 15 דקות.

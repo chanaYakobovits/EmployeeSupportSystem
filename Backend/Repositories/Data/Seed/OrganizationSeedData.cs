@@ -27,10 +27,13 @@ internal sealed record PersonSeed(
     bool IsDepartmentManager = false,
     bool IsDepartmentHr = false,
     bool IsActive = true,
-    bool MustChangePassword = false);
+    bool MustChangePassword = false,
+    // Invited by e-mail, no password yet: the seed queues an invitation job, the API sends it on its first run.
+    bool IsInvited = false);
 
 /// <summary>
-/// The demo organization from spec 2.2, completed to 25 people (spec 8.5) with regular, non-handler employees.
+/// The demo organization from spec 2.2, completed to 25 people (spec 8.5) with regular, non-handler employees,
+/// plus one invited employee (no password yet) for the invitation e-mail.
 /// Order matters: the position in <see cref="People"/> becomes the employee code (EMP-00001 ...).
 /// </summary>
 internal static class OrganizationSeedData
@@ -93,7 +96,12 @@ internal static class OrganizationSeedData
         // Central HR: HR manager = system admin + handler (spec 14, question 10) + manager of the HR department; HR coordinator
         new("יעל", "הרפז", "yael.harpaz", "מנהלת משאבי אנוש", DepartmentKey.HumanResources,
             [Role.Admin, Role.Handler, Role.DepartmentManager], IsDepartmentManager: true),
-        new("עדי", "שמעוני", "adi.shimoni", "רכזת משאבי אנוש", DepartmentKey.HumanResources, Handler)
+        new("עדי", "שמעוני", "adi.shimoni", "רכזת משאבי אנוש", DepartmentKey.HumanResources, Handler),
+
+        // Invitation e-mail demo – after the 25 people above, so their ids and codes do not move:
+        // a new employee without a password, with a pending invitation job.
+        new("נגה", "ברק", "noga.barak", "רכזת גיוס", DepartmentKey.HumanResources, None,
+            MustChangePassword: true, IsInvited: true)
     ];
 
     public static string EmployeeCode(int position) => EmployeeCodeFormat.Format(position);

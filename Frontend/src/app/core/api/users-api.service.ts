@@ -8,7 +8,6 @@ import { toHttpParams } from '../http/query-params';
 import { PagedResult } from '../models/paging.models';
 import {
   CreateUserRequest,
-  CreateUserResponse,
   ResetPasswordResponse,
   SetUserActiveResponse,
   UpdateUserRequest,
@@ -47,8 +46,8 @@ export class UsersApiService {
     return this.http.get<UserDetails>(`${this.baseUrl}/${id}`, { context: skipErrorToast() });
   }
 
-  create(request: CreateUserRequest): Observable<CreateUserResponse> {
-    return this.http.post<CreateUserResponse>(this.baseUrl, request, { context: skipErrorToast() });
+  create(request: CreateUserRequest): Observable<UserDetails> {
+    return this.http.post<UserDetails>(this.baseUrl, request, { context: skipErrorToast() });
   }
 
   update(id: number, request: UpdateUserRequest): Observable<UserDetails> {

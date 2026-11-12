@@ -273,7 +273,9 @@ Authorization: Bearer {{admin.response.body.$.accessToken}}
 
 ### ---------- Create (spec 4.2) ----------
 
-### Create → 201 + Location; employeeCode EMP-00026; roles [Employee, Handler]; temporaryPassword shown once
+### Create → 201 + Location; the user itself (no temporary password); employeeCode EMP-00027 (after the 26 seeded);
+### roles [Employee, Handler]; "invitation": { "status": "Pending" } – the e-mail is sent by the background worker
+### within ~10 seconds (see "Invitation e-mail" below).
 # @name created
 POST {{API_HostAddress}}/api/users
 Authorization: Bearer {{admin.response.body.$.accessToken}}
@@ -316,17 +318,16 @@ Content-Type: application/json
 
 { "firstName": "א", "lastName": "ב", "email": "ab@example.com", "departmentId": 2, "jobTitle": "ג", "roles": ["DepartmentManager"] }
 
-### The new user signs in with the employee code + temporary password → 200, mustChangePassword: true
-# @name createdLogin
+### The new user has no password yet: any password → 401 (the uniform "פרטי ההתחברות שגויים")
 POST {{API_HostAddress}}/api/auth/login
 Content-Type: application/json
 
-{ "identifier": "{{created.response.body.$.user.employeeCode}}", "password": "{{created.response.body.$.temporaryPassword}}" }
+{ "identifier": "{{created.response.body.$.employeeCode}}", "password": "Demo1234" }
 
 ### ---------- Update ----------
 
 ### Update details and roles → 200; employeeCode unchanged (not part of the request)
-PUT {{API_HostAddress}}/api/users/{{created.response.body.$.user.id}}
+PUT {{API_HostAddress}}/api/users/{{created.response.body.$.id}}
 Authorization: Bearer {{admin.response.body.$.accessToken}}
 Content-Type: application/json
 
@@ -355,20 +356,25 @@ Content-Type: application/json
 
 ### ---------- Reset password ----------
 
-### Reset → 200 { temporaryPassword }; MustChangePassword, lockout cleared, all refresh tokens revoked
+### Reset → 200 { temporaryPassword }; MustChangePassword, lockout cleared, all refresh tokens revoked,
+### open invitation links revoked (GET → "invitation": { "status": "Revoked" } if the e-mail had been sent)
 # @name reset
-POST {{API_HostAddress}}/api/users/{{created.response.body.$.user.id}}/reset-password
+POST {{API_HostAddress}}/api/users/{{created.response.body.$.id}}/reset-password
 Authorization: Bearer {{admin.response.body.$.accessToken}}
 
-### The session from before the reset is gone: refresh with the cookie of "createdLogin" → 401
-### (paste it from the Set-Cookie of createdLogin if the REST client replaced it since)
-POST {{API_HostAddress}}/api/auth/refresh
-
-### The new temporary password works → 200 (the previous one → 401)
+### The temporary password works → 200, mustChangePassword: true
+# @name resetLogin
 POST {{API_HostAddress}}/api/auth/login
 Content-Type: application/json
 
-{ "identifier": "{{created.response.body.$.user.employeeCode}}", "password": "{{reset.response.body.$.temporaryPassword}}" }
+{ "identifier": "{{created.response.body.$.employeeCode}}", "password": "{{reset.response.body.$.temporaryPassword}}" }
+
+### A second reset signs out the session above: refresh with the cookie of "resetLogin" → 401
+POST {{API_HostAddress}}/api/users/{{created.response.body.$.id}}/reset-password
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+
+###
+POST {{API_HostAddress}}/api/auth/refresh
 
 ### Resetting your own password → 422 (use change-password)
 POST {{API_HostAddress}}/api/users/24/reset-password
@@ -673,3 +679,106 @@ Content-Type: application/json
 { "critical": 0, "high": 1.5, "medium": 48 }
 
 ### Reset all of the above: dotnet run --project API -- --seed
+
+### ======================================================================================
+### ============ Invitation e-mail (addition, not in the spec) – run in order after --seed ============
+### ======================================================================================
+### Mail delivery (appsettings.Development.json, "Email"):
+###   Provider "File" (default): every e-mail is written to Backend/API/App_Data/emails/*.eml (git-ignored).
+###     Open it in any mail client / text editor and copy the token after "#token=" in the link.
+###   Provider "Smtp" with smtp4dev: run smtp4dev (web UI http://localhost:5000, SMTP port 25), set
+###     "Provider": "Smtp" (Host localhost, Port 25, Security None are already set), restart the API.
+### The seed has one invited employee: נגה ברק, id 26, EMP-00026 – no password, invitation sent on the first run.
+### Set the token you copied here:
+@inviteToken = paste-the-token-from-the-eml-file
+
+### Run "Admin login – Yael Harpaz" at the top of "User administration" first.
+
+### Status in the user DTO → "invitation": { "status": "Sent", "at": ... } (Pending until the worker ran, ~10 s)
+GET {{API_HostAddress}}/api/users/26
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+
+### The list carries the status too
+GET {{API_HostAddress}}/api/users?search=EMP-00026
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+
+### Before setting a password: no password signs in → 401 uniform
+POST {{API_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{ "identifier": "EMP-00026", "password": "Demo1234" }
+
+### Weak password → 400, errors.newPassword (the link stays valid)
+POST {{API_HostAddress}}/api/auth/set-password
+Content-Type: application/json
+
+{ "token": "{{inviteToken}}", "newPassword": "abc" }
+
+### Set the password (anonymous) → 204. The link is now used; other links revoked; AuditLog "Invitation.PasswordSet"
+POST {{API_HostAddress}}/api/auth/set-password
+Content-Type: application/json
+
+{ "token": "{{inviteToken}}", "newPassword": "Noga2026x" }
+
+### The same link again → 400 "הקישור אינו בתוקף. יש לפנות למנהל המערכת." (type invalid-invitation)
+### Same answer for an unknown, expired (72 hours) or revoked link, or an inactive employee
+POST {{API_HostAddress}}/api/auth/set-password
+Content-Type: application/json
+
+{ "token": "{{inviteToken}}", "newPassword": "Noga2026y" }
+
+### Unknown token → the same 400
+POST {{API_HostAddress}}/api/auth/set-password
+Content-Type: application/json
+
+{ "token": "no-such-token", "newPassword": "Noga2026y" }
+
+### Sign in with the new password → 200, mustChangePassword: false
+POST {{API_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{ "identifier": "EMP-00026", "password": "Noga2026x" }
+
+### Status → "Used"
+GET {{API_HostAddress}}/api/users/26
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+
+### ---------- Resend: POST /api/users/{id}/invitation (Admin) ----------
+
+### To an employee who already chose a password (Noga now, or Noa) → 422 "password-already-set"
+POST {{API_HostAddress}}/api/users/4/invitation
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+
+### New employee → 201, invitation Pending
+# @name invited
+POST {{API_HostAddress}}/api/users
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "firstName": "טל", "lastName": "בדיקה", "email": "tal.test@example.com", "departmentId": 2, "jobTitle": "מפתח" }
+
+### Resend → 200, Pending again. The earlier link (if already sent) is revoked; a queued e-mail is cancelled,
+### so the worker sends one e-mail with a new link. AuditLog "Invitation.Resent"
+POST {{API_HostAddress}}/api/users/{{invited.response.body.$.id}}/invitation
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+
+### After ~10 s → "Sent"
+GET {{API_HostAddress}}/api/users/{{invited.response.body.$.id}}
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+
+### Reset password instead → 200 { temporaryPassword }; the open link is revoked → status "Revoked"
+POST {{API_HostAddress}}/api/users/{{invited.response.body.$.id}}/reset-password
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+
+###
+GET {{API_HostAddress}}/api/users/{{invited.response.body.$.id}}
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+
+### Unknown user → 404
+POST {{API_HostAddress}}/api/users/99999/invitation
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+
+### Failure: with Provider "Smtp" and no SMTP server listening, the worker retries after 1, 5 and 30 minutes
+### (job Pending, LastErrorCode "SmtpConnectionFailed"), then marks it Failed → status "Failed",
+### AuditLog "Invitation.SendFailed". The admin then resends. Neither the token nor the address is ever logged.
+### Rate limit: more than 10 set-password requests from one IP within 15 minutes → 429.

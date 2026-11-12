@@ -8,7 +8,6 @@ import { UsersApiService } from '../../../../core/api/users-api.service';
 import { Department } from '../../../../core/models/department.models';
 import {
   CreateUserRequest,
-  CreateUserResponse,
   ResetPasswordResponse,
   SetUserActiveResponse,
   UpdateUserRequest,
@@ -79,7 +78,7 @@ export class UserFormStore {
   }
 
   /** The response holds the temporary password: show it once, do not keep it. */
-  create(request: CreateUserRequest): Observable<CreateUserResponse> {
+  create(request: CreateUserRequest): Observable<UserDetails> {
     return withFlag(this.saving, this.usersApi.create(request));
   }
 

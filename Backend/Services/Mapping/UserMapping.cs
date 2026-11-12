@@ -14,8 +14,9 @@ public static class UserMapping
     public static IReadOnlyList<Role> NormalizeRoles(IEnumerable<Role>? roles) =>
         (roles ?? []).Append(Role.Employee).Distinct().Order().ToList();
 
+    /// <summary>A new user has no password (null hash) until they set one through the invitation e-mail.</summary>
     public static User ToNewUser(this CreateUserRequest request, int organizationId, string employeeCode,
-        string passwordHash, IReadOnlyList<Role> roles, DateTime now) => new()
+        IReadOnlyList<Role> roles, DateTime now) => new()
     {
         OrganizationId = organizationId,
         DepartmentId = request.DepartmentId,
@@ -24,7 +25,7 @@ public static class UserMapping
         LastName = request.LastName.Trim(),
         Email = NormalizeEmail(request.Email),
         JobTitle = request.JobTitle.Trim(),
-        PasswordHash = passwordHash,
+        PasswordHash = null,
         MustChangePassword = true,
         IsActive = true,
         CreatedAt = now,

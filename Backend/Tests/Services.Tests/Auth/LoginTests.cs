@@ -67,7 +67,7 @@ public class LoginTests : AuthServiceTestBase
         Assert.True(result.RefreshToken.Value.Length >= 43); // 32 random bytes, base64url
 
         var stored = Assert.Single(RefreshTokens.Tokens);
-        Assert.Equal(RefreshTokenGenerator.Hash(result.RefreshToken.Value), stored.TokenHash);
+        Assert.Equal(SecureTokenGenerator.Hash(result.RefreshToken.Value), stored.TokenHash);
         Assert.NotEqual(result.RefreshToken.Value, stored.TokenHash);
         Assert.Equal((NoaId, Start, Start.AddDays(7)), (stored.UserId, stored.CreatedAt, stored.ExpiresAt));
         Assert.Null(stored.RevokedAt);
@@ -243,7 +243,7 @@ public class LoginTests : AuthServiceTestBase
         Assert.DoesNotContain(FakePasswordHasher.Prefix, log);
         Assert.DoesNotContain(FakeAccessTokenIssuer.Token, log);
         Assert.DoesNotContain(result.RefreshToken.Value, log);
-        Assert.DoesNotContain(RefreshTokenGenerator.Hash(result.RefreshToken.Value), log);
+        Assert.DoesNotContain(SecureTokenGenerator.Hash(result.RefreshToken.Value), log);
         Assert.DoesNotContain("nobody", log, StringComparison.OrdinalIgnoreCase);
     }
 

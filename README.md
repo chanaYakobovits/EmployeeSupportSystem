@@ -63,6 +63,7 @@ dotnet run --project API -- --seed
 |---|---|---|---|
 | כניסה ראשונה: חייב להחליף סיסמה (`MustChangePassword`) | תומר זילבר | EMP-00009 | tomer.zilber@example.com |
 | עובדת שעזבה (`IsActive = false`): לא יכולה להתחבר | אורית דנון | EMP-00012 | orit.danon@example.com |
+| עובדת שהוזמנה במייל: אין לה סיסמה, וההזמנה נשלחת בהרצה הראשונה של ה-API | נגה ברק | EMP-00026 | noga.barak@example.com |
 
 **מטפלים נוספים:**
 
@@ -72,6 +73,20 @@ dotnet run --project API -- --seed
 | רותם לביא | EMP-00019 | בקשות מנהלתיות |
 | מורן אשכנזי | EMP-00020 | בקשות מנהלתיות |
 | עדי שמעוני | EMP-00025 | משאבי אנוש מרכזי |
+
+## מייל הזמנה לעובד חדש
+
+עובד חדש נוצר בלי סיסמה ומקבל מייל עם קישור חד-פעמי לקביעת סיסמה (תוקף 72 שעות). שירות רקע שולח את המיילים.
+
+- **ברירת מחדל בפיתוח – קבצים:** כל מייל נשמר כקובץ `.eml` בתיקייה `Backend/API/App_Data/emails` (התיקייה לא נכנסת לגיט).
+  פותחים את הקובץ ומעתיקים את הטוקן שאחרי `#token=` בקישור. האפשרות הזו מותרת רק ב-Development.
+- **smtp4dev (שרת SMTP מקומי):** ב-`appsettings.Development.json` משנים `"Email": { "Provider": "Smtp" }`.
+  שאר ההגדרות (localhost, פורט 25, בלי הצפנה) כבר קיימות. המיילים מוצגים בממשק של smtp4dev.
+- **שרת אמיתי:** `Email:Smtp:Host/Port/Security/UserName` מוגדרים ב-appsettings, והסיסמה רק ב-user-secrets:
+  `dotnet user-secrets set "Email:Smtp:Password" "<value>" --project API`
+- `Invitations:FrontendBaseUrl` – הכתובת של אפליקציית Angular, שממנה נבנה הקישור. מחוץ ל-Development חייבת להיות https.
+
+תרחישים מלאים – בסוף `Backend/API/API.http`.
 
 ## פקודות
 

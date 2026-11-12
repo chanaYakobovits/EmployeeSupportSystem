@@ -17,15 +17,28 @@ public interface IUserService
     Task<UserDetailsDto> GetAsync(int userId, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Generates the employee code and a temporary password (returned only here), MustChangePassword = true.
+    /// Generates the employee code; no password (MustChangePassword = true). An invitation e-mail is queued in the same
+    /// transaction – the response shows it as Pending.
     /// </summary>
     /// <exception cref="Common.Exceptions.ConflictException">The e-mail is already registered (→ 409).</exception>
-    Task<CreateUserResponse> CreateAsync(CreateUserRequest request, string ipAddress, CancellationToken cancellationToken);
+    Task<UserDetailsDto> CreateAsync(CreateUserRequest request, string ipAddress, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Sends the invitation again: earlier links are revoked, a queued e-mail is cancelled, a new one is queued.
+    /// </summary>
+    /// <exception cref="Common.Exceptions.NotFoundException"/>
+    /// <exception cref="Common.Exceptions.BusinessRuleException">
+    /// The user already chose a password, or is inactive (→ 422).
+    /// </exception>
+    Task<UserDetailsDto> ResendInvitationAsync(int userId, string ipAddress, CancellationToken cancellationToken);
 
     /// <exception cref="Common.Exceptions.BusinessRuleException">A protection rule was broken (→ 422).</exception>
     Task<UserDetailsDto> UpdateAsync(int userId, UpdateUserRequest request, string ipAddress, CancellationToken cancellationToken);
 
-    /// <summary>New temporary password, MustChangePassword = true, lockout cleared, all refresh tokens revoked.</summary>
+    /// <summary>
+    /// New temporary password, MustChangePassword = true, lockout cleared, all refresh tokens revoked,
+    /// open invitations revoked.
+    /// </summary>
     Task<ResetPasswordResponse> ResetPasswordAsync(int userId, string ipAddress, CancellationToken cancellationToken);
 
     /// <summary>

@@ -14,7 +14,7 @@ namespace API.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/auth")]
-public class AuthController(IAuthService authService) : ControllerBase
+public class AuthController(IAuthService authService, IInvitationService invitationService) : ControllerBase
 {
     public const string RefreshCookieName = "refresh_token";
 
@@ -87,6 +87,23 @@ public class AuthController(IAuthService authService) : ControllerBase
     {
         var result = await authService.ChangePasswordAsync(request, ClientIp, cancellationToken);
         return SessionResponse(result);
+    }
+
+    /// <summary>
+    /// Sets the first password with the token from the invitation e-mail. Anonymous; rate limited per IP.
+    /// The link works once. Any invalid link (unknown, used, revoked, expired) → 400 with one uniform message.
+    /// No session is started: the employee signs in normally afterwards.
+    /// </summary>
+    [HttpPost("set-password")]
+    [AllowAnonymous]
+    [EnableRateLimiting(AuthExtensions.SetPasswordRateLimitPolicy)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status429TooManyRequests)]
+    public async Task<IActionResult> SetPassword(SetPasswordRequest request, CancellationToken cancellationToken)
+    {
+        await invitationService.SetPasswordAsync(request, ClientIp, cancellationToken);
+        return NoContent();
     }
 
     /// <summary>The signed-in user, roles and department. Allowed also while a password change is pending.</summary>

@@ -38,8 +38,8 @@ public sealed class UserServiceTests : AdminTestBase
         var first = await UserService.CreateAsync(NewUser("a@example.com"), Ip, CancellationToken.None);
         var second = await UserService.CreateAsync(NewUser("b@example.com"), Ip, CancellationToken.None);
 
-        Assert.Equal("EMP-00042", first.User.EmployeeCode);
-        Assert.Equal("EMP-00043", second.User.EmployeeCode);
+        Assert.Equal("EMP-00042", first.EmployeeCode);
+        Assert.Equal("EMP-00043", second.EmployeeCode);
     }
 
     [Theory]
@@ -51,8 +51,8 @@ public sealed class UserServiceTests : AdminTestBase
         var response = await UserService.CreateAsync(NewUser(roles: requested), Ip, CancellationToken.None);
 
         var expected = requested.Append(Role.Employee).Distinct().Order().ToList();
-        Assert.Equal(expected, response.User.Roles);
-        Assert.Equal(expected, RolesOf(UserById(response.User.Id)));
+        Assert.Equal(expected, response.Roles);
+        Assert.Equal(expected, RolesOf(UserById(response.Id)));
     }
 
     [Fact]
@@ -60,18 +60,16 @@ public sealed class UserServiceTests : AdminTestBase
     {
         var response = await UserService.CreateAsync(NewUser(roles: null), Ip, CancellationToken.None);
 
-        Assert.Equal([Role.Employee], response.User.Roles);
+        Assert.Equal([Role.Employee], response.Roles);
     }
 
     [Fact]
-    public async Task Create_stores_only_the_hash_of_a_temporary_password_that_must_be_changed()
+    public async Task Create_makes_a_user_without_a_password_who_must_set_one()
     {
         var response = await UserService.CreateAsync(NewUser(), Ip, CancellationToken.None);
-        var user = UserById(response.User.Id);
+        var user = UserById(response.Id);
 
-        Assert.Empty(PasswordPolicy.Validate(response.TemporaryPassword));
-        Assert.NotEqual(response.TemporaryPassword, user.PasswordHash);
-        Assert.True(Hasher.Verify(user.PasswordHash, response.TemporaryPassword));
+        Assert.Null(user.PasswordHash);
         Assert.True(user.MustChangePassword);
         Assert.True(user.IsActive);
         Assert.Equal(OrgId, user.OrganizationId);
@@ -79,17 +77,31 @@ public sealed class UserServiceTests : AdminTestBase
     }
 
     [Fact]
-    public async Task Create_never_writes_the_temporary_password_to_the_log_or_the_audit_log()
+    public async Task Create_queues_an_invitation_in_the_same_transaction_without_a_token()
     {
         var response = await UserService.CreateAsync(NewUser(), Ip, CancellationToken.None);
 
-        Assert.DoesNotContain(response.TemporaryPassword, UserLogger.AllText);
+        var job = Assert.Single(Invitations.Jobs);
+        Assert.Equal(response.Id, job.UserId);
+        Assert.Equal(OrgId, job.OrganizationId);
+        Assert.Equal(InvitationJobStatus.Pending, job.Status);
+        Assert.Equal(Now, job.NextAttemptAt);
+        Assert.Null(job.InvitationId);
+        Assert.Empty(Invitations.Invitations); // the token is created only when the e-mail is sent
+        Assert.Equal(1, UnitOfWork.TransactionCount);
+        Assert.Equal(InvitationStatus.Pending, response.Invitation?.Status);
+    }
+
+    [Fact]
+    public async Task Create_is_audited_with_actor_target_and_ip()
+    {
+        var response = await UserService.CreateAsync(NewUser(), Ip, CancellationToken.None);
+
         var audit = Assert.Single(AuditLog.Entries);
         Assert.Equal(AuditActions.UserCreated, audit.Action);
         Assert.Equal(YaelId, audit.UserId);
-        Assert.Equal(response.User.Id, audit.EntityId);
+        Assert.Equal(response.Id, audit.EntityId);
         Assert.Equal(Ip, audit.IpAddress);
-        Assert.Equal(1, UnitOfWork.TransactionCount);
     }
 
     [Fact]
@@ -97,7 +109,7 @@ public sealed class UserServiceTests : AdminTestBase
     {
         var response = await UserService.CreateAsync(NewUser("  Dana.New@Example.COM "), Ip, CancellationToken.None);
 
-        Assert.Equal("dana.new@example.com", response.User.Email);
+        Assert.Equal("dana.new@example.com", response.Email);
     }
 
     [Theory]
@@ -279,7 +291,7 @@ public sealed class UserServiceTests : AdminTestBase
         var response = await UserService.ResetPasswordAsync(NoaId, Ip, CancellationToken.None);
 
         Assert.Empty(PasswordPolicy.Validate(response.TemporaryPassword));
-        Assert.True(Hasher.Verify(noa.PasswordHash, response.TemporaryPassword));
+        Assert.True(Hasher.Verify(noa.PasswordHash!, response.TemporaryPassword));
         Assert.True(noa.MustChangePassword);
         Assert.Equal(0, noa.FailedLoginCount);
         Assert.Null(noa.LockoutEnd);

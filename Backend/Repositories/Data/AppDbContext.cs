@@ -6,13 +6,15 @@ using Repositories.Data.Converters;
 
 namespace Repositories.Data;
 
-public class AppDbContext(DbContextOptions<AppDbContext> options, ICurrentUser currentUser) : DbContext(options)
+public class AppDbContext(DbContextOptions<AppDbContext> options, IOrganizationContext organizationContext)
+    : DbContext(options)
 {
     /// <summary>
-    /// Organization of the signed-in user, or null when nobody is signed in (login, refresh, seeder, background jobs).
-    /// Read by the global query filters on every query (EF parameterizes context members per execution).
+    /// Organization of the signed-in user, or the one a background job entered explicitly; null otherwise
+    /// (login, refresh, seeder). Read by the global query filters on every query (EF parameterizes context members
+    /// per execution).
     /// </summary>
-    private int? CurrentOrganizationId => currentUser.IsAuthenticated ? currentUser.OrganizationId : null;
+    private int? CurrentOrganizationId => organizationContext.OrganizationId;
 
     public DbSet<Organization> Organizations => Set<Organization>();
     public DbSet<Department> Departments => Set<Department>();
@@ -28,6 +30,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ICurrentUser c
     public DbSet<TicketComment> TicketComments => Set<TicketComment>();
     public DbSet<TicketAttachment> TicketAttachments => Set<TicketAttachment>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<UserInvitation> UserInvitations => Set<UserInvitation>();
+    public DbSet<InvitationEmailJob> InvitationEmailJobs => Set<InvitationEmailJob>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -49,9 +53,13 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ICurrentUser c
     /// Spec 6.2: every entity with an OrganizationId is filtered to the signed-in user's organization.
     /// Fail closed: without a signed-in user no rows are returned. The explicit "!= null" matters for AuditLog,
     /// whose OrganizationId is nullable - EF's C# null semantics would otherwise match null to null.
-    /// Bypassed with IgnoreQueryFilters() only where no user can exist yet: login lookup and refresh-token lookup.
-    /// Entities without OrganizationId (UserRole, RefreshToken, Ticket children, AI jobs) are not filtered -
-    /// they are always reached through a filtered parent.
+    /// Bypassed with IgnoreQueryFilters() only where no user can exist yet: login lookup, refresh-token lookup and
+    /// invitation-token lookup (set-password). Background jobs do not bypass: they enter an organization explicitly
+    /// (ISystemOrganizationContext).
+    /// Entities without OrganizationId (UserRole, RefreshToken, UserInvitation, Ticket children, AI jobs) are not
+    /// filtered - they are always reached through a filtered parent. InvitationEmailJob has an OrganizationId but is
+    /// deliberately not filtered: the worker claims jobs of every organization before it knows which one (it then
+    /// enters each job's organization) and the claim returns only ids.
     /// </summary>
     private void ApplyOrganizationFilters(ModelBuilder modelBuilder)
     {

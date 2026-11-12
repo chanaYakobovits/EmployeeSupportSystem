@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>הזמנה לעובדנט</title>
+</head>
+<body dir="rtl" style="margin:0;padding:0;background:#f4f6f8;font-family:Arial,'Segoe UI',sans-serif;color:#1f2933;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f4f6f8;padding:24px 0;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="560" cellspacing="0" cellpadding="0" dir="rtl"
+               style="max-width:560px;width:100%;background:#ffffff;border-radius:8px;text-align:right;">
+          <tr>
+            <td style="padding:24px 32px;background:#1e3a5f;border-radius:8px 8px 0 0;color:#ffffff;font-size:22px;font-weight:bold;">
+              עובדנט
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:32px;font-size:16px;line-height:1.6;">
+              <p style="margin:0 0 16px;">שלום {{FirstName}},</p>
+              <p style="margin:0 0 16px;">נפתח עבורך חשבון במערכת עובדנט לניהול פניות עובדים.</p>
+              <p style="margin:0 0 16px;">
+                קוד העובד שלך: <strong dir="ltr" style="unicode-bidi:embed;">{{EmployeeCode}}</strong><br>
+                בכניסה למערכת אפשר להזין את קוד העובד או את כתובת המייל.
+              </p>
+              <p style="margin:0 0 24px;">כדי להתחיל, יש לקבוע סיסמה דרך הקישור הבא:</p>
+              <p style="margin:0 0 24px;text-align:center;">
+                <a href="{{Link}}" style="display:inline-block;padding:12px 28px;background:#1e6fd9;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:bold;">
+                  קביעת סיסמה
+                </a>
+              </p>
+              <p style="margin:0 0 16px;font-size:14px;color:#52606d;">
+                הקישור תקף עד {{ExpiresAt}} (שעון ישראל), ואפשר להשתמש בו פעם אחת בלבד.
+              </p>
+              <p style="margin:0 0 16px;font-size:14px;color:#52606d;">
+                אם הכפתור לא עובד, אפשר להעתיק את הכתובת הזו לדפדפן:<br>
+                <span dir="ltr" style="unicode-bidi:embed;word-break:break-all;">{{Link}}</span>
+              </p>
+              <p style="margin:24px 0 0;font-size:14px;color:#52606d;">
+                אם לא ציפית למייל הזה – אפשר להתעלם ממנו.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

@@ -209,21 +209,13 @@ export class UserForm {
       .create(request)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: (response) => {
-          const created = response.user;
-          openTemporaryPasswordDialog(this.dialog, {
-            employeeCode: created.employeeCode,
-            fullName: fullName(created),
-            temporaryPassword: response.temporaryPassword,
-            reason: 'created',
-          })
-            .afterClosed()
-            .subscribe(() => {
-              void this.router.navigate([USERS_URL, created.id], {
-                replaceUrl: true,
-                state: { returnTo: this.router.serializeUrl(this.backLink) },
-              });
-            });
+        // No temporary password any more: the server queues an invitation e-mail with a link for setting one.
+        next: (created) => {
+          this.notifications.success('העובד נוצר ונשלחה אליו הזמנה במייל');
+          void this.router.navigate([USERS_URL, created.id], {
+            replaceUrl: true,
+            state: { returnTo: this.router.serializeUrl(this.backLink) },
+          });
         },
         error: (error: unknown) => this.showSaveError(error),
       });

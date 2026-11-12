@@ -22,9 +22,10 @@ public interface IUserRepository
     // ---- user administration (task 2.3); all within the signed-in user's organization unless stated ----
 
     /// <summary>Filtered, sorted and paged in SQL. The query must already be validated (page, pageSize, sortBy).</summary>
-    Task<PagedResult<UserListItemDto>> GetPageAsync(UserListQuery query, CancellationToken cancellationToken);
+    /// <param name="now">For the invitation status (expired or not).</param>
+    Task<PagedResult<UserListItemDto>> GetPageAsync(UserListQuery query, DateTime now, CancellationToken cancellationToken);
 
-    /// <param name="now">For <see cref="UserDetailsDto.IsLockedOut"/>.</param>
+    /// <param name="now">For <see cref="UserDetailsDto.IsLockedOut"/> and the invitation status.</param>
     Task<UserDetailsDto?> GetDetailsAsync(int userId, DateTime now, CancellationToken cancellationToken);
 
     /// <summary>

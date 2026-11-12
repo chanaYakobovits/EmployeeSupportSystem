@@ -67,7 +67,7 @@ public abstract class AuthServiceTestBase
     }
 
     protected RefreshToken StoredToken(string value) =>
-        RefreshTokens.Tokens.Single(t => t.TokenHash == RefreshTokenGenerator.Hash(value));
+        RefreshTokens.Tokens.Single(t => t.TokenHash == SecureTokenGenerator.Hash(value));
 
     private User CreateUser(int id, string code, string email, bool isActive, bool mustChangePassword = false)
     {

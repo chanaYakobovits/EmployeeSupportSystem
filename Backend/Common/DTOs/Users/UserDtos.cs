@@ -1,4 +1,5 @@
 using Common.DTOs.Auth;
+using Common.DTOs.Invitations;
 using Common.Enums;
 
 namespace Common.DTOs.Users;
@@ -15,7 +16,9 @@ public sealed record UserListItemDto(
     IReadOnlyList<Role> Roles,
     bool IsActive,
     DateTime CreatedAt,
-    DateTime? LastLoginAt);
+    DateTime? LastLoginAt,
+    // State of the latest invitation e-mail, or null if the user was never invited.
+    InvitationStatusDto? Invitation);
 
 /// <summary>One user (GET/PUT /api/users/{id}).</summary>
 public sealed record UserDetailsDto(
@@ -33,7 +36,9 @@ public sealed record UserDetailsDto(
     DateTime CreatedAt,
     DateTime? LastLoginAt,
     // The department this user manages (at most one), or null.
-    DepartmentSummaryDto? ManagedDepartment);
+    DepartmentSummaryDto? ManagedDepartment,
+    // State of the latest invitation e-mail, or null if the user was never invited.
+    InvitationStatusDto? Invitation);
 
 /// <summary>Short reference to a user, e.g. a department manager.</summary>
 public sealed record UserSummaryDto(int Id, string EmployeeCode, string FirstName, string LastName);
@@ -60,11 +65,10 @@ public sealed record UpdateUserRequest(
     IReadOnlyList<Role>? Roles);
 
 /// <summary>
-/// The temporary password appears only in this response (spec 4.2): never stored in clear text, logged or audited.
+/// POST /api/users/{id}/reset-password. The temporary password appears only in this response (spec 4.2):
+/// never stored in clear text, logged or audited. Shown to the admin once.
+/// (A new user gets no temporary password – an invitation e-mail is sent instead.)
 /// </summary>
-public sealed record CreateUserResponse(UserDetailsDto User, string TemporaryPassword);
-
-/// <summary>POST /api/users/{id}/reset-password. Shown to the admin once.</summary>
 public sealed record ResetPasswordResponse(string TemporaryPassword);
 
 /// <summary>PATCH /api/users/{id}/active. Nullable so that a missing value is a validation error, not "false".</summary>
