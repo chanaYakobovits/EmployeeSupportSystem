@@ -9,8 +9,11 @@ export function isApiRequest(url: string): boolean {
   return url === base || url.startsWith(`${base}/`);
 }
 
-/** login / refresh / logout: authenticated by credentials or the refresh cookie, never by a refreshed token. */
-const SESSION_ENDPOINTS = /\/auth\/(login|refresh|logout)$/;
+/**
+ * login / refresh / logout / set-password: authenticated by credentials, the refresh cookie or an invitation token –
+ * never by an access token, and a failure is never "refresh and retry".
+ */
+const SESSION_ENDPOINTS = /\/auth\/(login|refresh|logout|set-password)$/;
 
 export function isSessionRequest(request: HttpRequest<unknown>): boolean {
   return request.context.get(AUTH_REQUEST) || SESSION_ENDPOINTS.test(request.url.split('?')[0]);

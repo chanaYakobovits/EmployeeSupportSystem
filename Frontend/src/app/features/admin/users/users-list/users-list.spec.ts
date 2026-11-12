@@ -124,6 +124,40 @@ describe('UsersList', () => {
     });
   });
 
+  describe('invitation', () => {
+    it('shows the invitation state as a Hebrew tag, and "—" for a user never invited', async () => {
+      usersApi.list.and.returnValue(
+        of(
+          result([
+            fakeUserDetails({ id: 1, invitation: { status: 'Failed', at: '2026-11-12T08:00:00Z' } }),
+            fakeUserDetails({ id: 2, invitation: null }),
+          ]),
+        ),
+      );
+      const element = await open('/admin/users');
+      const rows = element.querySelectorAll('tbody tr');
+
+      expect(Array.from(element.querySelectorAll('th')).some((th) => th.textContent!.includes('הזמנה'))).toBeTrue();
+      expect(rows[0].querySelector('app-invitation-badge')!.textContent).toContain('נכשלה');
+      expect(rows[0].querySelector('app-invitation-badge app-badge')?.classList).toContain('tone-danger');
+      expect(rows[1].querySelector('app-invitation-badge')!.textContent!.trim()).toBe('—');
+    });
+
+    it('sends the invitation status filter from the URL to the server', async () => {
+      usersApi.list.and.returnValue(of(result([])));
+      await open('/admin/users?invitationStatus=Expired');
+
+      expect(usersApi.list).toHaveBeenCalledWith(jasmine.objectContaining({ invitationStatus: 'Expired' }));
+    });
+
+    it('ignores an unknown invitation status in the URL', async () => {
+      usersApi.list.and.returnValue(of(result([])));
+      await open('/admin/users?invitationStatus=Lost');
+
+      expect(usersApi.list).toHaveBeenCalledWith(jasmine.objectContaining({ invitationStatus: null }));
+    });
+  });
+
   it('sortable headers expose aria-sort', async () => {
     usersApi.list.and.returnValue(of(result([fakeUserDetails()])));
     const element = await open('/admin/users?sortBy=email&sortDir=desc');

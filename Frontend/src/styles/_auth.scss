@@ -1,4 +1,4 @@
-// Shared layout of the auth screens (login, change password) – outside the shell. docs/design-guide.md.
+// Shared layout of the auth screens (login, change password, set password) – outside the shell. docs/design-guide.md.
 
 .auth-page {
   min-height: 100%;
@@ -79,6 +79,42 @@
 
 .auth-alert-title {
   font-weight: 600;
+}
+
+// Good news next to the form (role="status"), e.g. "the password was set" on the login screen.
+.auth-alert.auth-alert-success {
+  border-color: var(--success-text);
+  background: var(--success-soft);
+  color: var(--success-text);
+
+  &:focus-visible,
+  &:focus {
+    outline-color: var(--success-text);
+  }
+}
+
+// Split card (login, set-password): brand side (app-auth-brand) + form side. One column on mobile.
+.auth-split-card {
+  max-width: 1000px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.auth-form-side {
+  padding: 56px 48px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+@media (max-width: 767.98px) {
+  .auth-split-card {
+    grid-template-columns: 1fr;
+  }
+
+  .auth-form-side {
+    padding: 28px 24px 32px;
+  }
 }
 
 .auth-submit.mat-mdc-unelevated-button {

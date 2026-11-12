@@ -60,6 +60,11 @@ export class UsersApiService {
     });
   }
 
+  /** Sends the invitation e-mail again (earlier links stop working). 422 if the user already chose a password. */
+  resendInvitation(id: number): Observable<UserDetails> {
+    return this.http.post<UserDetails>(`${this.baseUrl}/${id}/invitation`, null, { context: skipErrorToast() });
+  }
+
   setActive(id: number, isActive: boolean): Observable<SetUserActiveResponse> {
     return this.http.patch<SetUserActiveResponse>(
       `${this.baseUrl}/${id}/active`,

@@ -1,0 +1,16 @@
+<div class="brand-logo">
+  <img class="brand-icon" src="logo-icon.svg" alt="" width="56" height="56" />
+  <div>
+    <p class="brand-name">עובדנט</p>
+    <p class="brand-slogan">הופכים פניות לפתרונות</p>
+  </div>
+</div>
+
+<ul class="features">
+  @for (feature of features; track feature.icon) {
+    <li>
+      <span class="feature-icon"><mat-icon aria-hidden="true">{{ feature.icon }}</mat-icon></span>
+      <span>{{ feature.text }}</span>
+    </li>
+  }
+</ul>

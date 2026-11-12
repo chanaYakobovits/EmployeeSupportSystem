@@ -21,7 +21,7 @@
       [subtitle]="
         isEdit()
           ? (user()?.jobTitle ?? '') + ' · ' + (user()?.department?.name ?? '')
-          : 'קוד העובד והסיסמה הזמנית ייווצרו אוטומטית'
+          : 'קוד העובד ייווצר אוטומטית, והעובד יקבל הזמנה במייל לקביעת סיסמה'
       "
     />
 
@@ -225,6 +225,63 @@
             }
           </dl>
 
+          @if (!isSelf()) {
+            <section class="invitation" aria-labelledby="invitation-title">
+              <h3 id="invitation-title" class="section-title">הזמנה במייל</h3>
+
+              <dl class="facts">
+                <div class="fact">
+                  <dt>סטטוס</dt>
+                  <dd><app-invitation-badge [status]="invitation()?.status" /></dd>
+                </div>
+                @if (invitation(); as invitation) {
+                  <div class="fact">
+                    <dt>עדכון אחרון</dt>
+                    <dd dir="ltr">{{ invitation.at | dateTime }}</dd>
+                  </div>
+                }
+              </dl>
+
+              @if (invitationFailed()) {
+                <div class="app-alert app-alert-warning invitation-failed">
+                  <mat-icon aria-hidden="true">warning</mat-icon>
+                  <div>
+                    <p class="app-alert-title">ההזמנה לא נשלחה</p>
+                    <p>
+                      שליחת המייל נכשלה, והעובד לא קיבל קישור לקביעת סיסמה. אפשר לשלוח את ההזמנה שוב, או ליצור
+                      סיסמה זמנית ולמסור אותה לעובד בעצמכם (זה מבטל את ההזמנה).
+                    </p>
+                    <div class="invitation-failed-actions">
+                      <button mat-flat-button type="button" [disabled]="store.busy()" (click)="resendInvitation()">
+                        <mat-icon aria-hidden="true">forward_to_inbox</mat-icon>
+                        שליחה מחדש
+                      </button>
+                      <button mat-stroked-button type="button" [disabled]="store.busy()" (click)="resetPassword()">
+                        <mat-icon aria-hidden="true">password</mat-icon>
+                        סיסמה זמנית במקום
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              } @else if (canResendInvitation()) {
+                <button
+                  mat-stroked-button
+                  type="button"
+                  class="resend-button"
+                  [disabled]="store.busy()"
+                  (click)="resendInvitation()"
+                >
+                  @if (store.resendingInvitation()) {
+                    <mat-spinner diameter="18" aria-hidden="true" />
+                  } @else {
+                    <mat-icon aria-hidden="true">forward_to_inbox</mat-icon>
+                  }
+                  {{ invitation() ? 'שליחת הזמנה מחדש' : 'שליחת הזמנה' }}
+                </button>
+              }
+            </section>
+          }
+
           @if (isSelf()) {
             <p class="self-note">
               זה המשתמש שלך: אי אפשר להשבית אותו או לאפס לו סיסמה מכאן. להחלפת הסיסמה –
@@ -235,7 +292,7 @@
               <button
                 mat-stroked-button
                 type="button"
-                [disabled]="store.resetting() || store.changingActive()"
+                [disabled]="store.busy()"
                 (click)="resetPassword()"
               >
                 <mat-icon aria-hidden="true">lock_reset</mat-icon>
@@ -245,7 +302,7 @@
                 mat-stroked-button
                 type="button"
                 [class.danger]="current.isActive"
-                [disabled]="store.resetting() || store.changingActive()"
+                [disabled]="store.busy()"
                 (click)="toggleActive()"
               >
                 <mat-icon aria-hidden="true">{{ current.isActive ? 'person_off' : 'person_check' }}</mat-icon>

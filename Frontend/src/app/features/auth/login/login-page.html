@@ -1,28 +1,18 @@
 <main class="auth-page">
-  <div class="auth-card login-card">
+  <div class="auth-card auth-split-card">
     <!-- Brand side: right in RTL -->
-    <section class="brand" aria-label="עובדנט">
-      <div class="brand-logo">
-        <img class="brand-icon" src="logo-icon.svg" alt="" width="56" height="56" />
-        <div>
-          <p class="brand-name">עובדנט</p>
-          <p class="brand-slogan">הופכים פניות לפתרונות</p>
-        </div>
-      </div>
+    <app-auth-brand />
 
-      <ul class="features">
-        @for (feature of features; track feature.icon) {
-          <li>
-            <span class="feature-icon"><mat-icon aria-hidden="true">{{ feature.icon }}</mat-icon></span>
-            <span>{{ feature.text }}</span>
-          </li>
-        }
-      </ul>
-    </section>
-
-    <section class="form-side">
+    <section class="auth-form-side">
       <h1 class="auth-title">התחברות</h1>
       <p class="auth-subtitle">יש להזין את פרטי ההתחברות שקיבלתם מהארגון</p>
+
+      @if (notice(); as notice) {
+        <div class="auth-alert auth-alert-success" role="status">
+          <mat-icon aria-hidden="true">check_circle</mat-icon>
+          <p class="auth-alert-title">{{ notice }}</p>
+        </div>
+      }
 
       @if (alert(); as alert) {
         <div #alertBox class="auth-alert" role="alert" tabindex="-1">

@@ -19,6 +19,7 @@ public sealed class UserListQueryValidator : PageQueryValidator<UserListQuery>
             .WithMessage("מזהה המחלקה אינו תקין");
 
         RuleFor(q => q.Role).IsInEnum().WithMessage("התפקיד אינו קיים");
+        RuleFor(q => q.InvitationStatus).IsInEnum().WithMessage("סטטוס ההזמנה אינו קיים");
     }
 }
 

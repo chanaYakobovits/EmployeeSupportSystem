@@ -702,6 +702,15 @@ Authorization: Bearer {{admin.response.body.$.accessToken}}
 GET {{API_HostAddress}}/api/users?search=EMP-00026
 Authorization: Bearer {{admin.response.body.$.accessToken}}
 
+### Filter by invitation status (Pending | Sent | Used | Expired | Failed | Revoked) → only users whose latest
+### invitation is in that state; never-invited users never match
+GET {{API_HostAddress}}/api/users?invitationStatus=Sent
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+
+### Unknown invitation status → 400, errors.invitationStatus
+GET {{API_HostAddress}}/api/users?invitationStatus=Lost
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+
 ### Before setting a password: no password signs in → 401 uniform
 POST {{API_HostAddress}}/api/auth/login
 Content-Type: application/json

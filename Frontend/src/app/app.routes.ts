@@ -19,6 +19,12 @@ export const routes: Routes = [
     loadComponent: () => import('./features/auth/login/login-page').then((m) => m.LoginPage),
   },
   {
+    // The invitation e-mail's link (#token=...). Open to everyone: a signed-in user is signed out by the page.
+    path: 'set-password',
+    title: 'קביעת סיסמה',
+    loadComponent: () => import('./features/auth/set-password/set-password-page').then((m) => m.SetPasswordPage),
+  },
+  {
     // First login: mandatory, no shell, no cancel.
     path: 'change-password',
     canActivate: [authGuard, changePasswordGuard],

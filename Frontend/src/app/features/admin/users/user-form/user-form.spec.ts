@@ -27,6 +27,7 @@ describe('UserForm', () => {
       'update',
       'resetPassword',
       'setActive',
+      'resendInvitation',
     ]);
     confirm = jasmine.createSpyObj<ConfirmService>('ConfirmService', ['confirm']);
     const departmentsApi = jasmine.createSpyObj<DepartmentsApiService>('DepartmentsApiService', ['list']);
@@ -247,6 +248,122 @@ describe('UserForm', () => {
         .find((b) => b.textContent!.includes('איפוס סיסמה'))!
         .click();
       expect(usersApi.resetPassword).not.toHaveBeenCalled();
+    });
+
+    describe('invitation', () => {
+      const AT = '2026-11-12T08:30:00Z';
+
+      function button(text: string): HTMLButtonElement {
+        return Array.from(element.querySelectorAll('button')).find((b) => b.textContent!.includes(text))!;
+      }
+
+      function invitationSection(): HTMLElement {
+        return element.querySelector('section.invitation')!;
+      }
+
+      it('shows the state and the last time', () => {
+        render(fakeUserDetails({ mustChangePassword: true, invitation: { status: 'Sent', at: AT } }));
+
+        expect(invitationSection().querySelector('app-invitation-badge')!.textContent).toContain('נשלחה');
+        expect(invitationSection().textContent).toContain('12/11/2026 10:30');
+      });
+
+      it('resend: explains that the previous link stops working, then shows the new state', () => {
+        const user = fakeUserDetails({ mustChangePassword: true, invitation: { status: 'Sent', at: AT } });
+        render(user);
+        confirm.confirm.and.returnValue(of(true));
+        usersApi.resendInvitation.and.returnValue(of({ ...user, invitation: { status: 'Pending', at: AT } }));
+
+        button('שליחת הזמנה מחדש').click();
+        fixture.detectChanges();
+
+        const options = confirm.confirm.calls.mostRecent().args[0];
+        expect(options.consequences!.join(' ')).toContain('הקישור מההזמנה הקודמת יפסיק לעבוד');
+        expect(usersApi.resendInvitation).toHaveBeenCalledOnceWith(42);
+        expect(invitationSection().textContent).toContain('ממתינה');
+      });
+
+      it('a cancelled resend confirmation sends nothing', () => {
+        render(fakeUserDetails({ mustChangePassword: true, invitation: { status: 'Expired', at: AT } }));
+        confirm.confirm.and.returnValue(of(false));
+
+        button('שליחת הזמנה מחדש').click();
+
+        expect(usersApi.resendInvitation).not.toHaveBeenCalled();
+      });
+
+      it('no resend once the invitation was used (or the user chose a password)', () => {
+        render(fakeUserDetails({ mustChangePassword: false, invitation: { status: 'Used', at: AT } }));
+
+        expect(hasButton('שליחת הזמנה')).toBeFalse();
+        expect(invitationSection().textContent).toContain('נוצלה');
+      });
+
+      it('no resend for an inactive user', () => {
+        render(fakeUserDetails({ isActive: false, mustChangePassword: true, invitation: { status: 'Sent', at: AT } }));
+
+        expect(hasButton('שליחת הזמנה')).toBeFalse();
+      });
+
+      it('failed: a prominent warning with resend and a temporary password instead', () => {
+        render(fakeUserDetails({ mustChangePassword: true, invitation: { status: 'Failed', at: AT } }));
+
+        const warning = element.querySelector('.invitation-failed')!;
+        expect(warning.textContent).toContain('ההזמנה לא נשלחה');
+        expect(warning.textContent).toContain('שליחה מחדש');
+        expect(warning.textContent).toContain('סיסמה זמנית במקום');
+      });
+
+      it('failed → temporary password: the confirmation says the invitation is cancelled', () => {
+        render(fakeUserDetails({ mustChangePassword: true, invitation: { status: 'Failed', at: AT } }));
+        confirm.confirm.and.returnValue(of(false));
+
+        button('סיסמה זמנית במקום').click();
+
+        const options = confirm.confirm.calls.mostRecent().args[0];
+        expect(options.heading).toBe('איפוס סיסמה');
+        expect(options.consequences!.join(' ')).toContain('ההזמנה במייל תבוטל');
+      });
+
+      it('a reset reloads the user, so the state becomes "בוטלה"', async () => {
+        const user = fakeUserDetails({ mustChangePassword: true, invitation: { status: 'Sent', at: AT } });
+        render(user);
+        confirm.confirm.and.returnValue(of(true));
+        usersApi.resetPassword.and.returnValue(of({ temporaryPassword: 'Temp12345abc' }));
+        usersApi.get.and.returnValue(of({ ...user, invitation: { status: 'Revoked', at: AT } }));
+
+        button('איפוס סיסמה').click();
+        fixture.detectChanges();
+        await fixture.whenStable();
+
+        expect(usersApi.get).toHaveBeenCalledTimes(2);
+        expect(invitationSection().textContent).toContain('בוטלה');
+      });
+
+      it('422 (already chose a password) shows the server message', () => {
+        render(fakeUserDetails({ mustChangePassword: true, invitation: { status: 'Sent', at: AT } }));
+        confirm.confirm.and.returnValue(of(true));
+        usersApi.resendInvitation.and.returnValue(
+          throwError(() =>
+            problemResponse(422, 'password-already-set', 'העובד כבר קבע סיסמה', {
+              detail: 'אפשר לאפס לו סיסמה במקום לשלוח הזמנה.',
+            }),
+          ),
+        );
+
+        button('שליחת הזמנה מחדש').click();
+        fixture.detectChanges();
+
+        const alert = element.querySelector('app-form-alert')!;
+        expect(alert.textContent).toContain('העובד כבר קבע סיסמה');
+        expect(alert.textContent).toContain('אפשר לאפס לו סיסמה');
+      });
+
+      it('not shown for the signed-in admin', () => {
+        render(fakeUserDetails({ id: SIGNED_IN_ADMIN_ID, roles: ['Employee', 'Admin'] }));
+
+        expect(element.querySelector('section.invitation')).toBeNull();
+      });
     });
 
     it('an id that is not a number is "not found"', () => {

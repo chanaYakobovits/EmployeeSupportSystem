@@ -13,7 +13,7 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
-import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
   AbstractControl,
   NonNullableFormBuilder,
@@ -31,11 +31,11 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { finalize } from 'rxjs';
 
 import { AuthService } from '../../../core/auth/auth.service';
-import { PASSWORD_RULES, passwordPolicyValidator } from '../../../core/auth/password-policy';
+import { newPasswordControls } from '../../../core/auth/password-policy';
 import { problemMessages, problemType, isProblemDetails } from '../../../core/models/problem-details';
 import { NotificationService } from '../../../core/notifications/notification.service';
+import { NewPasswordFields } from '../../../shared/components/new-password-fields/new-password-fields';
 import { PageHeader } from '../../../shared/components/page-header/page-header';
-import { PasswordStrengthMeter } from '../../../shared/components/password-strength/password-strength';
 import { FormAlert, changePasswordAlert } from '../auth-errors';
 import { safeReturnUrl } from '../safe-return-url';
 
@@ -43,17 +43,11 @@ type FieldName = 'currentPassword' | 'newPassword' | 'confirmPassword';
 
 /** required: first login (MustChangePassword), outside the shell. voluntary: from the user menu, inside the shell. */
 export type ChangePasswordMode = 'required' | 'voluntary';
-type RuleState = 'pending' | 'met' | 'unmet';
 
 /** The new password must differ from the current one (same rule as the server). */
 const differentFromCurrent: ValidatorFn = (control: AbstractControl): ValidationErrors | null => {
   const current = control.parent?.get('currentPassword')?.value as string | undefined;
   return control.value && current && control.value === current ? { sameAsCurrent: true } : null;
-};
-
-const matchesNewPassword: ValidatorFn = (control: AbstractControl): ValidationErrors | null => {
-  const newPassword = control.parent?.get('newPassword')?.value as string | undefined;
-  return control.value && control.value !== newPassword ? { mismatch: true } : null;
 };
 
 /**
@@ -72,7 +66,7 @@ const matchesNewPassword: ValidatorFn = (control: AbstractControl): ValidationEr
     MatButtonModule,
     MatIconModule,
     MatProgressSpinnerModule,
-    PasswordStrengthMeter,
+    NewPasswordFields,
     PageHeader,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -95,55 +89,31 @@ export class ChangePasswordPage {
 
   protected readonly form = inject(NonNullableFormBuilder).group({
     currentPassword: ['', [Validators.required, Validators.maxLength(128)]],
-    newPassword: ['', [Validators.required, passwordPolicyValidator, differentFromCurrent]],
-    confirmPassword: ['', [Validators.required, matchesNewPassword]],
+    ...newPasswordControls([differentFromCurrent]),
   });
 
   protected readonly submitting = signal(false);
   protected readonly alert = signal<FormAlert | null>(null);
-  protected readonly visible = signal<Record<FieldName, boolean>>({
-    currentPassword: false,
-    newPassword: false,
-    confirmPassword: false,
-  });
+  protected readonly showCurrent = signal(false);
 
   protected readonly firstName = computed(() => this.auth.currentUser()?.firstName ?? '');
   protected readonly username = computed(() => this.auth.currentUser()?.email ?? '');
 
-  private readonly newPasswordValue = toSignal(this.form.controls.newPassword.valueChanges, { initialValue: '' });
-  protected readonly newPassword = computed(() => this.newPasswordValue() ?? '');
-
-  protected readonly rules = computed(() => {
-    const value = this.newPassword();
-    return PASSWORD_RULES.map((rule) => ({
-      id: rule.id,
-      label: rule.label,
-      state: (!value ? 'pending' : rule.test(value) ? 'met' : 'unmet') as RuleState,
-    }));
-  });
-
   private readonly alertBox = viewChild<ElementRef<HTMLElement>>('alertBox');
   private readonly currentInput = viewChild.required<ElementRef<HTMLInputElement>>('currentInput');
-  private readonly newInput = viewChild.required<ElementRef<HTMLInputElement>>('newInput');
-  private readonly confirmInput = viewChild.required<ElementRef<HTMLInputElement>>('confirmInput');
+  private readonly newPasswordFields = viewChild.required(NewPasswordFields);
 
   constructor() {
-    // Cross-field rules: re-validate the dependent field when the one it depends on changes.
-    const { currentPassword, newPassword, confirmPassword } = this.form.controls;
+    // Cross-field rule: "different from the current one" depends on the current password.
+    // (The confirmation's dependency on the new password is handled by NewPasswordFields.)
+    const { currentPassword, newPassword } = this.form.controls;
     currentPassword.valueChanges
       .pipe(takeUntilDestroyed())
       .subscribe(() => newPassword.dirty && newPassword.updateValueAndValidity({ emitEvent: false }));
-    newPassword.valueChanges
-      .pipe(takeUntilDestroyed())
-      .subscribe(() => confirmPassword.dirty && confirmPassword.updateValueAndValidity({ emitEvent: false }));
   }
 
-  protected isVisible(field: FieldName): boolean {
-    return this.visible()[field];
-  }
-
-  protected toggleVisible(field: FieldName): void {
-    this.visible.update((state) => ({ ...state, [field]: !state[field] }));
+  protected toggleCurrentVisible(): void {
+    this.showCurrent.update((shown) => !shown);
   }
 
   protected submit(): void {
@@ -208,26 +178,22 @@ export class ChangePasswordPage {
     const control = this.form.controls[field];
     control.setErrors({ server: message });
     control.markAsTouched();
-    afterNextRender(() => this.inputOf(field).nativeElement.focus(), { injector: this.injector });
+    afterNextRender(() => this.focus(field), { injector: this.injector });
   }
 
   private focusFirstInvalid(): void {
-    const field = (['currentPassword', 'newPassword', 'confirmPassword'] as const).find(
-      (name) => this.form.controls[name].invalid,
-    );
-    if (field) {
-      this.inputOf(field).nativeElement.focus();
+    if (this.form.controls.currentPassword.invalid) {
+      this.currentInput().nativeElement.focus();
+      return;
     }
+    this.newPasswordFields().focusFirstInvalid();
   }
 
-  private inputOf(field: FieldName): ElementRef<HTMLInputElement> {
-    switch (field) {
-      case 'currentPassword':
-        return this.currentInput();
-      case 'newPassword':
-        return this.newInput();
-      case 'confirmPassword':
-        return this.confirmInput();
+  private focus(field: FieldName): void {
+    if (field === 'currentPassword') {
+      this.currentInput().nativeElement.focus();
+    } else {
+      this.newPasswordFields().focus(field);
     }
   }
 }

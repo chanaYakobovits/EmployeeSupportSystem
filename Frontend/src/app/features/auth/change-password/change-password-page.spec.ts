@@ -73,6 +73,36 @@ describe('ChangePasswordPage', () => {
       expect(buttonTexts()).not.toContain('ביטול');
     });
 
+    it('uses the shared new-password fields (rules, strength) next to its own current-password field', () => {
+      expect(element.querySelector('app-new-password-fields')).not.toBeNull();
+      expect(element.querySelectorAll('.rules li').length).toBe(3);
+      expect(element.querySelector('app-password-strength')).not.toBeNull();
+      expect(element.querySelector('input[formcontrolname="currentPassword"]')!.getAttribute('autocomplete')).toBe(
+        'current-password',
+      );
+    });
+
+    it('an empty submit shows the errors of all three fields, including the shared ones', () => {
+      element.querySelector('form')!.dispatchEvent(new Event('submit'));
+      fixture.detectChanges();
+
+      expect(auth.changePassword).not.toHaveBeenCalled();
+      expect(element.textContent).toContain('יש להזין את הסיסמה הנוכחית');
+      expect(element.textContent).toContain('יש להזין סיסמה חדשה');
+      expect(element.textContent).toContain('יש להזין שוב את הסיסמה החדשה');
+    });
+
+    it('the new password must differ from the current one', () => {
+      type('currentPassword', 'Temp1234');
+      type('newPassword', 'Temp1234');
+      type('confirmPassword', 'Temp1234');
+      element.querySelector('form')!.dispatchEvent(new Event('submit'));
+      fixture.detectChanges();
+
+      expect(auth.changePassword).not.toHaveBeenCalled();
+      expect(element.textContent).toContain('הסיסמה החדשה חייבת להיות שונה מהסיסמה הנוכחית');
+    });
+
     it('offers sign-out (not skip)', () => {
       expect(buttonTexts()).toContain('יציאה מהמערכת');
     });

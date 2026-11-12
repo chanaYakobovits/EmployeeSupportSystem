@@ -14,6 +14,9 @@ public sealed class UserListQuery : PageQuery
     public Role? Role { get; set; }
 
     public bool? IsActive { get; set; }
+
+    /// <summary>State of the latest invitation (as in the list column). Users never invited never match.</summary>
+    public InvitationStatus? InvitationStatus { get; set; }
 }
 
 /// <summary>Closed list of sortBy values for GET /api/users (spec 9.4).</summary>

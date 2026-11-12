@@ -1,4 +1,4 @@
-import { AbstractControl, ValidationErrors, ValidatorFn } from '@angular/forms';
+import { AbstractControl, ValidationErrors, ValidatorFn, Validators } from '@angular/forms';
 
 /**
  * Spec 6.1 password policy – the same rules as Backend Services PasswordPolicy, checked here too so the user
@@ -42,6 +42,26 @@ export const passwordPolicyValidator: ValidatorFn = (control: AbstractControl): 
   const broken = brokenPasswordRules(value);
   return broken.length ? { passwordPolicy: broken } : null;
 };
+
+/** The confirmation must equal the sibling control "newPassword". */
+export const matchesNewPassword: ValidatorFn = (control: AbstractControl): ValidationErrors | null => {
+  const newPassword = control.parent?.get('newPassword')?.value as string | undefined;
+  return control.value && control.value !== newPassword ? { mismatch: true } : null;
+};
+
+/**
+ * Controls of the shared "new password + confirmation" fields (NewPasswordFields), to spread into a form group.
+ * extraNewPasswordValidators: rules of one screen only (e.g. "different from the current password").
+ */
+export function newPasswordControls(extraNewPasswordValidators: ValidatorFn[] = []): {
+  newPassword: [string, ValidatorFn[]];
+  confirmPassword: [string, ValidatorFn[]];
+} {
+  return {
+    newPassword: ['', [Validators.required, passwordPolicyValidator, ...extraNewPasswordValidators]],
+    confirmPassword: ['', [Validators.required, matchesNewPassword]],
+  };
+}
 
 export type PasswordStrength = 0 | 1 | 2 | 3 | 4;
 

@@ -10,8 +10,8 @@
   2.4 ניהול קטגוריות ו-SLA (API + מסכים).
 - הבא בתור: 3.1 יצירת פנייה וצפייה של עובד.
 - תוספת שלא באפיון: בדיקת איכות סיווג AI על 30 פניות לדוגמה – אחרי משימה 4.3.
-- תוספת שלא באפיון: הזמנת עובד במייל (האפיון 14 שאלה 3, "בעתיד"). שלב א' (שרת + תיקון מינימלי במסך עובד חדש) – הושלם.
-  שלב ב' (מסך set-password ב-Angular, הצגת סטטוס הזמנה וכפתור "שליחה מחדש") – פתוח.
+- תוספת שלא באפיון: הזמנת עובד במייל (האפיון 14 שאלה 3, "בעתיד"). שלב א' (שרת) ושלב ב' (מסך set-password, סטטוס הזמנה
+  ברשימה ובעריכה, שליחה מחדש, סינון לפי סטטוס הזמנה) – הושלמו.
 
 ## שפה
 - הסברים, תוכניות ושאלות אליי – בעברית.
@@ -144,6 +144,24 @@
   * AuditLog: `Invitation.Sent` / `Invitation.SendFailed` (מערכת: UserId null, ‏IpAddress "system"), `Invitation.Resent`,
     `Invitation.PasswordSet`, `Invitation.PasswordSetFailed` (בלי actor).
   * תבנית המייל: `Services/Implementations/Invitations/Templates/invitation.html` (לא `*.he.html` – MSBuild מתייחס ל-he כתרבות).
+  * סינון `GET /users?invitationStatus=` (נוסף בשלב ב'): אותו CASE כמו העמודה – `InvitationStatusOf`/`InvitationStatusAt`
+    ב-UserRepository הם ההגדרה היחידה, וה-Projection וה-Filter נבנים מהם. עובד שלא הוזמן לא מתאים לאף סטטוס.
+- הזמנה במייל – צד לקוח (שלב ב'):
+  * `/set-password` מחוץ ל-shell, בלי guards. הטוקן נקרא מה-fragment (`ActivatedRoute.snapshot.fragment`) ונמחק מהכתובת מיד
+    וגם ב-NavigationEnd הראשון (ה-Router כותב את ה-URL בסוף הניווט הראשון). נשמר בשדה פרטי (לא signal, לא DOM) עד תשובה סופית:
+    הצלחה או `invalid-invitation`. בשגיאה זמנית (רשת/429/500) נשאר, כדי לנסות שוב. משתמש מחובר ← `AuthService.signOut()`
+    (ביטול בשרת וניקוי מקומי בלי ניווט; `logout()` משתמש בו). `<meta name="referrer" content="no-referrer">` רק בזמן שהמסך פתוח.
+  * set-password נחשב בקשת session (`SESSION_ENDPOINTS` ב-api-request.ts): בלי Access Token ובלי refresh על 401.
+  * הודעות למסך הכניסה: `features/auth/login-notices.ts`. ב-navigation state עובר רק מפתח, והטקסט קבוע בקוד.
+  * `app-new-password-fields` (shared): סיסמה חדשה + אימות, כללי המדיניות ומחוון החוזק. יושב בתוך הטופס של ההורה
+    (`viewProviders` ← ControlContainer, `formControlName`). בהורה – `newPasswordControls(extraValidators)`.
+    OnPush: נבדק מחדש על `control.events` ועל `ngSubmit` של ההורה, אחרת שגיאות לא מוצגות אחרי submit ריק.
+  * `app-auth-brand` (features/auth): צד המותג הכחול, ו-`.auth-split-card`/`.auth-form-side` ב-`styles/_auth.scss` – משותפים
+    ל-login ול-set-password.
+  * `app-invitation-badge`: טקסט וצבע לכל סטטוס (ממתינה accent, נשלחה primary, נוצלה success, פגה warning, נכשלה danger,
+    בוטלה neutral; בלי הזמנה "—"). "שליחת הזמנה מחדש" מוצג לעובד פעיל עם `mustChangePassword` שההזמנה שלו לא נוצלה,
+    ולא למשתמש המחובר. בסטטוס נכשלה – אזהרה עם שליחה מחדש או סיסמה זמנית. ה-confirm של איפוס מזכיר שההזמנה תבוטל.
+    אחרי איפוס – טעינה מחדש של העובד, בלי לאפס את הטופס.
 - הקשר ארגון לשירותי רקע (לשימוש גם ב-4.3): `AppDbContext` תלוי ב-`IOrganizationContext` (לא ב-ICurrentUser).
   `OrganizationContext` (Scoped): המשתמש המחובר, אחרת הארגון שנקבע ב-`ISystemOrganizationContext.Enter` (זורק אם יש משתמש
   או ארגון אחר). ‏`API/BackgroundJobs`: ‏`PollingBackgroundService` (בסיס ל-Worker) ו-`CreateOrganizationScope(orgId)`.

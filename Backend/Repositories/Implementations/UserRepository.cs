@@ -111,6 +111,16 @@ public sealed class UserRepository(AppDbContext db) : IUserRepository
             users = users.Where(u => u.IsActive == isActive);
         }
 
+        if (query.InvitationStatus is { } invitation)
+        {
+            // Same subquery and the same CASE as the projection, so the filter and the column always agree.
+            var statusOf = NullableInvitationStatusOf(now);
+            users = users.Where(u => db.InvitationEmailJobs
+                .Where(j => j.UserId == u.Id && j.Status != InvitationJobStatus.Cancelled)
+                .OrderByDescending(j => j.CreatedAt).ThenByDescending(j => j.Id)
+                .Select(statusOf).FirstOrDefault() == invitation);
+        }
+
         var sortBy = query.SortBy ?? UserSortFields.Default;
         var desc = query.SortDir is null ? UserSortFields.IsDescendingByDefault(sortBy) : query.IsDescending;
         var ordered = sortBy switch
@@ -177,25 +187,60 @@ public sealed class UserRepository(AppDbContext db) : IUserRepository
     }
 
     /// <summary>
-    /// Job + its invitation → the state shown to the admin, as CASE expressions in SQL (EF inlines the captured
-    /// expression into the projection). Applied to the user's newest job that is not cancelled: a cancelled job was
-    /// replaced or never sent, so the state comes from the job before it.
-    /// A succeeded job always has an invitation. Order matters: used, then revoked (password reset), then expired.
+    /// The invitation state of a job (CASE in SQL) – the one definition, used by the projection and by the filter.
+    /// Applied to the user's newest job that is not cancelled: a cancelled job was replaced or never sent, so the state
+    /// comes from the job before it. A succeeded job always has an invitation.
+    /// Order matters: used, then revoked (password reset), then expired.
     /// </summary>
-    private static Expression<Func<InvitationEmailJob, InvitationStatusDto>> InvitationStatusProjection(DateTime now) =>
-        j => new InvitationStatusDto(
-            j.Status == InvitationJobStatus.Pending || j.Status == InvitationJobStatus.Processing ? InvitationStatus.Pending
+    private static Expression<Func<InvitationEmailJob, InvitationStatus>> InvitationStatusOf(DateTime now) =>
+        j => j.Status == InvitationJobStatus.Pending || j.Status == InvitationJobStatus.Processing ? InvitationStatus.Pending
             : j.Status == InvitationJobStatus.Failed ? InvitationStatus.Failed
             : j.Invitation!.UsedAt != null ? InvitationStatus.Used
             : j.Invitation.RevokedAt != null ? InvitationStatus.Revoked
             : j.Invitation.ExpiresAt <= now ? InvitationStatus.Expired
-            : InvitationStatus.Sent,
-            j.Status == InvitationJobStatus.Pending || j.Status == InvitationJobStatus.Processing ? j.CreatedAt
+            : InvitationStatus.Sent;
+
+    /// <summary>When the job reached the state of <see cref="InvitationStatusOf"/> (same branches, same order).</summary>
+    private static Expression<Func<InvitationEmailJob, DateTime>> InvitationStatusAt(DateTime now) =>
+        j => j.Status == InvitationJobStatus.Pending || j.Status == InvitationJobStatus.Processing ? j.CreatedAt
             : j.Status == InvitationJobStatus.Failed ? j.CompletedAt ?? j.CreatedAt
             : j.Invitation!.UsedAt != null ? j.Invitation.UsedAt.Value
             : j.Invitation.RevokedAt != null ? j.Invitation.RevokedAt.Value
             : j.Invitation.ExpiresAt <= now ? j.Invitation.ExpiresAt
-            : j.CompletedAt ?? j.Invitation.CreatedAt);
+            : j.CompletedAt ?? j.Invitation.CreatedAt;
+
+    /// <summary>
+    /// Job → <see cref="InvitationStatusDto"/>, composed from the two expressions above (EF inlines the captured
+    /// expression into the projection).
+    /// </summary>
+    private static Expression<Func<InvitationEmailJob, InvitationStatusDto>> InvitationStatusProjection(DateTime now)
+    {
+        var status = InvitationStatusOf(now);
+        var at = InvitationStatusAt(now);
+        var job = status.Parameters[0];
+        var constructor = typeof(InvitationStatusDto).GetConstructor([typeof(InvitationStatus), typeof(DateTime)])!;
+        return Expression.Lambda<Func<InvitationEmailJob, InvitationStatusDto>>(
+            Expression.New(constructor, status.Body, ParameterReplacer.Replace(at.Body, at.Parameters[0], job)), job);
+    }
+
+    /// <summary>
+    /// Job → status as nullable, for the filter: the FirstOrDefault of a user without jobs must be null,
+    /// not default(InvitationStatus) (= Pending).
+    /// </summary>
+    private static Expression<Func<InvitationEmailJob, InvitationStatus?>> NullableInvitationStatusOf(DateTime now)
+    {
+        var status = InvitationStatusOf(now);
+        return Expression.Lambda<Func<InvitationEmailJob, InvitationStatus?>>(
+            Expression.Convert(status.Body, typeof(InvitationStatus?)), status.Parameters);
+    }
+
+    private sealed class ParameterReplacer(ParameterExpression from, ParameterExpression to) : ExpressionVisitor
+    {
+        public static Expression Replace(Expression body, ParameterExpression from, ParameterExpression to) =>
+            new ParameterReplacer(from, to).Visit(body);
+
+        protected override Expression VisitParameter(ParameterExpression node) => node == from ? to : node;
+    }
 
     // IgnoreQueryFilters: e-mail is unique across all organizations (it is the login identifier).
     // Only a bool leaves this method, so nothing about the other organization is exposed.

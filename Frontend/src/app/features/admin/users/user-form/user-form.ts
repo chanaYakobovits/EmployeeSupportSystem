@@ -43,6 +43,7 @@ import { ConfirmService } from '../../../../shared/components/confirm-dialog/con
 import { EmptyState } from '../../../../shared/components/empty-state/empty-state';
 import { ErrorState } from '../../../../shared/components/error-state/error-state';
 import { FormAlert, FormAlertBox } from '../../../../shared/components/form-alert/form-alert';
+import { InvitationBadge } from '../../../../shared/components/invitation-badge/invitation-badge';
 import { LoadingState } from '../../../../shared/components/loading-state/loading-state';
 import { PageHeader } from '../../../../shared/components/page-header/page-header';
 import { applyServerErrors } from '../../../../shared/forms/server-errors';
@@ -92,6 +93,7 @@ const FIELD_ORDER = ['firstName', 'lastName', 'email', 'departmentId', 'jobTitle
     FormAlertBox,
     ActiveBadge,
     Badge,
+    InvitationBadge,
     DateTimePipe,
   ],
   providers: [UserFormStore],
@@ -147,6 +149,28 @@ export class UserForm {
   });
   protected readonly isDepartmentManager = computed(() => this.user()?.roles.includes('DepartmentManager') ?? false);
   protected readonly isHandler = computed(() => this.user()?.roles.includes('Handler') ?? false);
+
+  protected readonly invitation = computed(() => this.user()?.invitation ?? null);
+  protected readonly invitationFailed = computed(() => this.invitation()?.status === 'Failed');
+  /**
+   * The server accepts a resend while the user has not chosen a password of their own (CLAUDE.md), and the user is
+   * active. Not for a used invitation, and not for yourself.
+   */
+  protected readonly canResendInvitation = computed(() => {
+    const user = this.user();
+    return (
+      user !== null &&
+      !this.isSelf() &&
+      user.isActive &&
+      user.mustChangePassword &&
+      this.invitation()?.status !== 'Used'
+    );
+  });
+  /** A link that may still be used (or be sent): a password reset cancels it. */
+  private readonly hasOpenInvitation = computed(() => {
+    const status = this.invitation()?.status;
+    return status === 'Pending' || status === 'Sent' || status === 'Failed';
+  });
 
   /** Back to the list as it was (search, filters, page) when the user came from there. */
   protected readonly backLink: UrlTree;
@@ -227,15 +251,19 @@ export class UserForm {
       return;
     }
     this.alert.set(null);
+    const consequences = [
+      'הסיסמה הנוכחית תפסיק לעבוד מיד.',
+      'העובד ינותק מכל המכשירים שבהם הוא מחובר.',
+      'בכניסה הבאה המערכת תבקש לבחור סיסמה חדשה.',
+    ];
+    if (this.hasOpenInvitation()) {
+      consequences.push('ההזמנה במייל תבוטל, והקישור שבה יפסיק לעבוד. את הסיסמה הזמנית מוסרים לעובד בעצמכם.');
+    }
     this.confirm
       .confirm({
         heading: 'איפוס סיסמה',
         message: `תיווצר סיסמה זמנית חדשה עבור ${fullName(user)}.`,
-        consequences: [
-          'הסיסמה הנוכחית תפסיק לעבוד מיד.',
-          'העובד ינותק מכל המכשירים שבהם הוא מחובר.',
-          'בכניסה הבאה המערכת תבקש לבחור סיסמה חדשה.',
-        ],
+        consequences,
         confirmText: 'איפוס הסיסמה',
         tone: 'danger',
       })
@@ -252,6 +280,34 @@ export class UserForm {
             temporaryPassword: response.temporaryPassword,
             reason: 'reset',
           }),
+        error: (error: unknown) => this.alert.set(adminAlert(error)),
+      });
+  }
+
+  protected resendInvitation(): void {
+    const user = this.user();
+    if (!user || !this.canResendInvitation()) {
+      return;
+    }
+    this.alert.set(null);
+    this.confirm
+      .confirm({
+        heading: 'שליחת הזמנה מחדש',
+        message: `תישלח הזמנה חדשה במייל אל ${fullName(user)}.`,
+        consequences: [
+          'הקישור מההזמנה הקודמת יפסיק לעבוד – רק הקישור במייל החדש יאפשר לקבוע סיסמה.',
+          'הקישור החדש תקף ל-72 שעות מרגע השליחה.',
+        ],
+        confirmText: 'שליחת ההזמנה',
+      })
+      .pipe(
+        filter(Boolean),
+        switchMap(() => this.store.resendInvitation(user.id)),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe({
+        next: () => this.notifications.success('ההזמנה תישלח לעובד במייל בדקות הקרובות'),
+        // 422 (already chose a password / inactive): the server's message.
         error: (error: unknown) => this.alert.set(adminAlert(error)),
       });
   }

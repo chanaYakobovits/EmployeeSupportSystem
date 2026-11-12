@@ -3,7 +3,14 @@ import { Router } from '@angular/router';
 import { Observable, catchError, finalize, firstValueFrom, map, of, shareReplay, tap, throwError } from 'rxjs';
 
 import { AuthApiService } from '../api/auth-api.service';
-import { AuthResponse, ChangePasswordRequest, CurrentUser, LoginRequest, Role } from '../models/auth.models';
+import {
+  AuthResponse,
+  ChangePasswordRequest,
+  CurrentUser,
+  LoginRequest,
+  Role,
+  SetPasswordRequest,
+} from '../models/auth.models';
 import { TokenStore } from './token.store';
 
 /** Session state of the signed-in user, as signals. The only place that changes it. */
@@ -77,9 +84,22 @@ export class AuthService {
 
   /** Revokes the refresh token on the server (best effort), clears the local session and opens the login screen. */
   async logout(): Promise<void> {
+    await this.signOut();
+    await this.router.navigateByUrl('/login');
+  }
+
+  /**
+   * Revokes the refresh token on the server (best effort) and clears the local session, without navigating –
+   * for a screen that must stay open signed out (set-password: the link belongs to another account).
+   */
+  async signOut(): Promise<void> {
     await firstValueFrom(this.api.logout().pipe(catchError(() => of(undefined))), { defaultValue: undefined });
     this.clearSession();
-    await this.router.navigateByUrl('/login');
+  }
+
+  /** Sets the first password with an invitation token. Never touches the session (none is started). */
+  setPassword(request: SetPasswordRequest): Observable<void> {
+    return this.api.setPassword(request);
   }
 
   /** Clears the session in this tab only (no server call). */

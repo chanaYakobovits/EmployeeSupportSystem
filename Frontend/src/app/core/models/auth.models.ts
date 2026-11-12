@@ -34,3 +34,9 @@ export interface ChangePasswordRequest {
   currentPassword: string;
   newPassword: string;
 }
+
+/** POST /auth/set-password (anonymous): the token from the invitation link + the first password. */
+export interface SetPasswordRequest {
+  token: string;
+  newPassword: string;
+}

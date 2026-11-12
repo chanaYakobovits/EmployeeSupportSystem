@@ -43,6 +43,9 @@ export class UserFormStore {
   readonly saving = signal(false);
   readonly resetting = signal(false);
   readonly changingActive = signal(false);
+  readonly resendingInvitation = signal(false);
+  /** Any action of the side card is running: the others wait. */
+  readonly busy = computed(() => this.resetting() || this.changingActive() || this.resendingInvitation());
 
   /** Active departments, plus the user's current one even if it was deactivated since. */
   readonly departmentOptions = computed(() => {
@@ -77,7 +80,7 @@ export class UserFormStore {
     this.statusSignal.set('notFound');
   }
 
-  /** The response holds the temporary password: show it once, do not keep it. */
+  /** No password: the server queues an invitation e-mail. */
   create(request: CreateUserRequest): Observable<UserDetails> {
     return withFlag(this.saving, this.usersApi.create(request));
   }
@@ -93,8 +96,32 @@ export class UserFormStore {
         if (user) {
           this.userSignal.set({ ...user, mustChangePassword: true, isLockedOut: false });
         }
+        // The reset also revoked an open invitation: fetch the new invitation state.
+        this.refreshUser(id);
       }),
     );
+  }
+
+  /** Sends the invitation e-mail again; the response is the user with the new (Pending) invitation state. */
+  resendInvitation(id: number): Observable<UserDetails> {
+    return withFlag(this.resendingInvitation, this.usersApi.resendInvitation(id)).pipe(
+      tap((user) => this.setUser(user, false)),
+    );
+  }
+
+  /** Reloads the shown user without touching the form (unsaved edits stay). Best effort – errors are ignored. */
+  private refreshUser(id: number): void {
+    this.usersApi
+      .get(id)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (user) => {
+          if (this.userSignal()?.id === id) {
+            this.setUser(user, false);
+          }
+        },
+        error: () => undefined,
+      });
   }
 
   setActive(id: number, isActive: boolean): Observable<SetUserActiveResponse> {

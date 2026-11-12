@@ -1,3 +1,4 @@
+import { Location } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -21,13 +22,10 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { finalize } from 'rxjs';
 
 import { AuthService } from '../../../core/auth/auth.service';
+import { AuthBrand } from '../auth-brand/auth-brand';
 import { FormAlert, loginAlert } from '../auth-errors';
+import { readLoginNotice } from '../login-notices';
 import { safeReturnUrl } from '../safe-return-url';
-
-interface Feature {
-  icon: string;
-  text: string;
-}
 
 /** Spec 7.1 – login with e-mail or employee code. No sign-up, no "remember me", no "forgot password". */
 @Component({
@@ -39,6 +37,7 @@ interface Feature {
     MatButtonModule,
     MatIconModule,
     MatProgressSpinnerModule,
+    AuthBrand,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './login-page.html',
@@ -47,18 +46,15 @@ interface Feature {
 export class LoginPage {
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
+  private readonly location = inject(Location);
   private readonly injector = inject(Injector);
   private readonly destroyRef = inject(DestroyRef);
 
   /** Bound from the query string (withComponentInputBinding). */
   readonly returnUrl = input<string>();
 
-  protected readonly features: readonly Feature[] = [
-    { icon: 'alt_route', text: 'ניתוב אוטומטי של כל פנייה לגורם המטפל המתאים' },
-    { icon: 'timer', text: 'מעקב אחר זמני טיפול ויעדי שירות' },
-    { icon: 'track_changes', text: 'עדכון שוטף על מצב הפנייה עד לפתרון' },
-    { icon: 'monitoring', text: 'תמונת מצב ארגונית למנהלים' },
-  ];
+  /** A notice left by the previous screen (navigation state – not in the URL, gone after a reload). */
+  protected readonly notice = signal<string | null>(this.readNotice());
 
   protected readonly form = inject(NonNullableFormBuilder).group({
     identifier: ['', [Validators.required, Validators.maxLength(256)]],
@@ -82,6 +78,7 @@ export class LoginPage {
       return;
     }
     this.alert.set(null);
+    this.notice.set(null);
 
     if (this.form.invalid) {
       this.form.markAllAsTouched();
@@ -109,6 +106,11 @@ export class LoginPage {
           afterNextRender(() => this.alertBox()?.nativeElement.focus(), { injector: this.injector });
         },
       });
+  }
+
+  /** During the navigation the state is on the navigation; after it (e.g. back/forward) in the history entry. */
+  private readNotice(): string | null {
+    return readLoginNotice(this.router.getCurrentNavigation()?.extras.state ?? this.location.getState());
   }
 
   private focusFirstInvalid(): void {

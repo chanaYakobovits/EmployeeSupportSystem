@@ -4,7 +4,13 @@ import { Observable } from 'rxjs';
 
 import { environment } from '../../../environments/environment';
 import { AUTH_REQUEST, skipErrorToast } from '../http/http-context';
-import { AuthResponse, ChangePasswordRequest, CurrentUser, LoginRequest } from '../models/auth.models';
+import {
+  AuthResponse,
+  ChangePasswordRequest,
+  CurrentUser,
+  LoginRequest,
+  SetPasswordRequest,
+} from '../models/auth.models';
 
 /** Typed calls to the backend AuthController (spec 9.1). No state – see AuthService. */
 @Injectable({ providedIn: 'root' })
@@ -41,6 +47,16 @@ export class AuthApiService {
     return this.http.post<AuthResponse>(`${this.baseUrl}/change-password`, request, {
       withCredentials: true,
       context: skipErrorToast(),
+    });
+  }
+
+  /**
+   * Invitation link → first password. Anonymous (no access token, no refresh on failure); errors are shown by the
+   * set-password screen. 204 on success – no session is started.
+   */
+  setPassword(request: SetPasswordRequest): Observable<void> {
+    return this.http.post<void>(`${this.baseUrl}/set-password`, request, {
+      context: skipErrorToast(new HttpContext().set(AUTH_REQUEST, true)),
     });
   }
 

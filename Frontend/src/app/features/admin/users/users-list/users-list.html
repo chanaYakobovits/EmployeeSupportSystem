@@ -35,6 +35,16 @@
     </mat-select>
   </mat-form-field>
 
+  <mat-form-field appearance="outline" subscriptSizing="dynamic" class="filter-select">
+    <mat-label>סטטוס הזמנה</mat-label>
+    <mat-select [value]="state().filters.invitationStatus" (selectionChange)="onInvitationStatus($event.value)">
+      <mat-option [value]="null">כל הסטטוסים</mat-option>
+      @for (option of invitationOptions; track option.status) {
+        <mat-option [value]="option.status">{{ option.label }}</mat-option>
+      }
+    </mat-select>
+  </mat-form-field>
+
   <mat-button-toggle-group
     class="segmented"
     aria-label="סטטוס העובד"
@@ -96,6 +106,10 @@
 
   <ng-template appCell="isActive" let-user>
     <app-active-badge [active]="user.isActive" />
+  </ng-template>
+
+  <ng-template appCell="invitation" let-user>
+    <app-invitation-badge [status]="user.invitation?.status" />
   </ng-template>
 
   <div tableEmpty>

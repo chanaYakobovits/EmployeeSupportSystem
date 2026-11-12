@@ -178,3 +178,41 @@
     padding: 16px;
   }
 }
+
+// Invitation e-mail (state, resend, a failed send).
+.invitation {
+  margin: 0 0 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+
+  .facts {
+    margin-bottom: 12px;
+  }
+}
+
+.section-title {
+  margin: 0 0 12px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.resend-button {
+  width: 100%;
+}
+
+.invitation-failed {
+  margin: 0;
+
+  p {
+    margin: 0 0 8px;
+    font-size: 13px;
+  }
+}
+
+.invitation-failed-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}

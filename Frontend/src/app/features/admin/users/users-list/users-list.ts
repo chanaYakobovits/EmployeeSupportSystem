@@ -7,8 +7,13 @@ import { MatSelectModule } from '@angular/material/select';
 import { Router, RouterLink } from '@angular/router';
 
 import { Role } from '../../../../core/models/auth.models';
-import { UserListItem } from '../../../../core/models/user.models';
+import { InvitationStatus, UserListItem } from '../../../../core/models/user.models';
 import { ActiveBadge } from '../../../../shared/components/active-badge/active-badge';
+import {
+  INVITATION_STATUSES,
+  INVITATION_STATUS_ORDER,
+  InvitationBadge,
+} from '../../../../shared/components/invitation-badge/invitation-badge';
 import { Badge } from '../../../../shared/components/badge/badge';
 import { DataTable, DataTableCell, DataTableColumn } from '../../../../shared/components/data-table/data-table';
 import { EmptyState } from '../../../../shared/components/empty-state/empty-state';
@@ -42,6 +47,7 @@ const ROLE_ORDER: readonly Role[] = ['Admin', 'Executive', 'DepartmentManager', 
     EmptyState,
     ActiveBadge,
     Badge,
+    InvitationBadge,
     RoleLabelPipe,
   ],
   providers: [UsersListStore],
@@ -66,7 +72,13 @@ export class UsersList {
     { key: 'jobTitle', header: 'תפקיד בארגון' },
     { key: 'roles', header: 'תפקידי מערכת' },
     { key: 'isActive', header: 'סטטוס' },
+    { key: 'invitation', header: 'הזמנה' },
   ];
+
+  protected readonly invitationOptions = INVITATION_STATUS_ORDER.map((status) => ({
+    status,
+    label: INVITATION_STATUSES[status].label,
+  }));
 
   protected readonly activeFilter = computed<ActiveFilter>(() => {
     const isActive = this.state().filters.isActive;
@@ -93,6 +105,10 @@ export class UsersList {
 
   protected onRole(role: Role | null): void {
     this.list.setFilters({ role });
+  }
+
+  protected onInvitationStatus(invitationStatus: InvitationStatus | null): void {
+    this.list.setFilters({ invitationStatus });
   }
 
   protected onActive(value: ActiveFilter): void {

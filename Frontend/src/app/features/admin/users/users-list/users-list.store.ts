@@ -6,7 +6,12 @@ import { DepartmentsApiService } from '../../../../core/api/departments-api.serv
 import { UsersApiService } from '../../../../core/api/users-api.service';
 import { Role } from '../../../../core/models/auth.models';
 import { Department } from '../../../../core/models/department.models';
-import { USER_SORT_FIELDS, UserListItem } from '../../../../core/models/user.models';
+import {
+  INVITATION_STATUS_VALUES,
+  InvitationStatus,
+  USER_SORT_FIELDS,
+  UserListItem,
+} from '../../../../core/models/user.models';
 import { ListStateDef, boolParam, enumParam, idParam, textParam, toPageQuery } from '../../../../shared/list/list-state';
 import { ListStore } from '../../../../shared/list/list-store';
 
@@ -15,6 +20,7 @@ export type UserFilters = {
   departmentId: number | null;
   role: Role | null;
   isActive: boolean | null;
+  invitationStatus: InvitationStatus | null;
 };
 
 /** Every user is an Employee (spec 2.3), so filtering by it means nothing. */
@@ -27,6 +33,7 @@ export const USERS_LIST: ListStateDef<UserFilters> = {
     departmentId: idParam,
     role: enumParam(FILTERABLE_ROLES),
     isActive: boolParam,
+    invitationStatus: enumParam(INVITATION_STATUS_VALUES),
   },
   sortFields: USER_SORT_FIELDS,
   // Newest employees first. Same default as the server (UserSortFields.Default) – not written to the URL.

@@ -1,0 +1,115 @@
+// Brand side: blue gradient with a slow diagonal pattern (the only animated background in the app).
+:host {
+  display: block;
+  position: relative;
+  overflow: hidden;
+  padding: 56px 48px;
+  background: linear-gradient(165deg, var(--primary) 0%, var(--primary-dark) 100%);
+  color: var(--on-primary);
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: -50%;
+    background: repeating-linear-gradient(
+      45deg,
+      transparent,
+      transparent 60px,
+      var(--on-primary-pattern) 60px,
+      var(--on-primary-pattern) 120px
+    );
+    animation: brand-pattern 40s linear infinite;
+  }
+
+  > * {
+    position: relative;
+  }
+}
+
+@keyframes brand-pattern {
+  to {
+    transform: translate(84.85px, 84.85px);
+  }
+}
+
+.brand-logo {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+
+  p {
+    margin: 0;
+  }
+}
+
+.brand-icon {
+  flex-shrink: 0;
+  border-radius: var(--radius-field);
+}
+
+.brand-name {
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.brand-slogan {
+  font-size: 17px;
+  color: var(--on-primary-muted);
+}
+
+.features {
+  list-style: none;
+  margin: 48px 0 0;
+  padding: 0;
+
+  li {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 0;
+    font-size: 15px;
+    border-bottom: 1px solid var(--on-primary-line);
+  }
+}
+
+.feature-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-field);
+  background: var(--on-primary-overlay);
+
+  mat-icon {
+    font-size: 20px;
+    width: 20px;
+    height: 20px;
+  }
+}
+
+// Mobile: a compact brand strip above the form.
+@media (max-width: 767.98px) {
+  :host {
+    padding: 24px;
+  }
+
+  .brand-icon {
+    width: 44px;
+    height: 44px;
+  }
+
+  .brand-name {
+    font-size: 24px;
+  }
+
+  .brand-slogan {
+    font-size: 14px;
+  }
+
+  .features {
+    display: none;
+  }
+}

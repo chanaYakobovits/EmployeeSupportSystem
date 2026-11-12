@@ -28,7 +28,8 @@ export interface UserListItem {
 }
 
 /** Backend InvitationStatus (derived, not stored). */
-export type InvitationStatus = 'Pending' | 'Sent' | 'Used' | 'Expired' | 'Failed' | 'Revoked';
+export const INVITATION_STATUS_VALUES = ['Pending', 'Sent', 'Used', 'Expired', 'Failed', 'Revoked'] as const;
+export type InvitationStatus = (typeof INVITATION_STATUS_VALUES)[number];
 
 /** Backend InvitationStatusDto. `at`: when the invitation reached this state (UTC ISO). */
 export interface InvitationStatusInfo {
@@ -55,6 +56,8 @@ export interface UserListQuery extends PageQuery {
   departmentId?: number | null;
   role?: Role | null;
   isActive?: boolean | null;
+  /** State of the latest invitation; never-invited users never match. */
+  invitationStatus?: InvitationStatus | null;
 }
 
 /**

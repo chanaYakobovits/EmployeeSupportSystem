@@ -175,6 +175,52 @@ public sealed class UserRepositoryTests
     public async Task Invitation_status_comes_from_the_newest_job_that_is_not_cancelled()
     {
         var now = DateTime.UtcNow;
+        await SeedInvitationJobsAsync(now);
+
+        await using var db = CreateContext();
+        var page = await new UserRepository(db).GetPageAsync(new UserListQuery { PageSize = 100 }, now, CancellationToken.None);
+        var details = await new UserRepository(db).GetDetailsAsync(103, now, CancellationToken.None);
+
+        InvitationStatus? StatusOf(int id) => page.Items.Single(u => u.Id == id).Invitation?.Status;
+        Assert.Equal(InvitationStatus.Pending, StatusOf(101));
+        Assert.Equal(InvitationStatus.Sent, StatusOf(102));
+        Assert.Equal(InvitationStatus.Used, StatusOf(103));
+        Assert.Equal(InvitationStatus.Expired, StatusOf(104));
+        Assert.Equal(InvitationStatus.Failed, StatusOf(105));
+        Assert.Equal(InvitationStatus.Revoked, StatusOf(106));
+        Assert.Equal(InvitationStatus.Sent, StatusOf(107));
+        Assert.Null(StatusOf(108));
+        Assert.Null(StatusOf(1)); // never invited
+        Assert.Equal(InvitationStatus.Used, details?.Invitation?.Status);
+        Assert.Equal(now.AddHours(-1), details?.Invitation?.At);
+    }
+
+    [Theory]
+    [InlineData(InvitationStatus.Pending, new[] { 101 })] // not the never-invited users (default would be Pending)
+    [InlineData(InvitationStatus.Sent, new[] { 102, 107 })]
+    [InlineData(InvitationStatus.Used, new[] { 103 })]
+    [InlineData(InvitationStatus.Expired, new[] { 104 })]
+    [InlineData(InvitationStatus.Failed, new[] { 105 })]
+    [InlineData(InvitationStatus.Revoked, new[] { 106 })]
+    public async Task Filtering_by_invitation_status_matches_the_column(InvitationStatus status, int[] expectedIds)
+    {
+        var now = DateTime.UtcNow;
+        await SeedInvitationJobsAsync(now);
+
+        await using var db = CreateContext();
+        var page = await new UserRepository(db).GetPageAsync(
+            new UserListQuery { InvitationStatus = status, PageSize = 100 }, now, CancellationToken.None);
+
+        Assert.Equal(expectedIds, page.Items.Select(u => u.Id).Order());
+        Assert.All(page.Items, u => Assert.Equal(status, u.Invitation?.Status));
+    }
+
+    /// <summary>
+    /// 101 Pending · 102 Sent · 103 Used · 104 Expired · 105 Failed · 106 Revoked ·
+    /// 107 Sent + a newer cancelled job · 108 only a cancelled job (no status).
+    /// </summary>
+    private async Task SeedInvitationJobsAsync(DateTime now)
+    {
         await using (var setup = CreateContext())
         {
             UserInvitation Link(int userId, DateTime sent, DateTime? used = null, DateTime? revoked = null) => new()
@@ -201,23 +247,6 @@ public sealed class UserRepositoryTests
                 Job(108, InvitationJobStatus.Cancelled, now.AddHours(-1)));
             await setup.SaveChangesAsync();
         }
-
-        await using var db = CreateContext();
-        var page = await new UserRepository(db).GetPageAsync(new UserListQuery { PageSize = 100 }, now, CancellationToken.None);
-        var details = await new UserRepository(db).GetDetailsAsync(103, now, CancellationToken.None);
-
-        InvitationStatus? StatusOf(int id) => page.Items.Single(u => u.Id == id).Invitation?.Status;
-        Assert.Equal(InvitationStatus.Pending, StatusOf(101));
-        Assert.Equal(InvitationStatus.Sent, StatusOf(102));
-        Assert.Equal(InvitationStatus.Used, StatusOf(103));
-        Assert.Equal(InvitationStatus.Expired, StatusOf(104));
-        Assert.Equal(InvitationStatus.Failed, StatusOf(105));
-        Assert.Equal(InvitationStatus.Revoked, StatusOf(106));
-        Assert.Equal(InvitationStatus.Sent, StatusOf(107));
-        Assert.Null(StatusOf(108));
-        Assert.Null(StatusOf(1)); // never invited
-        Assert.Equal(InvitationStatus.Used, details?.Invitation?.Status);
-        Assert.Equal(now.AddHours(-1), details?.Invitation?.At);
     }
 
     [Fact]
