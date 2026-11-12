@@ -195,3 +195,352 @@ Cookie: refresh_token=PASTE_TOKEN_FROM_BEFORE_THE_CHANGE
 POST {{API_HostAddress}}/api/auth/refresh
 
 ### Reset Tomer to first-login state (drops and recreates the dev database): dotnet run --project API -- --seed
+
+### ======================================================================================
+### ============ User administration (task 2.3) – Admin only. Run in order after --seed ============
+### ======================================================================================
+### Seed ids: departments 1 הנהלה, 2 פיתוח, 3 הנהלת חשבונות, 4 מזכירות, 5 מערכות מידע, 6 משאבי אנוש מרכזי.
+### Users: 3 Ron (manager of פיתוח), 4 Noa, 5 Ido, 10 Liat (handler), 12 Orit (inactive), 24 Yael (Admin), 25 Adi.
+
+### Admin login – Yael Harpaz
+# @name admin
+POST {{API_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{ "identifier": "yael.harpaz@example.com", "password": "{{password}}" }
+
+### Employee login – Noa
+# @name employee
+POST {{API_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{ "identifier": "noa.berkovich@example.com", "password": "{{password}}" }
+
+### ---------- List (spec 9.4) ----------
+
+### Default: page 1, 25 rows, by last name → 200, totalCount 25
+GET {{API_HostAddress}}/api/users
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+
+### Search by name / e-mail / employee code
+GET {{API_HostAddress}}/api/users?search=הרפז
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+
+### Filters: handlers of פיתוח
+GET {{API_HostAddress}}/api/users?departmentId=2&role=Handler
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+
+### Filter: inactive only → Orit
+GET {{API_HostAddress}}/api/users?isActive=false
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+
+### Sort + page: by employee code descending, 5 per page, page 2
+GET {{API_HostAddress}}/api/users?sortBy=employeeCode&sortDir=desc&pageSize=5&page=2
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+
+### pageSize above 100 → 400, errors.pageSize
+GET {{API_HostAddress}}/api/users?pageSize=500
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+
+### pageSize 0 → 400
+GET {{API_HostAddress}}/api/users?pageSize=0
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+
+### sortBy outside the closed list → 400, errors.sortBy
+GET {{API_HostAddress}}/api/users?sortBy=passwordHash
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+
+### Not a number → 400 (model binding), errors.pageSize
+GET {{API_HostAddress}}/api/users?pageSize=abc
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+
+### Employee → 403
+GET {{API_HostAddress}}/api/users
+Authorization: Bearer {{employee.response.body.$.accessToken}}
+
+### No token → 401
+GET {{API_HostAddress}}/api/users
+
+### ---------- Details ----------
+
+### Existing user → 200 (Ron: managedDepartment = פיתוח)
+GET {{API_HostAddress}}/api/users/3
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+
+### Unknown id (also: a user of another organization) → 404
+GET {{API_HostAddress}}/api/users/99999
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+
+### ---------- Create (spec 4.2) ----------
+
+### Create → 201 + Location; employeeCode EMP-00026; roles [Employee, Handler]; temporaryPassword shown once
+# @name created
+POST {{API_HostAddress}}/api/users
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{
+  "firstName": "דנה",
+  "lastName": "לוי",
+  "email": "Dana.Levi@Example.com",
+  "departmentId": 2,
+  "jobTitle": "מפתחת",
+  "roles": ["Handler"]
+}
+
+### Same e-mail again (any case) → 409 "כתובת המייל כבר רשומה במערכת", errors.email
+POST {{API_HostAddress}}/api/users
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "firstName": "דנה", "lastName": "לוי", "email": "dana.levi@example.com", "departmentId": 2, "jobTitle": "מפתחת" }
+
+### Invalid fields → 400, errors by field (firstName, email, departmentId, jobTitle)
+POST {{API_HostAddress}}/api/users
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "firstName": " ", "lastName": "לוי", "email": "not-an-email", "departmentId": 0, "jobTitle": "" }
+
+### Unknown / inactive department → 400, errors.departmentId
+POST {{API_HostAddress}}/api/users
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "firstName": "א", "lastName": "ב", "email": "ab@example.com", "departmentId": 999, "jobTitle": "ג" }
+
+### DepartmentManager cannot be chosen here → 422
+POST {{API_HostAddress}}/api/users
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "firstName": "א", "lastName": "ב", "email": "ab@example.com", "departmentId": 2, "jobTitle": "ג", "roles": ["DepartmentManager"] }
+
+### The new user signs in with the employee code + temporary password → 200, mustChangePassword: true
+# @name createdLogin
+POST {{API_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{ "identifier": "{{created.response.body.$.user.employeeCode}}", "password": "{{created.response.body.$.temporaryPassword}}" }
+
+### ---------- Update ----------
+
+### Update details and roles → 200; employeeCode unchanged (not part of the request)
+PUT {{API_HostAddress}}/api/users/{{created.response.body.$.user.id}}
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "firstName": "דנה", "lastName": "לוי-כהן", "email": "dana.levi@example.com", "departmentId": 5, "jobTitle": "טכנאית", "roles": [] }
+
+### Admin removes Admin from themself → 422 "self-admin-removal"
+PUT {{API_HostAddress}}/api/users/24
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "firstName": "יעל", "lastName": "הרפז", "email": "yael.harpaz@example.com", "departmentId": 6, "jobTitle": "מנהלת משאבי אנוש", "roles": ["Handler", "DepartmentManager"] }
+
+### Removing DepartmentManager from a department manager (Ron) → 422 "department-manager-role"
+PUT {{API_HostAddress}}/api/users/3
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "firstName": "רון", "lastName": "כהנוביץ", "email": "ron.kahanovich@example.com", "departmentId": 2, "jobTitle": "מנהל פיתוח", "roles": [] }
+
+### The e-mail of another user → 409
+PUT {{API_HostAddress}}/api/users/4
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "firstName": "נועה", "lastName": "ברקוביץ", "email": "ido.sagi@example.com", "departmentId": 2, "jobTitle": "מפתחת בכירה", "roles": [] }
+
+### ---------- Reset password ----------
+
+### Reset → 200 { temporaryPassword }; MustChangePassword, lockout cleared, all refresh tokens revoked
+# @name reset
+POST {{API_HostAddress}}/api/users/{{created.response.body.$.user.id}}/reset-password
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+
+### The session from before the reset is gone: refresh with the cookie of "createdLogin" → 401
+### (paste it from the Set-Cookie of createdLogin if the REST client replaced it since)
+POST {{API_HostAddress}}/api/auth/refresh
+
+### The new temporary password works → 200 (the previous one → 401)
+POST {{API_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{ "identifier": "{{created.response.body.$.user.employeeCode}}", "password": "{{reset.response.body.$.temporaryPassword}}" }
+
+### Resetting your own password → 422 (use change-password)
+POST {{API_HostAddress}}/api/users/24/reset-password
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+
+### ---------- Activate / deactivate ----------
+
+### Deactivate yourself → 422 "self-deactivation"
+PATCH {{API_HostAddress}}/api/users/24/active
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "isActive": false }
+
+### Deactivate a department manager (Ron) → 422 "department-manager-deactivation"
+PATCH {{API_HostAddress}}/api/users/3/active
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "isActive": false }
+
+### Deactivate a handler (Liat) → 200, unassignedTicketCount = her unresolved tickets, back in the department queue
+PATCH {{API_HostAddress}}/api/users/10/active
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "isActive": false }
+
+### Liat can no longer sign in → 401
+POST {{API_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{ "identifier": "liat.shahar@example.com", "password": "{{password}}" }
+
+### Reactivate Liat → 200, unassignedTicketCount 0 (her tickets are not given back automatically)
+PATCH {{API_HostAddress}}/api/users/10/active
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "isActive": true }
+
+### Missing isActive → 400, errors.isActive
+PATCH {{API_HostAddress}}/api/users/10/active
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ }
+
+### ---------- Last active admin ----------
+### Reachable only with a stale token: 1) Yael makes Adi an admin, 2) Adi signs in, 3) Yael removes Admin from Adi
+### (the access token of Adi still says Admin for up to 15 minutes), 4) Adi removes Admin from Yael → 422 "last-admin".
+
+### 1. Adi becomes Admin
+PUT {{API_HostAddress}}/api/users/25
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "firstName": "עדי", "lastName": "שמעוני", "email": "adi.shimoni@example.com", "departmentId": 6, "jobTitle": "רכזת משאבי אנוש", "roles": ["Handler", "Admin"] }
+
+### 2. Adi signs in
+# @name adi
+POST {{API_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{ "identifier": "adi.shimoni@example.com", "password": "{{password}}" }
+
+### 3. Yael removes Admin from Adi → 200 (Yael remains an active admin)
+PUT {{API_HostAddress}}/api/users/25
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "firstName": "עדי", "lastName": "שמעוני", "email": "adi.shimoni@example.com", "departmentId": 6, "jobTitle": "רכזת משאבי אנוש", "roles": ["Handler"] }
+
+### 4. Adi (stale Admin token) removes Admin from Yael → 422 "last-admin"
+PUT {{API_HostAddress}}/api/users/24
+Authorization: Bearer {{adi.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "firstName": "יעל", "lastName": "הרפז", "email": "yael.harpaz@example.com", "departmentId": 6, "jobTitle": "מנהלת משאבי אנוש", "roles": ["Handler", "DepartmentManager"] }
+
+### ======================================================================================
+### ============ Departments (task 2.3) ============
+### ======================================================================================
+
+### Any signed-in user → 200, active departments; includeInactive is ignored for non-admins
+GET {{API_HostAddress}}/api/departments?includeInactive=true
+Authorization: Bearer {{employee.response.body.$.accessToken}}
+
+### Employee creates a department → 403
+POST {{API_HostAddress}}/api/departments
+Authorization: Bearer {{employee.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "name": "שיווק" }
+
+### Duplicate name in the organization (trimmed) → 409, errors.name
+POST {{API_HostAddress}}/api/departments
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "name": " פיתוח " }
+
+### Empty name → 400, errors.name
+POST {{API_HostAddress}}/api/departments
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "name": "" }
+
+### Create with Noa as manager → 201; Noa gets DepartmentManager
+# @name marketing
+POST {{API_HostAddress}}/api/departments
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "name": "שיווק", "managerUserId": 4 }
+
+### The manager of another department (Yael – משאבי אנוש) → 422 "manages-other-department"
+PUT {{API_HostAddress}}/api/departments/2
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "name": "פיתוח", "managerUserId": 24, "isActive": true }
+
+### Inactive user (Orit) as manager → 400, errors.managerUserId
+PUT {{API_HostAddress}}/api/departments/2
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "name": "פיתוח", "managerUserId": 12, "isActive": true }
+
+### Replace the manager of פיתוח: Ron → Ido → 200; Ido gains DepartmentManager, Ron loses it (AuditLog RolesChanged ×2)
+PUT {{API_HostAddress}}/api/departments/2
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "name": "פיתוח", "managerUserId": 5, "isActive": true }
+
+### Check: Ron → roles [Employee], managedDepartment null
+GET {{API_HostAddress}}/api/users/3
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+
+### Deactivate a department with active users → 422 "department-has-active-users"
+PUT {{API_HostAddress}}/api/departments/2
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "name": "פיתוח", "managerUserId": 5, "isActive": false }
+
+### Deactivate שיווק (no users) → 200, isActive false
+PUT {{API_HostAddress}}/api/departments/{{marketing.response.body.$.id}}
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "name": "שיווק", "managerUserId": 4, "isActive": false }
+
+### Admin, including inactive → שיווק is listed with isActive false
+GET {{API_HostAddress}}/api/departments?includeInactive=true
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+
+### A user cannot be created in the inactive department → 400, errors.departmentId
+POST {{API_HostAddress}}/api/users
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "firstName": "א", "lastName": "ב", "email": "ab@example.com", "departmentId": {{marketing.response.body.$.id}}, "jobTitle": "ג" }
+
+### Unknown department → 404
+PUT {{API_HostAddress}}/api/departments/99999
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "name": "x", "isActive": true }
+
+### Reset all of the above: dotnet run --project API -- --seed

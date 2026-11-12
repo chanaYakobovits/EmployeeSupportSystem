@@ -5,6 +5,7 @@ using Common.Options;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using Services.Implementations;
+using Services.Validators;
 using Services.Tests.Auth.Fakes;
 using Services.Tests.Fakes;
 
@@ -42,7 +43,8 @@ public abstract class AuthServiceTestBase
 
         Service = new AuthService(UserRepository, RefreshTokens, AuditLog, UnitOfWork, Hasher, AccessTokens, Clock,
             new MemoryCache(new MemoryCacheOptions()), CurrentUser,
-            Options.Create(new JwtOptions { RefreshTokenDays = 7 }), Logger);
+            Options.Create(new JwtOptions { RefreshTokenDays = 7 }),
+            new LoginRequestValidator(), new ChangePasswordRequestValidator(), Logger);
     }
 
     protected User Noa => UserById(NoaId);

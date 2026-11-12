@@ -1,3 +1,4 @@
+using Common.Constants;
 using Common.Enums;
 using Common.Models;
 using Microsoft.EntityFrameworkCore;
@@ -9,7 +10,7 @@ public class TicketConfiguration : IEntityTypeConfiguration<Ticket>
 {
     // Statuses in which the SLA clock runs. WaitingForEmployee is excluded because its SLA is paused (spec 3.2).
     private static readonly string OpenStatusFilter =
-        $"[Status] IN ({(byte)TicketStatus.New}, {(byte)TicketStatus.Assigned}, {(byte)TicketStatus.InProgress})";
+        $"[Status] IN ({string.Join(", ", TicketStatuses.Open.Select(s => (byte)s))})";
 
     public void Configure(EntityTypeBuilder<Ticket> builder)
     {

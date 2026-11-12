@@ -33,6 +33,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ICurrentUser c
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
 
+        // Employee codes (spec 4.2): global and atomic. See EmployeeCodeSequence.
+        modelBuilder.HasSequence<long>(EmployeeCodeSequence.Name).StartsAt(1).IncrementsBy(1);
+
         
         foreach (var foreignKey in modelBuilder.Model.GetEntityTypes().SelectMany(entity => entity.GetForeignKeys()))
         {

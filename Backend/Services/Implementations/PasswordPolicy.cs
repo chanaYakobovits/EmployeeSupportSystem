@@ -2,7 +2,7 @@ namespace Services.Implementations;
 
 /// <summary>
 /// Spec 6.1: at least 8 characters, a letter and a digit. Any script counts as a letter (Hebrew too).
-/// Manual validation (FluentValidation is deferred). Reused by the admin password reset (task 2.3).
+/// Called by AuthService after the request validator. TemporaryPasswordGenerator always satisfies it.
 /// </summary>
 public static class PasswordPolicy
 {

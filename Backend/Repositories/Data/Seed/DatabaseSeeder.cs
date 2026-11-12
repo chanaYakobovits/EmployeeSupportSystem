@@ -77,6 +77,9 @@ internal sealed class DatabaseSeeder(AppDbContext db, IPasswordHasher passwordHa
         db.Users.AddRange(users.Select(u => u.User));
         await db.SaveChangesAsync(cancellationToken);
 
+        // The demo users have fixed codes (README); new users continue after the last one.
+        await db.Database.ExecuteSqlRawAsync(EmployeeCodeSequence.RestartAfterExistingCodesSql, cancellationToken);
+
         foreach (var manager in users.Where(u => u.Person.IsDepartmentManager))
         {
             departments[manager.Person.Department].ManagerUserId = manager.User.Id;

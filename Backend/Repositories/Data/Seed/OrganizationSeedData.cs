@@ -1,3 +1,4 @@
+using Common.Constants;
 using Common.Enums;
 
 namespace Repositories.Data.Seed;
@@ -95,5 +96,5 @@ internal static class OrganizationSeedData
         new("עדי", "שמעוני", "adi.shimoni", "רכזת משאבי אנוש", DepartmentKey.HumanResources, Handler)
     ];
 
-    public static string EmployeeCode(int position) => $"EMP-{position:D5}";
+    public static string EmployeeCode(int position) => EmployeeCodeFormat.Format(position);
 }

@@ -14,6 +14,14 @@ public static class AuditActions
     public const string PasswordChanged = "PasswordChanged";
     public const string PasswordChangeFailedWrongCurrent = "PasswordChangeFailed.WrongCurrent";
     public const string PasswordChangeFailedPolicy = "PasswordChangeFailed.Policy";
+
+    // User administration (task 2.3). Never any password, only actor / target / IP.
+    public const string UserCreated = "User.Created";
+    public const string UserUpdated = "User.Updated";
+    public const string UserRolesChanged = "User.RolesChanged";
+    public const string UserDeactivated = "User.Deactivated";
+    public const string UserActivated = "User.Activated";
+    public const string UserPasswordReset = "User.PasswordReset";
 }
 
 /// <summary>Values of <c>AuditLog.EntityType</c>.</summary>

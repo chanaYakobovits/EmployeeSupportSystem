@@ -97,7 +97,7 @@ public class AuthController(IAuthService authService) : ControllerBase
     public async Task<ActionResult<CurrentUserDto>> Me(CancellationToken cancellationToken) =>
         Ok(await authService.GetCurrentUserAsync(cancellationToken));
 
-    private string ClientIp => HttpContext.Connection.RemoteIpAddress?.ToString() ?? string.Empty;
+    private string ClientIp => HttpContext.ClientIp();
 
     private ActionResult<AuthResponse> SessionResponse(AuthResult result)
     {

@@ -1,4 +1,6 @@
 using Common.DTOs.Auth;
+using Common.DTOs.Paging;
+using Common.DTOs.Users;
 using Common.Enums;
 using Common.Exceptions;
 using Common.Interfaces;
@@ -8,10 +10,20 @@ using Services.Interfaces;
 
 namespace Services.Tests.Auth.Fakes;
 
-/// <summary>In-memory users. Records which lookup the service used.</summary>
+/// <summary>
+/// In-memory users. Records which lookup the service used. Paging is tested against EF Core InMemory instead
+/// (UserRepositoryTests), so <see cref="GetPageAsync"/> is not supported here.
+/// </summary>
 public sealed class FakeUserRepository : IUserRepository
 {
     public List<User> Users { get; } = [];
+
+    /// <summary>Departments by id, used to fill User.Department on Add (as a database load would).</summary>
+    public Dictionary<int, Department> Departments { get; } = [];
+
+    public long NextEmployeeNumber { get; set; } = 26;
+
+    public int LockCount { get; private set; }
 
     public List<string> Lookups { get; } = [];
 
@@ -38,6 +50,49 @@ public sealed class FakeUserRepository : IUserRepository
             : new CurrentUserDto(user.Id, user.EmployeeCode, user.FirstName, user.LastName, user.Email, user.JobTitle,
                 new DepartmentSummaryDto(user.DepartmentId, user.Department.Name),
                 user.Roles.Select(r => r.Role.ToString()).ToList(), user.MustChangePassword));
+    }
+
+    public Task<PagedResult<UserListItemDto>> GetPageAsync(UserListQuery query, CancellationToken cancellationToken) =>
+        throw new NotSupportedException("Tested with EF Core InMemory in UserRepositoryTests.");
+
+    public Task<UserDetailsDto?> GetDetailsAsync(int userId, DateTime now, CancellationToken cancellationToken)
+    {
+        var user = Users.SingleOrDefault(u => u.Id == userId);
+        var managed = Departments.Values.FirstOrDefault(d => d.ManagerUserId == userId);
+        return Task.FromResult(user is null
+            ? null
+            : new UserDetailsDto(user.Id, user.EmployeeCode, user.FirstName, user.LastName, user.Email, user.JobTitle,
+                new DepartmentSummaryDto(user.DepartmentId, user.Department?.Name ?? ""),
+                user.Roles.Select(r => r.Role).Order().ToList(), user.IsActive, user.MustChangePassword,
+                user.LockoutEnd > now, user.CreatedAt, user.LastLoginAt,
+                managed is null ? null : new DepartmentSummaryDto(managed.Id, managed.Name)));
+    }
+
+    public Task<bool> EmailExistsAsync(string email, int? excludeUserId, CancellationToken cancellationToken) =>
+        Task.FromResult(Users.Any(u => string.Equals(u.Email, email, StringComparison.OrdinalIgnoreCase)
+                                       && u.Id != excludeUserId));
+
+    public Task<long> NextEmployeeNumberAsync(CancellationToken cancellationToken) =>
+        Task.FromResult(NextEmployeeNumber++);
+
+    public Task<int> CountActiveAdminsAsync(int? excludeUserId, CancellationToken cancellationToken) =>
+        Task.FromResult(Users.Count(u => u.IsActive && u.Roles.Any(r => r.Role == Role.Admin) && u.Id != excludeUserId));
+
+    public Task LockOrganizationAdminsAsync(int organizationId, CancellationToken cancellationToken)
+    {
+        LockCount++;
+        return Task.CompletedTask;
+    }
+
+    public void Add(User user)
+    {
+        user.Id = Users.Count == 0 ? 1 : Users.Max(u => u.Id) + 1;
+        if (Departments.TryGetValue(user.DepartmentId, out var department))
+        {
+            user.Department = department;
+        }
+
+        Users.Add(user);
     }
 }
 
@@ -84,8 +139,25 @@ public sealed class FakeUnitOfWork : IUnitOfWork
 
     public Action? BeforeConflict { get; set; }
 
+    /// <summary>Thrown by the next save, e.g. a <see cref="UniqueConstraintException"/> (another request won a race).</summary>
+    public Exception? ThrowOnNextSave { get; set; }
+
+    public int TransactionCount { get; private set; }
+
+    public Task<T> ExecuteInTransactionAsync<T>(Func<CancellationToken, Task<T>> action, CancellationToken cancellationToken)
+    {
+        TransactionCount++;
+        return action(cancellationToken);
+    }
+
     public Task SaveChangesAsync(CancellationToken cancellationToken)
     {
+        if (ThrowOnNextSave is { } exception)
+        {
+            ThrowOnNextSave = null;
+            throw exception;
+        }
+
         if (ConflictOnNextSave)
         {
             ConflictOnNextSave = false;
@@ -145,7 +217,9 @@ public sealed class FakeCurrentUser : ICurrentUser
 
     public int DepartmentId => 1;
 
-    public IReadOnlyCollection<Role> Roles => IsAuthenticated ? [Role.Employee] : [];
+    public List<Role> SignedInRoles { get; set; } = [Role.Employee];
+
+    public IReadOnlyCollection<Role> Roles => IsAuthenticated ? SignedInRoles : [];
 
     public bool MustChangePassword => false;
 

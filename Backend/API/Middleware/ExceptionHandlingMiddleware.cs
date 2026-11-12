@@ -73,9 +73,10 @@ public class ExceptionHandlingMiddleware
                     Detail = appException.Detail,
                 };
 
-                if (appException is ValidationException { Errors.Count: > 0 } validation)
+                // Messages by field name (camelCase), so the client can show them next to the fields.
+                if (appException.Errors.Count > 0)
                 {
-                    problem.Extensions["errors"] = validation.Errors;
+                    problem.Extensions["errors"] = appException.Errors;
                 }
 
                 return problem;

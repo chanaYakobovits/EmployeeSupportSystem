@@ -1,3 +1,4 @@
+using FluentValidation;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Common.Interfaces;
@@ -26,6 +27,11 @@ public static class DependencyInjection
         // Failed-login counters of unknown identifiers (spec 4.1). The real users' counters live in the database.
         services.AddMemoryCache();
         services.AddScoped<IAuthService, AuthService>();
+        services.AddScoped<IUserService, UserService>();
+        services.AddScoped<IDepartmentService, DepartmentService>();
+
+        // Request validators (spec 11.4), run by the services. Stateless, so one instance each.
+        services.AddValidatorsFromAssemblyContaining<Validators.UserListQueryValidator>(ServiceLifetime.Singleton);
 
         services.AddAi(configuration);
 

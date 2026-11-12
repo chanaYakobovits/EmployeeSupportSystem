@@ -8,8 +8,9 @@ public class ConflictException : AppException
 {
     public const string DefaultTitle = "הנתונים עודכנו בינתיים או שכבר קיימים";
 
-    public ConflictException(string title = DefaultTitle, string? detail = null, string errorType = "conflict")
-        : base(title, detail, errorType)
+    public ConflictException(string title = DefaultTitle, string? detail = null, string errorType = "conflict",
+        IReadOnlyDictionary<string, string[]>? errors = null)
+        : base(title, detail, errorType, errors)
     {
     }
 }

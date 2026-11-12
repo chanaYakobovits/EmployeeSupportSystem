@@ -22,6 +22,8 @@ namespace Repositories.Data.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.HasSequence("EmployeeCodeNumbers");
+
             modelBuilder.Entity("Common.Models.AiAnalysisJob", b =>
                 {
                     b.Property<int>("Id")
@@ -182,7 +184,9 @@ namespace Repositories.Data.Migrations
 
                     b.HasIndex("ManagerUserId");
 
-                    b.HasIndex("OrganizationId");
+                    b.HasIndex("OrganizationId", "Name")
+                        .IsUnique()
+                        .HasDatabaseName("IX_Departments_OrganizationId_Name");
 
                     b.ToTable("Departments", (string)null);
                 });
@@ -639,10 +643,12 @@ namespace Repositories.Data.Migrations
                     b.HasIndex("DepartmentId");
 
                     b.HasIndex("Email")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasDatabaseName("IX_Users_Email");
 
                     b.HasIndex("EmployeeCode")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasDatabaseName("IX_Users_EmployeeCode");
 
                     b.HasIndex("OrganizationId");
 

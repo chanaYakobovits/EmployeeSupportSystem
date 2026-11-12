@@ -1,6 +1,7 @@
 using Common.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Repositories.Interfaces;
 
 namespace Repositories.Data.Configurations;
 
@@ -22,5 +23,8 @@ public class DepartmentConfiguration : IEntityTypeConfiguration<Department>
             .WithMany()
             .HasForeignKey(d => d.ManagerUserId)
             .IsRequired(false);
+
+        // Department names are unique within an organization (task 2.3).
+        builder.HasIndex(d => new { d.OrganizationId, d.Name }).IsUnique().HasDatabaseName(UniqueIndexes.DepartmentName);
     }
 }

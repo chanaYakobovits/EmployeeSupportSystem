@@ -79,8 +79,8 @@ public class ChangePasswordTests : AuthServiceTestBase
 
         var exception = await Assert.ThrowsAsync<ValidationException>(() => ChangePassword(TomerId, Password, "short"));
 
-        Assert.Contains(PasswordPolicy.TooShort, exception.Errors);
-        Assert.Contains(PasswordPolicy.MissingDigit, exception.Errors);
+        Assert.Contains(PasswordPolicy.TooShort, exception.Errors["newPassword"]);
+        Assert.Contains(PasswordPolicy.MissingDigit, exception.Errors["newPassword"]);
         Assert.True(UserById(TomerId).MustChangePassword);
         Assert.Null(StoredToken(login.RefreshToken.Value).RevokedAt);
         Assert.Equal(AuditActions.PasswordChangeFailedPolicy, AuditLog.Entries[^1].Action);
@@ -91,7 +91,7 @@ public class ChangePasswordTests : AuthServiceTestBase
     {
         var exception = await Assert.ThrowsAsync<ValidationException>(() => ChangePassword(NoaId, Password, Password));
 
-        Assert.Equal([PasswordPolicy.SameAsCurrent], exception.Errors);
+        Assert.Equal([PasswordPolicy.SameAsCurrent], exception.Errors["newPassword"]);
     }
 
     [Fact]

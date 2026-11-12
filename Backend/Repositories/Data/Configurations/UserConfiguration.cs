@@ -1,6 +1,7 @@
 using Common.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Repositories.Interfaces;
 
 namespace Repositories.Data.Configurations;
 
@@ -28,7 +29,8 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
 
         // Spec 8.4: login by email / employee code. Unique across the whole system (not per organization):
         // login happens before the organization is known, so an identifier must match at most one user.
-        builder.HasIndex(u => u.Email).IsUnique();
-        builder.HasIndex(u => u.EmployeeCode).IsUnique();
+        // E-mail is stored lower-case (UserService); the default collation is case-insensitive anyway.
+        builder.HasIndex(u => u.Email).IsUnique().HasDatabaseName(UniqueIndexes.UserEmail);
+        builder.HasIndex(u => u.EmployeeCode).IsUnique().HasDatabaseName(UniqueIndexes.UserEmployeeCode);
     }
 }

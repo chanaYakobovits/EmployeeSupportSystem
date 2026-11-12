@@ -4,11 +4,14 @@ using Common.Exceptions;
 using Common.Interfaces;
 using Common.Models;
 using Common.Options;
+using FluentValidation;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Repositories.Interfaces;
 using Services.Interfaces;
+using Services.Validators;
+using ValidationException = Common.Exceptions.ValidationException;
 
 namespace Services.Implementations;
 
@@ -44,6 +47,8 @@ public sealed class AuthService : IAuthService
     private readonly IMemoryCache _cache;
     private readonly ICurrentUser _currentUser;
     private readonly JwtOptions _jwtOptions;
+    private readonly IValidator<LoginRequest> _loginValidator;
+    private readonly IValidator<ChangePasswordRequest> _changePasswordValidator;
     private readonly ILogger<AuthService> _logger;
 
     public AuthService(
@@ -57,6 +62,8 @@ public sealed class AuthService : IAuthService
         IMemoryCache cache,
         ICurrentUser currentUser,
         IOptions<JwtOptions> jwtOptions,
+        IValidator<LoginRequest> loginValidator,
+        IValidator<ChangePasswordRequest> changePasswordValidator,
         ILogger<AuthService> logger)
     {
         _users = users;
@@ -69,6 +76,8 @@ public sealed class AuthService : IAuthService
         _cache = cache;
         _currentUser = currentUser;
         _jwtOptions = jwtOptions.Value;
+        _loginValidator = loginValidator;
+        _changePasswordValidator = changePasswordValidator;
         _logger = logger;
     }
 
@@ -76,6 +85,8 @@ public sealed class AuthService : IAuthService
 
     public async Task<AuthResult> LoginAsync(LoginRequest request, string ipAddress, CancellationToken cancellationToken)
     {
+        await _loginValidator.EnsureValidAsync(request, cancellationToken);
+
         var identifier = request.Identifier.Trim();
         var user = identifier.Contains('@')
             ? await _users.FindForLoginByEmailAsync(identifier, cancellationToken)
@@ -290,6 +301,8 @@ public sealed class AuthService : IAuthService
     public async Task<AuthResult> ChangePasswordAsync(ChangePasswordRequest request, string ipAddress,
         CancellationToken cancellationToken)
     {
+        await _changePasswordValidator.EnsureValidAsync(request, cancellationToken);
+
         var user = await _users.FindForUpdateAsync(_currentUser.UserId, cancellationToken);
         if (user is null || !user.IsActive)
         {
@@ -303,7 +316,9 @@ public sealed class AuthService : IAuthService
             Audit(AuditActions.PasswordChangeFailedWrongCurrent, user, ipAddress, now);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
             _logger.LogWarning("Password change failed for user {UserId}: wrong current password", user.Id);
-            throw new ValidationException("הסיסמה הנוכחית שגויה", errorType: "wrong-current-password");
+            throw new ValidationException("הסיסמה הנוכחית שגויה",
+                new Dictionary<string, string[]> { ["currentPassword"] = ["הסיסמה הנוכחית שגויה"] },
+                errorType: "wrong-current-password");
         }
 
         var errors = PasswordPolicy.Validate(request.NewPassword, request.CurrentPassword);
@@ -312,7 +327,8 @@ public sealed class AuthService : IAuthService
             Audit(AuditActions.PasswordChangeFailedPolicy, user, ipAddress, now);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
             _logger.LogInformation("Password change failed for user {UserId}: policy ({ErrorCount} errors)", user.Id, errors.Count);
-            throw new ValidationException("הסיסמה החדשה אינה עומדת בדרישות", errors, errorType: "password-policy");
+            throw new ValidationException("הסיסמה החדשה אינה עומדת בדרישות",
+                new Dictionary<string, string[]> { ["newPassword"] = errors.ToArray() }, errorType: "password-policy");
         }
 
         user.PasswordHash = _passwordHasher.Hash(request.NewPassword);
