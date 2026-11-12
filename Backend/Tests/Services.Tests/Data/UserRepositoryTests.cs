@@ -97,11 +97,44 @@ public sealed class UserRepositoryTests
         var repository = new UserRepository(db);
 
         var handlersInHr = await repository.GetPageAsync(
-            new UserListQuery { DepartmentId = HrId, Role = Role.Handler }, CancellationToken.None);
+            new UserListQuery { DepartmentId = HrId, Role = Role.Handler, SortBy = UserSortFields.Name },
+            CancellationToken.None);
         var inactive = await repository.GetPageAsync(new UserListQuery { IsActive = false }, CancellationToken.None);
 
-        Assert.Equal([1, 2], handlersInHr.Items.Select(u => u.Id)); // default order: last name (הרפז, שמעוני)
+        Assert.Equal([1, 2], handlersInHr.Items.Select(u => u.Id)); // by last name: הרפז, שמעוני
         Assert.Equal([4], inactive.Items.Select(u => u.Id));
+    }
+
+    [Fact]
+    public async Task Default_order_is_employee_code_descending_newest_first()
+    {
+        await using var db = CreateContext();
+
+        var page = await new UserRepository(db).GetPageAsync(new UserListQuery { PageSize = 3 }, CancellationToken.None);
+
+        Assert.Equal(["EMP-00130", "EMP-00129", "EMP-00128"], page.Items.Select(u => u.EmployeeCode));
+    }
+
+    [Fact]
+    public async Task Default_column_sorts_ascending_when_asked()
+    {
+        await using var db = CreateContext();
+
+        var page = await new UserRepository(db).GetPageAsync(new UserListQuery { SortDir = "asc", PageSize = 3 },
+            CancellationToken.None);
+
+        Assert.Equal(["EMP-00001", "EMP-00002", "EMP-00003"], page.Items.Select(u => u.EmployeeCode));
+    }
+
+    [Fact]
+    public async Task Another_column_without_sortDir_sorts_ascending()
+    {
+        await using var db = CreateContext();
+
+        var page = await new UserRepository(db).GetPageAsync(
+            new UserListQuery { SortBy = UserSortFields.Name, DepartmentId = HrId }, CancellationToken.None);
+
+        Assert.Equal([1, 3, 2], page.Items.Select(u => u.Id)); // הרפז, כהן, שמעוני
     }
 
     [Fact]

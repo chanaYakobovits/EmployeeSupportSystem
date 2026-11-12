@@ -1,0 +1,18 @@
+<nav mat-tab-nav-bar class="admin-tabs" aria-label="אזורי ניהול" [tabPanel]="panel">
+  @for (tab of tabs; track tab.path) {
+    <a
+      mat-tab-link
+      [routerLink]="tab.path"
+      routerLinkActive
+      #rla="routerLinkActive"
+      [active]="rla.isActive"
+    >
+      <mat-icon class="tab-icon" aria-hidden="true">{{ tab.icon }}</mat-icon>
+      {{ tab.label }}
+    </a>
+  }
+</nav>
+
+<mat-tab-nav-panel #panel class="admin-panel">
+  <router-outlet />
+</mat-tab-nav-panel>

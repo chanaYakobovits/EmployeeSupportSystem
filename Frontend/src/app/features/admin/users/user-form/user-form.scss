@@ -1,0 +1,180 @@
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 12px;
+  font-size: 14px;
+  color: var(--primary);
+  text-decoration: none;
+
+  &:hover,
+  &:focus-visible {
+    text-decoration: underline;
+  }
+
+  mat-icon {
+    width: 18px;
+    height: 18px;
+    font-size: 18px;
+  }
+}
+
+.layout {
+  display: grid;
+  gap: 20px;
+  align-items: start;
+
+  &.with-side {
+    grid-template-columns: minmax(0, 1fr) 300px;
+  }
+}
+
+.form-card,
+.side-card {
+  padding: 24px;
+}
+
+.card-title {
+  margin: 0 0 20px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.code-field {
+  width: 220px;
+  margin-bottom: 8px;
+}
+
+.fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 16px;
+  row-gap: 4px;
+
+  .wide {
+    grid-column: 1 / -1;
+  }
+}
+
+.roles {
+  margin: 16px 0 0;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-field);
+
+  &[aria-invalid='true'] {
+    border-color: var(--error-text);
+  }
+}
+
+.roles-legend {
+  padding: 0 6px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.role {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 8px;
+}
+
+.role-hint {
+  font-size: 13px;
+  color: var(--text-secondary);
+
+  a {
+    color: var(--primary);
+  }
+}
+
+.field-error {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--error-text);
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 24px;
+
+  mat-spinner {
+    display: inline-block;
+    margin-inline-end: 8px;
+    --mat-progress-spinner-active-indicator-color: currentColor;
+  }
+}
+
+.facts {
+  display: grid;
+  gap: 12px;
+  margin: 0 0 20px;
+}
+
+.fact {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+
+  dt {
+    color: var(--text-secondary);
+  }
+
+  dd {
+    margin: 0;
+  }
+}
+
+.flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: flex-end;
+}
+
+.side-actions {
+  display: grid;
+  gap: 8px;
+
+  .danger:not(:disabled) {
+    color: var(--error-text);
+  }
+}
+
+.self-note,
+.side-note {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+
+  a {
+    color: var(--primary);
+  }
+}
+
+@media (max-width: 1023.98px) {
+  .layout.with-side {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 599.98px) {
+  .fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .code-field {
+    width: 100%;
+  }
+
+  .form-card,
+  .side-card {
+    padding: 16px;
+  }
+}

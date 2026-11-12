@@ -1,3 +1,5 @@
+import { DepartmentSummary } from './department.models';
+
 /** System roles (Backend Common.Enums.Role). A user may hold several; every user is also an Employee. */
 export type Role = 'Employee' | 'Handler' | 'DepartmentManager' | 'Executive' | 'Admin';
 
@@ -9,7 +11,7 @@ export interface CurrentUser {
   lastName: string;
   email: string;
   jobTitle: string;
-  department: { id: number; name: string };
+  department: DepartmentSummary;
   roles: Role[];
   mustChangePassword: boolean;
 }

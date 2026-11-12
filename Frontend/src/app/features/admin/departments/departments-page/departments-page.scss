@@ -1,0 +1,49 @@
+.name {
+  font-weight: 600;
+}
+
+.manager-link {
+  color: var(--text-primary);
+  text-decoration: none;
+
+  &:hover,
+  &:focus-visible {
+    color: var(--primary);
+    text-decoration: underline;
+  }
+}
+
+.manager-code {
+  margin-inline-start: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.muted {
+  color: var(--text-secondary);
+}
+
+.count-link {
+  display: inline-block;
+  min-width: 32px;
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-weight: 600;
+  color: var(--primary);
+  text-decoration: none;
+
+  &:hover,
+  &:focus-visible {
+    background: var(--primary-soft);
+  }
+}
+
+.actions {
+  display: inline-flex;
+  gap: 4px;
+  white-space: nowrap;
+
+  .danger:not(:disabled) {
+    color: var(--error-text);
+  }
+}

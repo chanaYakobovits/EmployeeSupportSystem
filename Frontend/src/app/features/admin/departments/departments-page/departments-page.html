@@ -1,0 +1,87 @@
+<app-page-header heading="מחלקות" subtitle="המחלקות בארגון, המנהלים והגורמים המטפלים">
+  <button pageActions mat-flat-button type="button" class="btn-primary-gradient" (click)="openDialog(null)">
+    <mat-icon aria-hidden="true">add</mat-icon>
+    מחלקה חדשה
+  </button>
+</app-page-header>
+
+<app-data-table
+  caption="רשימת המחלקות"
+  [columns]="columns"
+  [rows]="store.departments()"
+  [status]="store.status()"
+  [paginated]="false"
+  [rowClickable]="true"
+  (rowActivate)="openDialog($event)"
+  (retry)="store.load()"
+>
+  <ng-template appCell="name" let-department>
+    <span class="name">{{ department.name }}</span>
+  </ng-template>
+
+  <ng-template appCell="manager" let-department>
+    @if (department.manager; as manager) {
+      <a class="manager-link" [routerLink]="[usersUrl, manager.id]">{{ fullName(manager) }}</a>
+      <span class="manager-code" dir="ltr">{{ manager.employeeCode }}</span>
+    } @else {
+      <span class="muted">ללא מנהל</span>
+    }
+  </ng-template>
+
+  <ng-template appCell="activeUserCount" let-department>
+    <a
+      class="count-link"
+      [routerLink]="usersUrl"
+      [queryParams]="{ departmentId: department.id, isActive: true }"
+      [attr.aria-label]="department.activeUserCount + ' עובדים פעילים במחלקת ' + department.name"
+    >
+      {{ department.activeUserCount }}
+    </a>
+  </ng-template>
+
+  <ng-template appCell="handlerCount" let-department>
+    <a
+      class="count-link"
+      [routerLink]="usersUrl"
+      [queryParams]="{ departmentId: department.id, isActive: true, role: 'Handler' }"
+      [attr.aria-label]="department.handlerCount + ' גורמים מטפלים במחלקת ' + department.name"
+    >
+      {{ department.handlerCount }}
+    </a>
+  </ng-template>
+
+  <ng-template appCell="isActive" let-department>
+    <app-active-badge [active]="department.isActive" activeText="פעילה" inactiveText="לא פעילה" />
+  </ng-template>
+
+  <ng-template appCell="actions" let-department>
+    <span class="actions">
+      <button
+        mat-button
+        type="button"
+        [attr.aria-label]="'עריכת מחלקת ' + department.name"
+        (click)="openDialog(department)"
+      >
+        <mat-icon aria-hidden="true">edit</mat-icon>
+        עריכה
+      </button>
+      <button
+        mat-button
+        type="button"
+        [class.danger]="department.isActive"
+        [disabled]="store.changingId() === department.id"
+        [attr.aria-label]="(department.isActive ? 'השבתת מחלקת ' : 'הפעלת מחלקת ') + department.name"
+        (click)="toggleActive(department)"
+      >
+        <mat-icon aria-hidden="true">{{ department.isActive ? 'block' : 'check_circle' }}</mat-icon>
+        {{ department.isActive ? 'השבתה' : 'הפעלה' }}
+      </button>
+    </span>
+  </ng-template>
+
+  <div tableEmpty>
+    <app-empty-state icon="apartment" heading="אין מחלקות" description="עדיין לא הוגדרו מחלקות בארגון.">
+      <button mat-flat-button type="button" class="btn-primary-gradient" (click)="openDialog(null)">מחלקה חדשה</button>
+    </app-empty-state>
+  </div>
+</app-data-table>

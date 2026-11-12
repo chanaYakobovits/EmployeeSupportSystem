@@ -1,0 +1,116 @@
+<app-page-header heading="עובדים" subtitle="הקמה ועדכון של עובדים, תפקידים וגישה למערכת">
+  <a pageActions mat-flat-button class="btn-primary-gradient" routerLink="/admin/users/new">
+    <mat-icon aria-hidden="true">person_add</mat-icon>
+    עובד חדש
+  </a>
+</app-page-header>
+
+<app-filter-bar label="סינון עובדים">
+  <app-search-field
+    class="grow"
+    placeholder="שם, מייל או קוד עובד"
+    [value]="state().filters.search"
+    (search)="onSearch($event)"
+  />
+
+  <mat-form-field appearance="outline" subscriptSizing="dynamic" class="filter-select">
+    <mat-label>מחלקה</mat-label>
+    <mat-select [value]="state().filters.departmentId" (selectionChange)="onDepartment($event.value)">
+      <mat-option [value]="null">כל המחלקות</mat-option>
+      @for (department of departments(); track department.id) {
+        <mat-option [value]="department.id">
+          {{ department.name }}{{ department.isActive ? '' : ' (לא פעילה)' }}
+        </mat-option>
+      }
+    </mat-select>
+  </mat-form-field>
+
+  <mat-form-field appearance="outline" subscriptSizing="dynamic" class="filter-select">
+    <mat-label>תפקיד מערכת</mat-label>
+    <mat-select [value]="state().filters.role" (selectionChange)="onRole($event.value)">
+      <mat-option [value]="null">כל התפקידים</mat-option>
+      @for (option of roleOptions; track option.role) {
+        <mat-option [value]="option.role">{{ option.label }}</mat-option>
+      }
+    </mat-select>
+  </mat-form-field>
+
+  <mat-button-toggle-group
+    class="segmented"
+    aria-label="סטטוס העובד"
+    hideSingleSelectionIndicator
+    [value]="activeFilter()"
+    (change)="onActive($event.value)"
+  >
+    <mat-button-toggle value="all">הכול</mat-button-toggle>
+    <mat-button-toggle value="active">פעילים</mat-button-toggle>
+    <mat-button-toggle value="inactive">לא פעילים</mat-button-toggle>
+  </mat-button-toggle-group>
+
+  @if (list.hasActiveFilters()) {
+    <button mat-button type="button" class="clear-button" (click)="list.clearFilters()">
+      <mat-icon aria-hidden="true">filter_alt_off</mat-icon>
+      ניקוי סינון
+    </button>
+  }
+</app-filter-bar>
+
+<app-data-table
+  caption="רשימת העובדים"
+  [columns]="columns"
+  [rows]="list.items()"
+  [status]="list.status()"
+  [sort]="state().sort"
+  [totalCount]="list.totalCount()"
+  [page]="state().page"
+  [pageSize]="state().pageSize"
+  [rowClickable]="true"
+  (sortChange)="list.setSort($event)"
+  (pageChange)="list.setPage($event.page, $event.pageSize)"
+  (rowActivate)="openUser($event)"
+  (retry)="list.reload()"
+>
+  <ng-template appCell="employeeCode" let-user>
+    <span class="code" dir="ltr">{{ user.employeeCode }}</span>
+  </ng-template>
+
+  <ng-template appCell="name" let-user>
+    <a class="name-link" [routerLink]="['/admin/users', user.id]" [state]="returnState()">
+      {{ user.firstName }} {{ user.lastName }}
+    </a>
+  </ng-template>
+
+  <ng-template appCell="email" let-user>
+    <span dir="ltr">{{ user.email }}</span>
+  </ng-template>
+
+  <ng-template appCell="department" let-user>{{ user.department.name }}</ng-template>
+
+  <ng-template appCell="roles" let-user>
+    <span class="roles">
+      @for (role of systemRoles(user); track role) {
+        <app-badge [tone]="role === 'Employee' ? 'neutral' : 'primary'">{{ role | roleLabel }}</app-badge>
+      }
+    </span>
+  </ng-template>
+
+  <ng-template appCell="isActive" let-user>
+    <app-active-badge [active]="user.isActive" />
+  </ng-template>
+
+  <div tableEmpty>
+    @if (list.hasActiveFilters()) {
+      <app-empty-state
+        icon="search_off"
+        heading="לא נמצאו עובדים"
+        description="אף עובד אינו מתאים לחיפוש או לסינון שנבחרו."
+      >
+        <button mat-stroked-button type="button" (click)="list.clearFilters()">ניקוי סינון</button>
+      </app-empty-state>
+    } @else {
+      <app-empty-state icon="group" heading="אין עובדים" description="עדיין לא הוקמו עובדים בארגון.">
+        <a mat-flat-button class="btn-primary-gradient" routerLink="/admin/users/new">עובד חדש</a>
+      </app-empty-state>
+    }
+  </div>
+</app-data-table>

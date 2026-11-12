@@ -1,0 +1,32 @@
+<h2 mat-dialog-title id="confirm-dialog-title" class="dialog-title">
+  @if (tone === 'danger') {
+    <mat-icon class="title-icon" aria-hidden="true">warning</mat-icon>
+  }
+  {{ data.heading }}
+</h2>
+
+<mat-dialog-content id="confirm-dialog-content">
+  <p class="message">{{ data.message }}</p>
+  @if (data.consequences?.length) {
+    <ul class="consequences">
+      @for (item of data.consequences; track $index) {
+        <li>{{ item }}</li>
+      }
+    </ul>
+  }
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button type="button" [mat-dialog-close]="false" cdkFocusInitial>
+    {{ data.cancelText ?? 'ביטול' }}
+  </button>
+  <button
+    mat-flat-button
+    type="button"
+    [class.btn-primary-gradient]="tone === 'primary'"
+    [class.btn-danger]="tone === 'danger'"
+    [mat-dialog-close]="true"
+  >
+    {{ data.confirmText }}
+  </button>
+</mat-dialog-actions>

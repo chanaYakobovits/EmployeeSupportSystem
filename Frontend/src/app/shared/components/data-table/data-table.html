@@ -1,0 +1,75 @@
+<section class="table-card" [attr.aria-busy]="status() === 'loading'" [attr.aria-label]="caption()">
+  @if (refreshing()) {
+    <mat-progress-bar class="progress" mode="indeterminate" aria-hidden="true" />
+  }
+
+  <p class="visually-hidden" role="status" aria-live="polite">{{ resultAnnouncement() }}</p>
+
+  @switch (view()) {
+    @case ('loading') {
+      <app-loading-state />
+    }
+    @case ('error') {
+      <app-error-state (retry)="retry.emit()" />
+    }
+    @case ('empty') {
+      <ng-content select="[tableEmpty]" />
+    }
+    @default {
+      <!-- Focusable so keyboard users can scroll a wide table sideways (mobile). -->
+      <div class="table-scroll" tabindex="0" role="region" [attr.aria-label]="caption()">
+        <table class="data-table">
+          <caption class="visually-hidden">{{ caption() }}</caption>
+          <thead>
+            <tr>
+              @for (column of columns(); track column.key) {
+                <th scope="col" [attr.aria-sort]="ariaSort(column)" [class]="'align-' + (column.align ?? 'start')">
+                  @if (column.sortKey) {
+                    <button
+                      type="button"
+                      class="sort-button"
+                      [class.sorted]="sort()?.by === column.sortKey"
+                      (click)="toggleSort(column)"
+                    >
+                      <span>{{ column.header }}</span>
+                      <mat-icon class="sort-icon" aria-hidden="true">{{ sortIcon(column) }}</mat-icon>
+                    </button>
+                  } @else {
+                    {{ column.header }}
+                  }
+                </th>
+              }
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of rows(); track trackBy()(row)) {
+              <tr [class.clickable]="rowClickable()" (click)="onRowClick(row, $event)">
+                @for (column of columns(); track column.key) {
+                  <td [class]="'align-' + (column.align ?? 'start')">
+                    @if (templates().get(column.key); as template) {
+                      <ng-container [ngTemplateOutlet]="template" [ngTemplateOutletContext]="{ $implicit: row }" />
+                    } @else {
+                      {{ cellText(row, column.key) }}
+                    }
+                  </td>
+                }
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+
+      @if (paginated()) {
+        <mat-paginator
+          class="paginator"
+          [length]="totalCount()"
+          [pageIndex]="page() - 1"
+          [pageSize]="pageSize()"
+          [pageSizeOptions]="pageSizeOptions"
+          showFirstLastButtons
+          (page)="onPage($event)"
+        />
+      }
+    }
+  }
+</section>

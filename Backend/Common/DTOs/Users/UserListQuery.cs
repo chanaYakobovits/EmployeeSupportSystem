@@ -19,13 +19,22 @@ public sealed class UserListQuery : PageQuery
 /// <summary>Closed list of sortBy values for GET /api/users (spec 9.4).</summary>
 public static class UserSortFields
 {
-    /// <summary>Last name, then first name. The default.</summary>
+    /// <summary>Last name, then first name.</summary>
     public const string Name = "name";
+    /// <summary>The default, descending: the newest employees first (the code is a running number).</summary>
     public const string EmployeeCode = "employeeCode";
     public const string Email = "email";
     public const string Department = "department";
     public const string CreatedAt = "createdAt";
     public const string LastLoginAt = "lastLoginAt";
+
+    /// <summary>Used when sortBy is not sent. Same default as the client (users-list.store.ts).</summary>
+    public const string Default = EmployeeCode;
+
+    /// <summary>
+    /// The direction when sortDir is not sent: the default column sorts descending, any other column ascending.
+    /// </summary>
+    public static bool IsDescendingByDefault(string sortBy) => sortBy == Default;
 
     public static readonly IReadOnlyList<string> All = [Name, EmployeeCode, Email, Department, CreatedAt, LastLoginAt];
 }

@@ -25,6 +25,10 @@
   --error-border: rgba(179, 38, 30, 0.25);
   --warning-text: #a14e00; // darker orange: passes WCAG AA as text
   --success-text: #1b6e3a;
+  --success-soft: rgba(27, 110, 58, 0.1); // badge background (10% of the text colour)
+  --warning-soft: rgba(161, 78, 0, 0.1);
+  --accent-text: #00737a; // darker teal: --accent as text fails WCAG AA
+  --accent-soft: rgba(0, 163, 173, 0.1);
   --auth-bg-start: #f0f7ff;
   --on-primary-overlay: rgba(255, 255, 255, 0.15);
   --on-primary-line: rgba(255, 255, 255, 0.12);
@@ -69,10 +73,13 @@ body {
   color: var(--text-primary);
 }
 
-// Form fields: rounded corners per design guide.
+// Form fields: rounded corners per design guide. Dialogs: 20px.
 html {
   @include mat.form-field-overrides((
     outlined-container-shape: var(--radius-field),
+  ));
+  @include mat.dialog-overrides((
+    container-shape: var(--radius-dialog),
   ));
 }
 
@@ -148,6 +155,46 @@ html {
 
 .btn-primary-gradient.mat-mdc-unelevated-button {
   border-radius: var(--radius-field);
+}
+
+// Destructive action (deactivate, reset password) in a confirmation dialog.
+.btn-danger.mat-mdc-unelevated-button:not(:disabled) {
+  background: var(--error-text);
+  color: var(--on-primary);
+  border-radius: var(--radius-field);
+}
+
+// Error / warning box inside a form or a dialog (not tied to one field). Focus it so screen readers read it.
+.app-alert {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  border: 1px solid var(--error-border);
+  border-radius: var(--radius-field);
+  background: var(--error-bg);
+  color: var(--error-text);
+  font-size: 14px;
+  line-height: 1.5;
+
+  &:focus {
+    outline: 2px solid var(--error-text);
+    outline-offset: 2px;
+  }
+
+  p {
+    margin: 0;
+  }
+
+  a {
+    color: inherit;
+    font-weight: 600;
+  }
+
+  .app-alert-title {
+    font-weight: 600;
+  }
 }
 
 // Visually hidden but available to screen readers.

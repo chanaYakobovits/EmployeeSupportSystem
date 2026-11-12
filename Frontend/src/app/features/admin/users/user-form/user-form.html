@@ -1,0 +1,263 @@
+<a class="back-link" [routerLink]="backLink">
+  <mat-icon class="icon-mirror-rtl" aria-hidden="true">arrow_forward</mat-icon>
+  חזרה לרשימת העובדים
+</a>
+
+@switch (store.status()) {
+  @case ('loading') {
+    <app-loading-state message="טוען את פרטי העובד..." />
+  }
+  @case ('notFound') {
+    <app-empty-state icon="person_off" heading="העובד לא נמצא" description="ייתכן שהקישור שגוי.">
+      <a mat-stroked-button [routerLink]="backLink">לרשימת העובדים</a>
+    </app-empty-state>
+  }
+  @case ('error') {
+    <app-error-state (retry)="reload()" />
+  }
+  @default {
+    <app-page-header
+      [heading]="isEdit() ? userName() : 'עובד חדש'"
+      [subtitle]="
+        isEdit()
+          ? (user()?.jobTitle ?? '') + ' · ' + (user()?.department?.name ?? '')
+          : 'קוד העובד והסיסמה הזמנית ייווצרו אוטומטית'
+      "
+    />
+
+    @if (alert(); as alert) {
+      <app-form-alert [alert]="alert" />
+    }
+
+    <div class="layout" [class.with-side]="isEdit()">
+      <form class="surface-card form-card" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+        <h2 class="card-title">פרטי העובד</h2>
+
+        @if (isEdit()) {
+          <mat-form-field appearance="outline" class="code-field">
+            <mat-label>קוד עובד</mat-label>
+            <input matInput formControlName="employeeCode" dir="ltr" />
+            <mat-hint>נוצר אוטומטית ואינו ניתן לשינוי</mat-hint>
+          </mat-form-field>
+        }
+
+        <div class="fields">
+          <mat-form-field appearance="outline">
+            <mat-label>שם פרטי</mat-label>
+            <input matInput formControlName="firstName" autocomplete="off" dir="auto" required maxlength="50" />
+            @let firstName = form.controls.firstName;
+            @if (firstName.hasError('required')) {
+              <mat-error>יש להזין שם פרטי</mat-error>
+            } @else if (firstName.hasError('server')) {
+              <mat-error>{{ firstName.getError('server') }}</mat-error>
+            }
+          </mat-form-field>
+
+          <mat-form-field appearance="outline">
+            <mat-label>שם משפחה</mat-label>
+            <input matInput formControlName="lastName" autocomplete="off" dir="auto" required maxlength="50" />
+            @let lastName = form.controls.lastName;
+            @if (lastName.hasError('required')) {
+              <mat-error>יש להזין שם משפחה</mat-error>
+            } @else if (lastName.hasError('server')) {
+              <mat-error>{{ lastName.getError('server') }}</mat-error>
+            }
+          </mat-form-field>
+
+          <mat-form-field appearance="outline">
+            <mat-label>מייל</mat-label>
+            <input
+              matInput
+              type="email"
+              formControlName="email"
+              autocomplete="off"
+              dir="ltr"
+              required
+              maxlength="256"
+            />
+            @let email = form.controls.email;
+            @if (email.hasError('required')) {
+              <mat-error>יש להזין כתובת מייל</mat-error>
+            } @else if (email.hasError('pattern')) {
+              <mat-error>כתובת המייל אינה תקינה</mat-error>
+            } @else if (email.hasError('server')) {
+              <mat-error>{{ email.getError('server') }}</mat-error>
+            }
+          </mat-form-field>
+
+          <mat-form-field appearance="outline">
+            <mat-label>מחלקה</mat-label>
+            <mat-select formControlName="departmentId" required>
+              @for (department of store.departmentOptions(); track department.id) {
+                <mat-option [value]="department.id">
+                  {{ department.name }}{{ department.isActive ? '' : ' (לא פעילה)' }}
+                </mat-option>
+              }
+            </mat-select>
+            @let departmentId = form.controls.departmentId;
+            @if (departmentId.hasError('required')) {
+              <mat-error>יש לבחור מחלקה</mat-error>
+            } @else if (departmentId.hasError('server')) {
+              <mat-error>{{ departmentId.getError('server') }}</mat-error>
+            }
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" class="wide">
+            <mat-label>תפקיד בארגון</mat-label>
+            <input matInput formControlName="jobTitle" autocomplete="off" dir="auto" required maxlength="100" />
+            <mat-hint>לדוגמה: מפתח בכיר, מזכירת משרד</mat-hint>
+            @let jobTitle = form.controls.jobTitle;
+            @if (jobTitle.hasError('required')) {
+              <mat-error>יש להזין תפקיד בארגון</mat-error>
+            } @else if (jobTitle.hasError('server')) {
+              <mat-error>{{ jobTitle.getError('server') }}</mat-error>
+            }
+          </mat-form-field>
+        </div>
+
+        @let roles = form.controls.roles;
+        <fieldset
+          class="roles"
+          formGroupName="roles"
+          data-field="roles"
+          [attr.aria-invalid]="roles.hasError('server') ? 'true' : null"
+          [attr.aria-describedby]="roles.hasError('server') ? 'roles-error' : null"
+        >
+          <legend class="roles-legend">תפקידי מערכת</legend>
+
+          <div class="role">
+            <mat-checkbox class="role-employee" [checked]="true" [disabled]="true" aria-describedby="employee-hint">
+              עובד
+            </mat-checkbox>
+            <span id="employee-hint" class="role-hint">כל משתמש הוא גם עובד ויכול לפתוח פניות</span>
+          </div>
+
+          <div class="role">
+            <mat-checkbox formControlName="Handler" aria-describedby="handler-hint">גורם מטפל</mat-checkbox>
+            <span id="handler-hint" class="role-hint">מטפל בפניות שמנותבות למחלקה שלו</span>
+          </div>
+
+          <div class="role">
+            <mat-checkbox
+              class="role-department-manager"
+              [checked]="isDepartmentManager()"
+              [disabled]="true"
+              aria-describedby="department-manager-hint"
+            >
+              מנהל/ת מחלקה
+            </mat-checkbox>
+            <span id="department-manager-hint" class="role-hint">
+              נקבע לפי מינוי במסך המחלקות
+              @if (user()?.managedDepartment; as managed) {
+                – מנהל/ת את מחלקת {{ managed.name }}.
+              }
+              <a [routerLink]="departmentsUrl">למסך המחלקות</a>
+            </span>
+          </div>
+
+          <div class="role">
+            <mat-checkbox formControlName="Executive" aria-describedby="executive-hint">מנכ"ל</mat-checkbox>
+            <span id="executive-hint" class="role-hint">צפייה בדשבורד הארגוני ובדשבורד של כל מחלקה</span>
+          </div>
+
+          <div class="role">
+            <mat-checkbox formControlName="Admin" aria-describedby="admin-hint">מנהל/ת מערכת</mat-checkbox>
+            <span id="admin-hint" class="role-hint">
+              @if (isSelf()) {
+                לא ניתן להסיר את הרשאת מנהל המערכת מהמשתמש שלך
+              } @else {
+                ניהול עובדים, מחלקות, קטגוריות והגדרות
+              }
+            </span>
+          </div>
+
+          @if (roles.hasError('server')) {
+            <p id="roles-error" class="field-error" role="alert">{{ roles.getError('server') }}</p>
+          }
+        </fieldset>
+
+        <div class="form-actions">
+          <a mat-button [routerLink]="backLink">ביטול</a>
+          <button mat-flat-button type="submit" class="btn-primary-gradient" [disabled]="store.saving()">
+            @if (store.saving()) {
+              <mat-spinner diameter="18" aria-hidden="true" />
+            }
+            {{ isEdit() ? 'שמירת שינויים' : 'יצירת עובד' }}
+          </button>
+        </div>
+      </form>
+
+      @if (isEdit() && user(); as current) {
+        <aside class="surface-card side-card" aria-labelledby="access-title">
+          <h2 id="access-title" class="card-title">סטטוס וגישה</h2>
+
+          <dl class="facts">
+            <div class="fact">
+              <dt>סטטוס</dt>
+              <dd><app-active-badge [active]="current.isActive" /></dd>
+            </div>
+            <div class="fact">
+              <dt>נוצר</dt>
+              <dd dir="ltr">{{ current.createdAt | dateTime }}</dd>
+            </div>
+            <div class="fact">
+              <dt>כניסה אחרונה</dt>
+              <dd>
+                @if (current.lastLoginAt) {
+                  <span dir="ltr">{{ current.lastLoginAt | dateTime }}</span>
+                } @else {
+                  עדיין לא התחבר/ה
+                }
+              </dd>
+            </div>
+            @if (current.mustChangePassword || current.isLockedOut) {
+              <div class="fact">
+                <dt>הערות</dt>
+                <dd class="flags">
+                  @if (current.mustChangePassword) {
+                    <app-badge tone="warning">ממתין להחלפת סיסמה</app-badge>
+                  }
+                  @if (current.isLockedOut) {
+                    <app-badge tone="danger">נעול זמנית</app-badge>
+                  }
+                </dd>
+              </div>
+            }
+          </dl>
+
+          @if (isSelf()) {
+            <p class="self-note">
+              זה המשתמש שלך: אי אפשר להשבית אותו או לאפס לו סיסמה מכאן. להחלפת הסיסמה –
+              <a routerLink="/account/change-password">החלפת סיסמה</a>.
+            </p>
+          } @else {
+            <div class="side-actions">
+              <button
+                mat-stroked-button
+                type="button"
+                [disabled]="store.resetting() || store.changingActive()"
+                (click)="resetPassword()"
+              >
+                <mat-icon aria-hidden="true">lock_reset</mat-icon>
+                איפוס סיסמה
+              </button>
+              <button
+                mat-stroked-button
+                type="button"
+                [class.danger]="current.isActive"
+                [disabled]="store.resetting() || store.changingActive()"
+                (click)="toggleActive()"
+              >
+                <mat-icon aria-hidden="true">{{ current.isActive ? 'person_off' : 'person_check' }}</mat-icon>
+                {{ current.isActive ? 'השבתת העובד' : 'הפעלת העובד' }}
+              </button>
+              @if (current.isActive && isHandler()) {
+                <p class="side-note">בהשבתה, פניות לא פתורות שלו יחזרו לתור המחלקה.</p>
+              }
+            </div>
+          }
+        </aside>
+      }
+    </div>
+  }
+}

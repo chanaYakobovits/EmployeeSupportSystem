@@ -1,0 +1,70 @@
+<h2 mat-dialog-title id="department-dialog-title">{{ isEdit ? 'עריכת מחלקה' : 'מחלקה חדשה' }}</h2>
+
+<form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+  <mat-dialog-content>
+    @if (alert(); as alert) {
+      <app-form-alert [alert]="alert" />
+    }
+
+    <mat-form-field appearance="outline" class="field">
+      <mat-label>שם המחלקה</mat-label>
+      <input matInput formControlName="name" autocomplete="off" dir="auto" required maxlength="100" cdkFocusInitial />
+      @let name = form.controls.name;
+      @if (name.hasError('required')) {
+        <mat-error>יש להזין שם מחלקה</mat-error>
+      } @else if (name.hasError('server')) {
+        <mat-error>{{ name.getError('server') }}</mat-error>
+      }
+    </mat-form-field>
+
+    <mat-form-field appearance="outline" class="field">
+      <mat-label>מנהל/ת המחלקה</mat-label>
+      <mat-icon matPrefix aria-hidden="true">person_search</mat-icon>
+      <input
+        matInput
+        formControlName="manager"
+        autocomplete="off"
+        dir="auto"
+        placeholder="ללא מנהל"
+        aria-describedby="manager-hint"
+        [matAutocomplete]="managers"
+      />
+      @if (form.controls.manager.value) {
+        <button mat-icon-button matSuffix type="button" aria-label="ללא מנהל" (click)="clearManager()">
+          <mat-icon aria-hidden="true">close</mat-icon>
+        </button>
+      }
+      <mat-autocomplete #managers="matAutocomplete" [displayWith]="displayManager">
+        <mat-option [value]="null">ללא מנהל</mat-option>
+        @for (candidate of store.candidates(); track candidate.id) {
+          <mat-option [value]="candidate">{{ managerLabel(candidate) }}</mat-option>
+        }
+        @if (!store.searching() && store.candidates().length === 0) {
+          <mat-option disabled>לא נמצאו עובדים פעילים</mat-option>
+        }
+      </mat-autocomplete>
+      <mat-hint id="manager-hint">חיפוש לפי שם או קוד עובד, מבין העובדים הפעילים</mat-hint>
+      @let manager = form.controls.manager;
+      @if (manager.hasError('notChosen')) {
+        <mat-error>יש לבחור עובד מהרשימה, או "ללא מנהל"</mat-error>
+      } @else if (manager.hasError('server')) {
+        <mat-error>{{ manager.getError('server') }}</mat-error>
+      }
+    </mat-form-field>
+
+    <p class="note">
+      <mat-icon aria-hidden="true">info</mat-icon>
+      <span>המנהל שנבחר מקבל את התפקיד "מנהל מחלקה". בהחלפת מנהל, המנהל הקודם מאבד את התפקיד. עובד יכול לנהל מחלקה אחת בלבד.</span>
+    </p>
+  </mat-dialog-content>
+
+  <mat-dialog-actions align="end">
+    <button mat-button type="button" mat-dialog-close>ביטול</button>
+    <button mat-flat-button type="submit" class="btn-primary-gradient" [disabled]="store.saving()">
+      @if (store.saving()) {
+        <mat-spinner diameter="18" aria-hidden="true" />
+      }
+      {{ isEdit ? 'שמירה' : 'יצירת מחלקה' }}
+    </button>
+  </mat-dialog-actions>
+</form>

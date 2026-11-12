@@ -107,9 +107,11 @@ public sealed class UserRepository(AppDbContext db) : IUserRepository
             users = users.Where(u => u.IsActive == isActive);
         }
 
-        var desc = query.IsDescending;
-        var ordered = (query.SortBy ?? UserSortFields.Name) switch
+        var sortBy = query.SortBy ?? UserSortFields.Default;
+        var desc = query.SortDir is null ? UserSortFields.IsDescendingByDefault(sortBy) : query.IsDescending;
+        var ordered = sortBy switch
         {
+            // "EMP-" + a fixed-width number, so text order is number order.
             UserSortFields.EmployeeCode => users.OrderByDirection(u => u.EmployeeCode, desc),
             UserSortFields.Email => users.OrderByDirection(u => u.Email, desc),
             UserSortFields.Department => users.OrderByDirection(u => u.Department.Name, desc)

@@ -6,8 +6,8 @@
 
 ## מצב משימות (לפי פרק 12 באפיון שב-docs/)
 - הושלמו: 1.1–1.5 (תשתית), 4.1 PiiRedactor, 4.2 לקוח OpenAI (נבנו מוקדם, לפני שלב ב'),
-  2.1 אימות, 2.2 מסכי התחברות, 2.3א API לניהול עובדים ומחלקות.
-- הבא בתור: 2.3ב מסכי ניהול עובדים ומחלקות.
+  2.1 אימות, 2.2 מסכי התחברות, 2.3א API לניהול עובדים ומחלקות, 2.3ב מסכי ניהול עובדים ומחלקות.
+- הבא בתור: 2.4 ניהול קטגוריות ו-SLA (API + מסכים; לשוניות נוספות ב-`features/admin/admin-layout`).
 - תוספת שלא באפיון: בדיקת איכות סיווג AI על 30 פניות לדוגמה – אחרי משימה 4.3.
 
 ## שפה
@@ -93,6 +93,17 @@
   ועברו מעל 30 שניות; תוך 30 שניות ← 401 בלבד. טוקן שבוטל ב-logout או בהחלפת סיסמה ← 401 בלבד,
   בלי ביטול כולל (אין לו "יורש" שתוקף יכול להחזיק; ביטול כולל רק ינתק את המשתמש האמיתי).
 
+
+- דפוסי רשימה משותפים ב-Frontend (משימה 2.3ב) – כל מסך רשימה חדש משתמש בהם, לא בונה מחדש:
+  `shared/list` (ListStateDef + ListStore: מצב ב-query params, switchMap), `app-search-field` (debounce 400),
+  `app-data-table` (מיון/דפדוף בשרת + מצבי 7.10), `app-filter-bar`, `applyServerErrors` (shared/forms),
+  `ConfirmService`, `app-form-alert`, `dateTime` pipe (dd/MM/yyyy HH:mm, Asia/Jerusalem).
+- רשימת עובדים: מיון ברירת מחדל קוד עובד יורד (החדשים בראש) – בשרת `UserSortFields.Default` ובלקוח
+  `USERS_LIST.defaultSort`; לשנות בשניהם יחד. בלי sortDir: עמודת ברירת המחדל יורדת, כל עמודה אחרת עולה.
+- 422 `manages-other-department` (עובד כבר מנהל מחלקה אחרת) נשאר 422 בשרת; ה-Frontend מציג אותו ליד שדה המנהל
+  (`typeFields` של applyServerErrors).
+- `NotificationService` טוען את MatSnackBar ב-dynamic import (נטען מיד בעלייה), כדי שה-CDK overlay לא ייכנס
+  ל-bundle הראשוני. לא לייבא MatSnackBar/MatDialog בקוד שנטען בעלייה (core, app.config).
 
 ## בהמשך
 - משימה 2.2: לטעון את Shell ב-loadComponent (lazy), מסך ההתחברות מחוצה לו –
