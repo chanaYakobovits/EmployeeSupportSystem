@@ -20,6 +20,17 @@ public static class AuthExtensions
     public const string LoginRateLimitPolicy = "login";
     public const string ChangePasswordRateLimitPolicy = "change-password";
     public const string SetPasswordRateLimitPolicy = "set-password";
+    public const string CreateTicketRateLimitPolicy = "create-ticket";
+
+    /// <summary>Spec 6.1: 20 new tickets per hour per user.</summary>
+    private const int CreateTicketPermitsPerWindow = 20;
+    private static readonly TimeSpan CreateTicketWindow = TimeSpan.FromHours(1);
+
+    /// <summary>The 429 detail of policies that need more than the generic title.</summary>
+    private static readonly Dictionary<string, string> RejectionDetails = new()
+    {
+        [CreateTicketRateLimitPolicy] = $"ניתן לפתוח עד {CreateTicketPermitsPerWindow} פניות בשעה. יש לנסות שוב מאוחר יותר.",
+    };
 
     /// <summary>
     /// Decision in CLAUDE.md: 10 set-password attempts per 15 minutes per IP. Tokens cannot be guessed (256 bits);
@@ -168,6 +179,17 @@ public static class AuthExtensions
                         QueueLimit = 0,
                     }));
 
+            // Per user, like change-password (runs after authorization).
+            options.AddPolicy(CreateTicketRateLimitPolicy, context =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    "create-ticket:user:" + (context.User.FindFirst(AuthClaimTypes.UserId)?.Value ?? "anonymous"),
+                    _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = CreateTicketPermitsPerWindow,
+                        Window = CreateTicketWindow,
+                        QueueLimit = 0,
+                    }));
+
             options.OnRejected = async (context, cancellationToken) =>
             {
                 var http = context.HttpContext;
@@ -181,6 +203,10 @@ public static class AuthExtensions
                     Status = StatusCodes.Status429TooManyRequests,
                     Type = ProblemTitles.GetType(StatusCodes.Status429TooManyRequests),
                     Title = ProblemTitles.GetTitle(StatusCodes.Status429TooManyRequests),
+                    Detail = http.GetEndpoint()?.Metadata.GetMetadata<EnableRateLimitingAttribute>()?.PolicyName is { } policy
+                             && RejectionDetails.TryGetValue(policy, out var detail)
+                        ? detail
+                        : null,
                 };
                 ProblemDetailsEnricher.AddTraceIds(problem, http);
 

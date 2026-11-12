@@ -17,4 +17,12 @@ public static class TicketStatuses
     /// </summary>
     public static readonly IReadOnlyList<TicketStatus> Unresolved =
         [TicketStatus.New, TicketStatus.Assigned, TicketStatus.InProgress, TicketStatus.WaitingForEmployee];
+
+    /// <summary>
+    /// The "פתוחות" card of the requester's summary (spec 7.3): not closed or cancelled, and not waiting for the
+    /// requester (WaitingForEmployee has its own card). Resolved counts as open until the employee confirms or it
+    /// closes automatically.
+    /// </summary>
+    public static readonly IReadOnlyList<TicketStatus> RequesterOpen =
+        [TicketStatus.New, TicketStatus.Assigned, TicketStatus.InProgress, TicketStatus.Resolved];
 }

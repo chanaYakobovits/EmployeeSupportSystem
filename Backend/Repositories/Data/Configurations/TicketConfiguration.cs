@@ -17,8 +17,8 @@ public class TicketConfiguration : IEntityTypeConfiguration<Ticket>
         builder.ToTable("Tickets");
         builder.HasKey(t => t.Id);
 
-        builder.Property(t => t.Subject).HasMaxLength(150);
-        builder.Property(t => t.Description).IsRequired().HasMaxLength(4000);
+        builder.Property(t => t.Subject).HasMaxLength(TicketFieldLimits.SubjectMaxLength);
+        builder.Property(t => t.Description).IsRequired().HasMaxLength(TicketFieldLimits.DescriptionMaxLength);
 
         // rowversion + concurrency token (spec 11.2).
         builder.Property(t => t.RowVersion).IsRowVersion();

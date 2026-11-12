@@ -75,6 +75,13 @@ public sealed class UserRepository(AppDbContext db) : IUserRepository
                 row.MustChangePassword);
     }
 
+    public Task<int?> GetActiveDepartmentIdAsync(int userId, CancellationToken cancellationToken) =>
+        db.Users
+            .AsNoTracking()
+            .Where(u => u.Id == userId && u.IsActive)
+            .Select(u => (int?)u.DepartmentId)
+            .SingleOrDefaultAsync(cancellationToken);
+
     // ===================== User administration (task 2.3) =====================
 
     public Task<PagedResult<UserListItemDto>> GetPageAsync(UserListQuery query, DateTime now,

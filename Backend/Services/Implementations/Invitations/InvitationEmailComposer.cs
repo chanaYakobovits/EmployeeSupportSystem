@@ -18,12 +18,11 @@ public sealed class InvitationEmailComposer(IOptions<InvitationOptions> options)
     public const string Subject = "הזמנה לעובדנט – קביעת סיסמה";
 
     private static readonly Lazy<string> HtmlTemplate = new(LoadTemplate);
-    private static readonly TimeZoneInfo IsraelTime = TimeZoneInfo.FindSystemTimeZoneById("Asia/Jerusalem");
 
     public EmailMessage Compose(User user, string token, DateTime expiresAtUtc)
     {
         var link = BuildLink(options.Value.FrontendBaseUrl, token);
-        var expires = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(expiresAtUtc, DateTimeKind.Utc), IsraelTime)
+        var expires = IsraelTime.FromUtc(expiresAtUtc)
             .ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
 
         var html = HtmlTemplate.Value

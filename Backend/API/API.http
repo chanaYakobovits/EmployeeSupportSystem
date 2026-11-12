@@ -791,3 +791,78 @@ Authorization: Bearer {{admin.response.body.$.accessToken}}
 ### (job Pending, LastErrorCode "SmtpConnectionFailed"), then marks it Failed → status "Failed",
 ### AuditLog "Invitation.SendFailed". The admin then resends. Neither the token nor the address is ever logged.
 ### Rate limit: more than 10 set-password requests from one IP within 15 minutes → 429.
+
+### ============ Tickets – task 3.1 (the requester's view) ============
+### Noa opens and views her own tickets; Ido is "another employee".
+
+# @name noa
+POST {{API_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{ "identifier": "noa.berkovich@example.com", "password": "{{password}}" }
+
+###
+# @name ido
+POST {{API_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{ "identifier": "ido.sagi@example.com", "password": "{{password}}" }
+
+### Create → 201 + Location /api/tickets/{id} + { "id": ... }. "requesterId" in the body is ignored:
+### the requester is Noa (from the token), the department is her current one (from the database).
+# @name newTicket
+POST {{API_HostAddress}}/api/tickets
+Authorization: Bearer {{noa.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "requesterId": 2, "subject": "שעות נוספות שלא שולמו", "description": "בתלוש של אוקטובר חסרות 6 שעות נוספות מה-14 בחודש." }
+
+### Create without a subject → 201; the list shows the start of the description ("isSubjectExcerpt": true)
+POST {{API_HostAddress}}/api/tickets
+Authorization: Bearer {{noa.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "description": "המחשב נתקע כל בוקר בזמן ההפעלה ולוקח לו כרבע שעה לעלות." }
+
+### Description too short / whitespace only, subject over 150 → 400 with errors by field
+POST {{API_HostAddress}}/api/tickets
+Authorization: Bearer {{noa.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "subject": "אאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאא", "description": "    " }
+
+### My tickets – newest first (default), page 1 of 25
+GET {{API_HostAddress}}/api/tickets/my
+Authorization: Bearer {{noa.response.body.$.accessToken}}
+
+### Filter by several statuses + search in the subject + sort by last update
+GET {{API_HostAddress}}/api/tickets/my?status=New&status=Assigned&status=InProgress&search=תלוש&sortBy=updatedAt&sortDir=desc&pageSize=10
+Authorization: Bearer {{noa.response.body.$.accessToken}}
+
+### Sort field outside the closed list / pageSize over 100 → 400
+GET {{API_HostAddress}}/api/tickets/my?sortBy=dueAt&pageSize=500
+Authorization: Bearer {{noa.response.body.$.accessToken}}
+
+### Unknown status → 400 (binding)
+GET {{API_HostAddress}}/api/tickets/my?status=Archived
+Authorization: Bearer {{noa.response.body.$.accessToken}}
+
+### Summary cards → { open, waitingForMe, closedThisMonth }
+### open = New/Assigned/InProgress/Resolved; closedThisMonth = Closed since the 1st of the month, Israel time
+GET {{API_HostAddress}}/api/tickets/my/summary
+Authorization: Bearer {{noa.response.body.$.accessToken}}
+
+### View the new ticket → 200, details + timeline (opening entry). No urgency, dueAt, AI or internal data.
+GET {{API_HostAddress}}/api/tickets/{{newTicket.response.body.$.id}}
+Authorization: Bearer {{noa.response.body.$.accessToken}}
+
+### Another employee views Noa's ticket → 404 (not 403)
+GET {{API_HostAddress}}/api/tickets/{{newTicket.response.body.$.id}}
+Authorization: Bearer {{ido.response.body.$.accessToken}}
+
+### Unknown ticket → 404
+GET {{API_HostAddress}}/api/tickets/999999
+Authorization: Bearer {{noa.response.body.$.accessToken}}
+
+### Rate limit: more than 20 new tickets per hour per user → 429 with
+### detail "ניתן לפתוח עד 20 פניות בשעה. יש לנסות שוב מאוחר יותר." (requests rejected with 400 also count).

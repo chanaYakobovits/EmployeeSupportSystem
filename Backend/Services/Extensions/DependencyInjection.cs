@@ -36,6 +36,7 @@ public static class DependencyInjection
         services.AddScoped<IDepartmentService, DepartmentService>();
         services.AddScoped<ICategoryService, CategoryService>();
         services.AddScoped<ISlaPolicyService, SlaPolicyService>();
+        services.AddScoped<ITicketService, TicketService>();
 
         // Departments and categories per organization, 10 minutes (spec 11.3).
         services.AddSingleton<IReferenceDataCache, MemoryReferenceDataCache>();

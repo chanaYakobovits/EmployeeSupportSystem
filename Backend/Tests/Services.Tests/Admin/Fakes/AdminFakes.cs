@@ -2,6 +2,8 @@ using Common.Constants;
 using Common.DTOs.Auth;
 using Common.DTOs.Categories;
 using Common.DTOs.Departments;
+using Common.DTOs.Paging;
+using Common.DTOs.Tickets;
 using Common.DTOs.Users;
 using Common.Enums;
 using Common.Models;
@@ -70,6 +72,18 @@ public sealed class FakeTicketRepository : ITicketRepository
     public Dictionary<int, int> UnresolvedByHandler { get; } = [];
 
     public List<int> UnassignedHandlers { get; } = [];
+
+    // The requester's view is tested against EF Core InMemory (Tickets/*), not with this fake.
+    public void Add(Ticket ticket) => throw new NotSupportedException();
+
+    public Task<PagedResult<RequesterTicketListItemDto>> GetRequesterPageAsync(int requesterId, MyTicketsQuery query,
+        CancellationToken cancellationToken) => throw new NotSupportedException();
+
+    public Task<RequesterTicketsSummaryDto> GetRequesterSummaryAsync(int requesterId, DateTime monthStartUtc,
+        CancellationToken cancellationToken) => throw new NotSupportedException();
+
+    public Task<RequesterTicketDetailsDto?> GetForRequesterAsync(int ticketId, int requesterId,
+        CancellationToken cancellationToken) => throw new NotSupportedException();
 
     public Task<int> UnassignUnresolvedTicketsAsync(int handlerUserId, DateTime now, CancellationToken cancellationToken)
     {

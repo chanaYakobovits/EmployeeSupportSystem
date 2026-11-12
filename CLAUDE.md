@@ -7,8 +7,8 @@
 ## מצב משימות (לפי פרק 12 באפיון שב-docs/)
 - הושלמו: 1.1–1.5 (תשתית), 4.1 PiiRedactor, 4.2 לקוח OpenAI (נבנו מוקדם, לפני שלב ב'),
   2.1 אימות, 2.2 מסכי התחברות, 2.3א API לניהול עובדים ומחלקות, 2.3ב מסכי ניהול עובדים ומחלקות,
-  2.4 ניהול קטגוריות ו-SLA (API + מסכים).
-- הבא בתור: 3.1 יצירת פנייה וצפייה של עובד.
+  2.4 ניהול קטגוריות ו-SLA (API + מסכים), 3.1 חלק א' (API ליצירת פנייה וצפייה של עובד).
+- הבא בתור: 3.1 חלק ב' – מסכי "הפניות שלי", "פנייה חדשה", "צפייה" ב-Angular.
 - תוספת שלא באפיון: בדיקת איכות סיווג AI על 30 פניות לדוגמה – אחרי משימה 4.3.
 - תוספת שלא באפיון: הזמנת עובד במייל (האפיון 14 שאלה 3, "בעתיד"). שלב א' (שרת) ושלב ב' (מסך set-password, סטטוס הזמנה
   ברשימה ובעריכה, שליחה מחדש, סינון לפי סטטוס הזמנה) – הושלמו.
@@ -168,12 +168,33 @@
   `InvitationEmailJobs` היא הישות היחידה עם OrganizationId בלי Query Filter (ה-claim חוצה ארגונים ומחזיר רק מזהים).
   טבלת תור של 4.3 תעבוד באותו דפוס: OrganizationId בשורה, claim בלי סינון, עיבוד בתוך Scope של הארגון.
 
+- פניות – צד העובד (משימה 3.1א):
+  * `POST /api/tickets` (JSON; קבצים ב-3.2): הפונה מ-ICurrentUser. `CreateTicketRequest` בלי שדה פונה/מחלקה, ושדות לא מוכרים
+    בגוף נזרקים. המחלקה נקראת מה-DB (`GetActiveDepartmentIdAsync`), לא מה-claim. עובד לא פעיל ← 401 (גם בחלון 15 הדקות).
+    Status=New, ‏AiStatus=Pending, בלי קטגוריה/דחיפות/שיוך/DueAt. נשמרת גם שורת היסטוריה `null → New` (ChangedBy = הפונה).
+    Trim לנושא ולתיאור, נושא ריק ← null. ‏201 + Location + `{ id }`. מגבלות ב-`Common/Constants/TicketFieldLimits`.
+  * כל מה שנשמר עם פנייה חדשה – ב-`TicketService.StageNewTicket` (navigations, ‏SaveChanges אחד = טרנזקציה אחת).
+    שם יתווספו ניתוב ו-SLA (3.3) ומשימת AI (4.3). save שני ← לעטוף ב-`ExecuteInTransactionAsync`.
+  * Rate Limit `create-ticket`: ‏20 לשעה לכל משתמש (Fixed Window, גם בקשות 400 נספרות). ב-429 יש `detail` לפי ה-policy
+    (`RejectionDetails` ב-AuthExtensions).
+  * `GET /tickets/my`: ‏`status` (כמה ערכים), ‏`search` (LIKE על Subject בלבד), מיון createdAt (ברירת מחדל יורד) / updatedAt / status
+    (סדר ה-enum), שובר שוויון Id יורד. בלי נושא ← 80 התווים הראשונים של התיאור + `isSubjectExcerpt` (ה-"…" בלקוח).
+  * `GET /tickets/my/summary`: שאילתה מקובצת אחת. פתוחות = `TicketStatuses.RequesterOpen` (New, Assigned, InProgress, Resolved),
+    ממתינות לתגובתי = WaitingForEmployee, נסגרו החודש = Closed עם ClosedAt מתחילת החודש בשעון ישראל (`IsraelTime`). Cancelled – באף כרטיס.
+  * `GET /tickets/{id}`: כרגע רק לפונה (`Where(Id && RequesterId)` בשאילתה), אחרת 404. ב-3.4 היקפי הצוות נבדקים לפניו ב-`TicketService.GetAsync`.
+    ציר הזמן: שינויי סטטוס בלבד, בלי `Reason` (עלול להיות פנימי – להחליט ב-3.5), `changedByName` null = מערכת.
+  * DTOs של הפונה (`Common/DTOs/Tickets/RequesterTicketDtos.cs`) – אסור להוסיף Urgency, DueAt, AiStatus, ניתוח AI,
+    ClassificationSource, Reason או הערות פנימיות. `RequesterJsonTests` בודק את ה-JSON ואת הטיפוסים.
+
 ## בהמשך
 - משימה 2.2: לטעון את Shell ב-loadComponent (lazy), מסך ההתחברות מחוצה לו –
   כדי להוריד את ה-bundle הראשוני מתחת ל-500KB. לא להגדיל את ה-budget.
 
   - משימה 4.3: ה-Worker רץ בלי משתמש ← ה-Query Filter מחזיר 0 שורות. הפתרון כבר קיים (הזמנות במייל):
   לרשת מ-`PollingBackgroundService` ולעבד כל משימה ב-`CreateOrganizationScope(job.OrganizationId)`. לא IgnoreQueryFilters כללי.
+
+  - 6.1 (בדיקות אינטגרציה): 429 ביצירת פנייה; JSON של עובד מ-GET /api/tickets/{id} בלי שדות פנימיים.
+- 3.5: העובד לא רואה נימוקים בציר הזמן – רק תגובות שנכתבו אליו.
 
 ## מגבלה ידועה
   - מגבלה ידועה: אחרי השבתה או שינוי תפקידים, Access Token קיים תקף עד 15 דקות.

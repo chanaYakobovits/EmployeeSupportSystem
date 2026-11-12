@@ -19,6 +19,12 @@ public interface IUserRepository
     /// <summary>Read-only projection of an active user. Null if not found or inactive.</summary>
     Task<CurrentUserDto?> GetCurrentUserAsync(int userId, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// The user's current department, read from the database (not from the access token, which may be up to
+    /// 15 minutes old). Null if the user does not exist or is inactive.
+    /// </summary>
+    Task<int?> GetActiveDepartmentIdAsync(int userId, CancellationToken cancellationToken);
+
     // ---- user administration (task 2.3); all within the signed-in user's organization unless stated ----
 
     /// <summary>Filtered, sorted and paged in SQL. The query must already be validated (page, pageSize, sortBy).</summary>

@@ -43,6 +43,9 @@ public sealed class FakeUserRepository : IUserRepository
     public Task<User?> FindForUpdateAsync(int userId, CancellationToken cancellationToken) =>
         Task.FromResult(Users.SingleOrDefault(u => u.Id == userId));
 
+    public Task<int?> GetActiveDepartmentIdAsync(int userId, CancellationToken cancellationToken) =>
+        Task.FromResult(Users.SingleOrDefault(u => u.Id == userId && u.IsActive)?.DepartmentId);
+
     public Task<CurrentUserDto?> GetCurrentUserAsync(int userId, CancellationToken cancellationToken)
     {
         var user = Users.SingleOrDefault(u => u.Id == userId && u.IsActive);
