@@ -54,8 +54,8 @@
               "outputHashing": "all",
               "fileReplacements": [
                 {
-                  "replace": "src/app/features/dev/dev-area.ts",
-                  "with": "src/app/features/dev/dev-area.production.ts"
+                  "replace": "src/app/components/dev/dev-area.ts",
+                  "with": "src/app/components/dev/dev-area.production.ts"
                 }
               ]
             },

@@ -4,8 +4,8 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 
-import { AuthService } from '../../core/auth/auth.service';
-import { primaryRole, roleLabel } from '../../shared/pipes/role-label.pipe';
+import { AuthService } from '../../services/auth.service';
+import { primaryRole, roleLabel } from '../../pipes/role-label.pipe';
 
 /** App header: logo, and the user's avatar / name / role with the user menu. No notifications bell (spec 13.1). */
 @Component({

@@ -3,8 +3,8 @@ import { RouterLink, RouterLinkActive } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { MatListModule } from '@angular/material/list';
 
-import { AuthService } from '../../core/auth/auth.service';
-import { visibleAreas } from '../../core/navigation/app-areas';
+import { AuthService } from '../../services/auth.service';
+import { visibleAreas } from '../../services/app-areas';
 
 /** Main menu: only the areas the user's roles allow (spec 7), in a fixed order. */
 @Component({

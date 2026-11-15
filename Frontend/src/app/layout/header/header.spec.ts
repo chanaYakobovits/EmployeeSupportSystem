@@ -2,9 +2,9 @@ import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 
-import { AuthService } from '../../core/auth/auth.service';
-import { fakeUser } from '../../core/auth/testing/auth-fixtures';
-import { CurrentUser } from '../../core/models/auth.models';
+import { AuthService } from '../../services/auth.service';
+import { fakeUser } from '../../services/testing/auth-fixtures';
+import { CurrentUser } from '../../models/auth.models';
 import { Header } from './header';
 
 describe('Header', () => {

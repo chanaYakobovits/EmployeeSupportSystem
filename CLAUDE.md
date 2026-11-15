@@ -9,6 +9,7 @@
   2.1 אימות, 2.2 מסכי התחברות, 2.3א API לניהול עובדים ומחלקות, 2.3ב מסכי ניהול עובדים ומחלקות,
   2.4 ניהול קטגוריות ו-SLA (API + מסכים), 3.1 חלק א' (API ליצירת פנייה וצפייה של עובד),
   3.1 חלק ב' (מסכי "הפניות שלי", "פנייה חדשה", "צפייה בפנייה" ב-Angular).
+- שינוי מבנה Frontend (לא באפיון): `src/app` עבר ממבנה core/features/shared למבנה לפי סוג קובץ – הושלם.
 - הבא בתור: 3.2 – קבצים ותגובות.
 - תוספת שלא באפיון: בדיקת איכות סיווג AI על 30 פניות לדוגמה – אחרי משימה 4.3.
 - תוספת שלא באפיון: הזמנת עובד במייל (האפיון 14 שאלה 3, "בעתיד"). שלב א' (שרת) ושלב ב' (מסך set-password, סטטוס הזמנה
@@ -26,6 +27,17 @@
   - `Repositories` – גישה לנתונים: AppDbContext, Fluent API Configurations, Migrations, Seed.
   - `Common` – Entities, DTOs, Enums, Interfaces, Options, Exceptions. בלי לוגיקה ובלי תלויות.
 - `Frontend/` – Angular 20, Standalone Components + Signals, Angular Material, RTL מלא.
+  מבנה `src/app` לפי סוג קובץ:
+  * `components/<אזור>/` – ‏auth, employee, handler, dashboard, admin, dev: המסכים, ‏`*.routes.ts` וקבצי עזר של האזור
+    (‏`*-errors.ts`, ‏`employee-urls.ts`, ‏`login-notices.ts`, ‏`sla-rules.ts`, ‏`dev-area.ts`, ‏`testing/` של fixtures).
+    `components/shared/` – רכיבים משותפים (page-header, data-table, confirm-dialog, badges, מצבי תצוגה וכו').
+  * `services/` – שטוח: שירותי API, ‏auth, ‏token.store, ‏http (api-request, http-context, query-params), ‏app-areas,
+    ‏notification, ‏confirm, ‏list-state/list-store, ‏server-errors, ‏hebrew-paginator-intl וכל ה-`*.store.ts` של המסכים.
+    `services/testing/` – fixtures של auth.
+  * `guards/` – ‏auth.guards, ‏unsaved-changes.guard. ‏`interceptors/` – ‏auth, error. ‏`models/` – הממשקים וה-enums.
+    `pipes/` – כל ה-pipes. ‏`layout/` – ‏shell, header, sidebar, not-found.
+  * מסכים חדשים נבנים ב-`components/<אזור>/`, שירותים ו-stores ב-`services/`, guards ב-`guards/`,
+    interceptors ב-`interceptors/`, מודלים ב-`models/`, pipes ב-`pipes/`. קבצי spec ליד הקובץ שהם בודקים.
    - עיצוב: כל מסך ורכיב ב-Frontend לפי docs/design-guide.md. קבצי docs/design-reference/ הם השראה לסגנון בלבד – לא להעתיק מהם תוכן או לוגיקה.
 
 ## כללי ארכיטקטורה (חובה)
@@ -39,7 +51,7 @@
 - Angular: קריאות HTTP ומצב רק בשירותים; רכיבים רק מציגים. אסור innerHTML לתוכן משתמש.
 - רכיבי Angular – כל רכיב בתיקייה משלו.
   שלושה קבצים נפרדים (name.ts, name.html, name.scss עם templateUrl + styleUrl) – חובה עבור:
-  * כל מסך: רכיב שנטען מנתיב (app.routes.ts או *.routes.ts ב-features).
+  * כל מסך: רכיב שנטען מנתיב (app.routes.ts או *.routes.ts ב-components).
   * רכיבי layout: shell, header, sidebar.
   * כל רכיב שהתבנית שלו מעל ~20 שורות או שיש לו עיצוב משלו של יותר מכמה שורות.
   רכיב קטן ופשוט (תג, כפתור, מצב ריק) – מותר inline. כשהוא גדל מעבר לזה – להעביר לקבצים.
@@ -99,8 +111,8 @@
 
 
 - דפוסי רשימה משותפים ב-Frontend (משימה 2.3ב) – כל מסך רשימה חדש משתמש בהם, לא בונה מחדש:
-  `shared/list` (ListStateDef + ListStore: מצב ב-query params, switchMap), `app-search-field` (debounce 400),
-  `app-data-table` (מיון/דפדוף בשרת + מצבי 7.10), `app-filter-bar`, `applyServerErrors` (shared/forms),
+  `services/list-state.ts` + `services/list-store.ts` (ListStateDef + ListStore: מצב ב-query params, switchMap), `app-search-field` (debounce 400),
+  `app-data-table` (מיון/דפדוף בשרת + מצבי 7.10), `app-filter-bar`, `applyServerErrors` (services/server-errors.ts),
   `ConfirmService`, `app-form-alert`, `dateTime` pipe (dd/MM/yyyy HH:mm, Asia/Jerusalem).
 - רשימת עובדים: מיון ברירת מחדל קוד עובד יורד (החדשים בראש) – בשרת `UserSortFields.Default` ובלקוח
   `USERS_LIST.defaultSort`; לשנות בשניהם יחד. בלי sortDir: עמודת ברירת המחדל יורדת, כל עמודה אחרת עולה.
@@ -120,7 +132,7 @@
   ברירות המחדל ב-`Common/Constants/SlaDefaults` (גם ל-Seed וגם לרמה חסרה).
 - `FormAlert.tone: 'warning'` + `dismissible` – לאזהרה שלא חסמה פעולה ונשארת במסך.
 - `NotificationService` טוען את MatSnackBar ב-dynamic import (נטען מיד בעלייה), כדי שה-CDK overlay לא ייכנס
-  ל-bundle הראשוני. לא לייבא MatSnackBar/MatDialog בקוד שנטען בעלייה (core, app.config).
+  ל-bundle הראשוני. לא לייבא MatSnackBar/MatDialog בקוד שנטען בעלייה (app.config, interceptors, guards ושירותי ה-auth/http שהם טוענים).
 
 - הזמנת עובד במייל (תוספת, במקום סיסמה זמנית ביצירת עובד; האפיון 4.2 מדבר על סיסמה זמנית):
   * POST /users יוצר עובד עם `PasswordHash = null` ו-`MustChangePassword = true`, ומחזיר `UserDetailsDto` (בלי סיסמה זמנית).
@@ -153,11 +165,11 @@
     הצלחה או `invalid-invitation`. בשגיאה זמנית (רשת/429/500) נשאר, כדי לנסות שוב. משתמש מחובר ← `AuthService.signOut()`
     (ביטול בשרת וניקוי מקומי בלי ניווט; `logout()` משתמש בו). `<meta name="referrer" content="no-referrer">` רק בזמן שהמסך פתוח.
   * set-password נחשב בקשת session (`SESSION_ENDPOINTS` ב-api-request.ts): בלי Access Token ובלי refresh על 401.
-  * הודעות למסך הכניסה: `features/auth/login-notices.ts`. ב-navigation state עובר רק מפתח, והטקסט קבוע בקוד.
-  * `app-new-password-fields` (shared): סיסמה חדשה + אימות, כללי המדיניות ומחוון החוזק. יושב בתוך הטופס של ההורה
+  * הודעות למסך הכניסה: `components/auth/login-notices.ts`. ב-navigation state עובר רק מפתח, והטקסט קבוע בקוד.
+  * `app-new-password-fields` (components/shared): סיסמה חדשה + אימות, כללי המדיניות ומחוון החוזק. יושב בתוך הטופס של ההורה
     (`viewProviders` ← ControlContainer, `formControlName`). בהורה – `newPasswordControls(extraValidators)`.
     OnPush: נבדק מחדש על `control.events` ועל `ngSubmit` של ההורה, אחרת שגיאות לא מוצגות אחרי submit ריק.
-  * `app-auth-brand` (features/auth): צד המותג הכחול, ו-`.auth-split-card`/`.auth-form-side` ב-`styles/_auth.scss` – משותפים
+  * `app-auth-brand` (components/auth): צד המותג הכחול, ו-`.auth-split-card`/`.auth-form-side` ב-`styles/_auth.scss` – משותפים
     ל-login ול-set-password.
   * `app-invitation-badge`: טקסט וצבע לכל סטטוס (ממתינה accent, נשלחה primary, נוצלה success, פגה warning, נכשלה danger,
     בוטלה neutral; בלי הזמנה "—"). "שליחת הזמנה מחדש" מוצג לעובד פעיל עם `mustChangePassword` שההזמנה שלו לא נוצלה,
@@ -189,15 +201,15 @@
 
 - פניות – צד העובד ב-Frontend (משימה 3.1ב):
   * נתיבים: `/employee` (הפניות שלי), `/employee/tickets/new` (עם `unsavedChangesGuard`), `/employee/tickets/:id`.
-    ה-URL-ים ב-`features/employee/employee-urls.ts`.
-  * קבוצות סטטוס (כרטיסי מדד + כפתורי פלח) – `REQUESTER_STATUS_GROUPS` ב-`core/models/ticket.models.ts`, מקום אחד:
+    ה-URL-ים ב-`components/employee/employee-urls.ts`.
+  * קבוצות סטטוס (כרטיסי מדד + כפתורי פלח) – `REQUESTER_STATUS_GROUPS` ב-`models/ticket.models.ts`, מקום אחד:
     open = ‏New/Assigned/InProgress/Resolved (כמו `TicketStatuses.RequesterOpen`), waiting = WaitingForEmployee,
     closed = Closed + Cancelled. ב-URL ‏`?view=open|waiting|closed`, לשרת נשלח `status` חוזר.
     כרטיס "נסגרו החודש" מסנן ל-closed ומציג את כל הסגורות והמבוטלות (אין סינון תאריך בשרת).
   * `toHttpParams` שולח מערך כפרמטר חוזר (`?status=New&status=Assigned`).
   * `app-data-table`: ‏`rowClass` (מעוצב שם: `row-attention`) ו-`<ng-template appRowCard>` – ברוחב XSmall כרטיסים במקום טבלה.
     לשימוש גם בתור המטפל (3.4).
-  * `unsavedChangesGuard` + `HasUnsavedChanges` (shared/forms): confirm ביציאה עם טקסט. במסך פנייה חדשה גם `beforeunload`.
+  * `unsavedChangesGuard` + `HasUnsavedChanges` (guards/unsaved-changes.guard.ts): confirm ביציאה עם טקסט. במסך פנייה חדשה גם `beforeunload`.
     אחרי שליחה מוצלחת – בלי confirm, ומעבר לצפייה עם `replaceUrl`.
   * `app-status-badge` (צבעים `--status-*` ב-styles.scss), `statusLabel` pipe, `app-relative-time` (טקסט יחסי + tooltip ותאריך
     מלא לקורא מסך). `formatRelativeTime` כתוב ידנית בעברית (צורת זוגי) – `Intl.RelativeTimeFormat('he')` נותן "לפני שעתיים (2)".

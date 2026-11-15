@@ -2,8 +2,8 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 
-import { EmptyState } from '../../shared/components/empty-state/empty-state';
-import { PageHeader } from '../../shared/components/page-header/page-header';
+import { EmptyState } from '../../components/shared/empty-state/empty-state';
+import { PageHeader } from '../../components/shared/page-header/page-header';
 
 @Component({
   selector: 'app-not-found',

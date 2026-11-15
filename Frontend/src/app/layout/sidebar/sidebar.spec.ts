@@ -2,9 +2,9 @@ import { Component, computed, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 
-import { AuthService } from '../../core/auth/auth.service';
-import { Role } from '../../core/models/auth.models';
-import { ALL_AREAS, visibleAreas } from '../../core/navigation/app-areas';
+import { AuthService } from '../../services/auth.service';
+import { Role } from '../../models/auth.models';
+import { ALL_AREAS, visibleAreas } from '../../services/app-areas';
 import { Sidebar } from './sidebar';
 
 @Component({ template: '' })

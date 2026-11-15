@@ -1,7 +1,7 @@
 import { Route } from '@angular/router';
 
-import { roleGuard } from './core/auth/guards/auth.guards';
-import { ALL_AREAS } from './core/navigation/app-areas';
+import { roleGuard } from './guards/auth.guards';
+import { ALL_AREAS } from './services/app-areas';
 import { routes } from './app.routes';
 
 describe('app routes', () => {

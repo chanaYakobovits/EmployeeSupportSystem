@@ -1,28 +1,28 @@
 import { Routes } from '@angular/router';
 
-import { authGuard, changePasswordGuard, guestGuard, mustChangePasswordGuard } from './core/auth/guards/auth.guards';
-import { APP_AREAS, AppArea, areaRoute } from './core/navigation/app-areas';
-import { DEV_AREAS, loadDevRoutes } from './features/dev/dev-area';
+import { authGuard, changePasswordGuard, guestGuard, mustChangePasswordGuard } from './guards/auth.guards';
+import { APP_AREAS, AppArea, areaRoute } from './services/app-areas';
+import { DEV_AREAS, loadDevRoutes } from './components/dev/dev-area';
 
 const [EMPLOYEE, HANDLER, DASHBOARD, ADMIN] = APP_AREAS;
 
 const loadChangePasswordPage = () =>
-  import('./features/auth/change-password/change-password-page').then((m) => m.ChangePasswordPage);
+  import('./components/auth/change-password/change-password-page').then((m) => m.ChangePasswordPage);
 
 // Every routed screen is lazy (loadComponent / loadChildren) to keep the initial bundle small.
-// Area routes (path, roles, title) come from core/navigation/app-areas.ts – the same definition as the menu.
+// Area routes (path, roles, title) come from services/app-areas.ts – the same definition as the menu.
 export const routes: Routes = [
   // Auth screens live outside the shell (spec 7.1, 7.2).
   {
     path: 'login',
     canActivate: [guestGuard],
-    loadComponent: () => import('./features/auth/login/login-page').then((m) => m.LoginPage),
+    loadComponent: () => import('./components/auth/login/login-page').then((m) => m.LoginPage),
   },
   {
     // The invitation e-mail's link (#token=...). Open to everyone: a signed-in user is signed out by the page.
     path: 'set-password',
     title: 'קביעת סיסמה',
-    loadComponent: () => import('./features/auth/set-password/set-password-page').then((m) => m.SetPasswordPage),
+    loadComponent: () => import('./components/auth/set-password/set-password-page').then((m) => m.SetPasswordPage),
   },
   {
     // First login: mandatory, no shell, no cancel.
@@ -36,10 +36,10 @@ export const routes: Routes = [
     loadComponent: () => import('./layout/shell/shell').then((m) => m.Shell),
     children: [
       { path: '', pathMatch: 'full', redirectTo: EMPLOYEE.path },
-      areaRoute(EMPLOYEE, () => import('./features/employee/employee.routes').then((m) => m.EMPLOYEE_ROUTES)),
-      areaRoute(HANDLER, () => import('./features/handler/handler.routes').then((m) => m.HANDLER_ROUTES)),
-      areaRoute(DASHBOARD, () => import('./features/dashboard/dashboard.routes').then((m) => m.DASHBOARD_ROUTES)),
-      areaRoute(ADMIN, () => import('./features/admin/admin.routes').then((m) => m.ADMIN_ROUTES)),
+      areaRoute(EMPLOYEE, () => import('./components/employee/employee.routes').then((m) => m.EMPLOYEE_ROUTES)),
+      areaRoute(HANDLER, () => import('./components/handler/handler.routes').then((m) => m.HANDLER_ROUTES)),
+      areaRoute(DASHBOARD, () => import('./components/dashboard/dashboard.routes').then((m) => m.DASHBOARD_ROUTES)),
+      areaRoute(ADMIN, () => import('./components/admin/admin.routes').then((m) => m.ADMIN_ROUTES)),
       // Development-only area; DEV_AREAS is empty in the production build.
       ...DEV_AREAS.map((area: AppArea) => areaRoute(area, loadDevRoutes)),
       {
