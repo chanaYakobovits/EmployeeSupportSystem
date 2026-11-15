@@ -1,0 +1,63 @@
+<ol class="timeline">
+  @for (item of items(); track trackKey(item)) {
+    @if (item.kind === 'status') {
+      <li class="entry entry-status" [class.opening]="item.previousStatus === null">
+        <span class="marker" aria-hidden="true">
+          <mat-icon>{{ item.previousStatus === null ? 'flag' : 'sync_alt' }}</mat-icon>
+        </span>
+        <div class="content">
+          <p class="what">
+            @if (item.previousStatus === null) {
+              הפנייה נפתחה
+            } @else {
+              הסטטוס שונה ל-<app-status-badge [status]="item.newStatus" />
+            }
+          </p>
+          <p class="meta">
+            <span>{{ item.changedByName ?? 'מערכת' }}</span>
+            <span aria-hidden="true">·</span>
+            <app-relative-time [value]="item.at" />
+          </p>
+        </div>
+      </li>
+    } @else if (item.kind === 'comment') {
+      <li class="entry entry-comment" [class.from-me]="item.isFromRequester" [class.from-staff]="!item.isFromRequester">
+        <span class="marker" aria-hidden="true">
+          <mat-icon>{{ item.isResolution ? 'task_alt' : 'chat_bubble_outline' }}</mat-icon>
+        </span>
+        <article class="bubble">
+          <header class="bubble-header">
+            <span class="visually-hidden">{{ item.isFromRequester ? 'תגובה שלך' : 'תגובה מ-' + item.authorName }}</span>
+            <span class="author" aria-hidden="true">{{ item.authorName }}</span>
+            @if (item.isResolution) {
+              <span class="resolution-tag">פתרון</span>
+            }
+            <app-relative-time class="meta" [value]="item.at" />
+          </header>
+          <!-- Plain text only: interpolation, white-space: pre-wrap. -->
+          <p class="body" dir="auto">{{ item.body }}</p>
+          @if (item.attachments.length > 0) {
+            <ul class="attachments" aria-label="קבצים מצורפים לתגובה">
+              @for (attachment of item.attachments; track attachment.id) {
+                <li><app-attachment-chip [ticketId]="ticketId()" [attachment]="attachment" /></li>
+              }
+            </ul>
+          }
+        </article>
+      </li>
+    } @else {
+      <li class="entry entry-attachment">
+        <span class="marker" aria-hidden="true">
+          <mat-icon>attach_file</mat-icon>
+        </span>
+        <div class="content">
+          <p class="what">{{ item.attachment.uploadedByName }} צירף/ה קובץ</p>
+          <app-attachment-chip class="file" [ticketId]="ticketId()" [attachment]="item.attachment" />
+          <p class="meta">
+            <app-relative-time [value]="item.at" />
+          </p>
+        </div>
+      </li>
+    }
+  }
+</ol>

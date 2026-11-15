@@ -1,0 +1,182 @@
+:host {
+  display: block;
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.label {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.drop-zone {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px 12px;
+  padding: 18px 16px;
+  border: 2px dashed var(--border);
+  border-radius: var(--radius-field);
+  background: var(--bg-page);
+  text-align: center;
+  transition:
+    border-color var(--transition),
+    background-color var(--transition);
+
+  &.dragging {
+    border-color: var(--primary);
+    background: var(--primary-soft);
+  }
+
+  &.disabled {
+    opacity: 0.6;
+  }
+}
+
+.drop-icon {
+  color: var(--primary);
+}
+
+.drop-text {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.choose-button {
+  border-radius: var(--radius-field);
+}
+
+.hint {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.count {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.files {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.file {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 4px 4px 4px 0;
+  padding-inline-start: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-field);
+  background: var(--surface);
+}
+
+.file-icon {
+  flex-shrink: 0;
+  color: var(--primary);
+}
+
+.file-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-size {
+  flex-shrink: 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.messages:empty {
+  display: none;
+}
+
+.message {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-field);
+  font-size: 14px;
+  line-height: 1.5;
+
+  mat-icon {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    font-size: 20px;
+  }
+
+  ul {
+    margin: 4px 0 0;
+    padding-inline-start: 18px;
+  }
+
+  p {
+    margin: 0;
+  }
+}
+
+.server-error,
+.rejections {
+  border: 1px solid var(--error-border);
+  background: var(--error-bg);
+  color: var(--error-text);
+}
+
+.rejections-title {
+  font-weight: 600;
+}
+
+.full-notice {
+  background: var(--primary-soft);
+  color: var(--primary-dark);
+}
+
+.server-error + .rejections,
+.rejections + .full-notice {
+  margin-top: 8px;
+}
+
+@media (max-width: 767.98px) {
+  // Touch screens: no dragging; a full-width button that is easy to tap.
+  .drop-text,
+  .drop-icon {
+    display: none;
+  }
+
+  .drop-zone {
+    padding: 12px;
+  }
+
+  .choose-button {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  .remove-button {
+    width: 44px;
+    height: 44px;
+  }
+}

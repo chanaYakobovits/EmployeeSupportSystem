@@ -1,0 +1,10 @@
+<button type="button" class="chip" [disabled]="downloading()" [attr.aria-label]="ariaLabel()" (click)="download()">
+  @if (downloading()) {
+    <mat-spinner diameter="18" aria-hidden="true" />
+  } @else {
+    <mat-icon class="chip-icon" aria-hidden="true">{{ icon() }}</mat-icon>
+  }
+  <span class="chip-name" dir="auto" [title]="attachment().fileName">{{ attachment().fileName }}</span>
+  <span class="chip-size" dir="ltr">{{ attachment().sizeBytes | fileSize }}</span>
+  <mat-icon class="chip-download" aria-hidden="true">download</mat-icon>
+</button>

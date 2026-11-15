@@ -1,0 +1,70 @@
+:host {
+  display: block;
+}
+
+.reply-card {
+  padding: 24px;
+}
+
+.card-title {
+  margin: 0 0 16px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.waiting-banner {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--warning-border);
+  border-inline-start-width: 4px;
+  border-radius: var(--radius-field);
+  background: var(--warning-soft);
+  color: var(--warning-text);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.5;
+
+  mat-icon {
+    flex-shrink: 0;
+  }
+}
+
+.reply-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.field {
+  width: 100%;
+}
+
+.counter {
+  white-space: nowrap;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+
+  mat-spinner {
+    display: inline-block;
+    margin-inline-end: 8px;
+    --mat-progress-spinner-active-indicator-color: currentColor;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .reply-card {
+    padding: 16px;
+  }
+
+  .submit-button {
+    width: 100%;
+    min-height: 44px;
+  }
+}

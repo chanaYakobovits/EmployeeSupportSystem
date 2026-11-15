@@ -19,6 +19,8 @@ export const EMPLOYEE_ROUTES: Routes = [
     // :id is bound to TicketViewPage's id input (withComponentInputBinding).
     path: 'tickets/:id',
     title: 'צפייה בפנייה',
+    // A reply typed or files chosen and not sent.
+    canDeactivate: [unsavedChangesGuard],
     loadComponent: () => import('./ticket-view/ticket-view-page').then((m) => m.TicketViewPage),
   },
 ];

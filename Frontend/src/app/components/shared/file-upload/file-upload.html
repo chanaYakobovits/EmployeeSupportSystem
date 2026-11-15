@@ -1,0 +1,105 @@
+<div class="group" role="group" [attr.aria-labelledby]="id + '-label'">
+  <p class="label" [id]="id + '-label'">{{ label() }}</p>
+
+  <!-- Dropping is an extra: everything can be done with the button (keyboard, spec 11.6). -->
+  <div
+    class="drop-zone"
+    [class.dragging]="dragging()"
+    [class.disabled]="disabled()"
+    (dragenter)="onDragOver($event)"
+    (dragover)="onDragOver($event)"
+    (dragleave)="onDragLeave($event)"
+    (drop)="onDrop($event)"
+  >
+    <mat-icon class="drop-icon" aria-hidden="true">upload_file</mat-icon>
+    <span class="drop-text" aria-hidden="true">גוררים קבצים לכאן, או</span>
+    <button
+      #chooseButton
+      mat-stroked-button
+      type="button"
+      class="choose-button"
+      [disabled]="disabled()"
+      [attr.aria-describedby]="id + '-hint ' + id + '-count'"
+      (click)="openPicker()"
+    >
+      <mat-icon aria-hidden="true">attach_file</mat-icon>
+      בחירת קבצים
+    </button>
+    <p class="hint" [id]="id + '-hint'">עד {{ maxFiles }} קבצים, עד 5MB כל אחד: PDF, JPG, PNG, DOCX</p>
+    <input
+      #fileInput
+      type="file"
+      multiple
+      class="visually-hidden"
+      tabindex="-1"
+      aria-hidden="true"
+      [accept]="accept"
+      [disabled]="disabled()"
+      (change)="onPicked()"
+    />
+  </div>
+
+  <p class="count" [id]="id + '-count'">
+    @if (files().length === 0) {
+      לא נבחרו קבצים
+    } @else if (full()) {
+      נבחרו {{ maxFiles }} קבצים – המקסימום
+    } @else {
+      נבחרו {{ files().length }} מתוך {{ maxFiles }} קבצים
+    }
+  </p>
+
+  @if (files().length > 0) {
+    <ul class="files" aria-label="קבצים שנבחרו">
+      @for (file of files(); track file) {
+        <li class="file">
+          <mat-icon class="file-icon" aria-hidden="true">{{ icon(file) }}</mat-icon>
+          <span class="file-name" dir="auto" [title]="file.name">{{ file.name }}</span>
+          <span class="file-size" dir="ltr">{{ file.size | fileSize }}</span>
+          <button
+            #removeButton
+            mat-icon-button
+            type="button"
+            class="remove-button"
+            [disabled]="disabled()"
+            [attr.aria-label]="'הסרת הקובץ ' + file.name"
+            (click)="remove($index)"
+          >
+            <mat-icon aria-hidden="true">close</mat-icon>
+          </button>
+        </li>
+      }
+    </ul>
+  }
+
+  <!-- Always in the DOM, so screen readers announce what is added to it. -->
+  <div class="messages" aria-live="assertive" aria-atomic="true">
+    @if (serverError(); as error) {
+      <p class="message server-error">
+        <mat-icon aria-hidden="true">error</mat-icon>
+        <span>{{ error }}</span>
+      </p>
+    }
+    @if (rejected().length > 0) {
+      <div class="message rejections">
+        <mat-icon aria-hidden="true">error</mat-icon>
+        <div>
+          <p class="rejections-title">
+            {{ rejected().length === 1 ? 'הקובץ הבא לא צורף:' : 'הקבצים הבאים לא צורפו:' }}
+          </p>
+          <ul>
+            @for (item of rejected(); track $index) {
+              <li><bdi>{{ item.fileName }}</bdi> – {{ item.reason }}</li>
+            }
+          </ul>
+        </div>
+      </div>
+    }
+    @if (fullNotice()) {
+      <p class="message full-notice">
+        <mat-icon aria-hidden="true">info</mat-icon>
+        <span>כבר נבחרו {{ maxFiles }} קבצים. כדי לצרף קובץ אחר יש להסיר אחד מהם.</span>
+      </p>
+    }
+  </div>
+</div>

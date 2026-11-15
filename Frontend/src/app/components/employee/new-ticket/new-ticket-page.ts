@@ -9,6 +9,7 @@ import {
   computed,
   inject,
   signal,
+  viewChild,
 } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { AbstractControl, FormControl, FormGroup, ReactiveFormsModule, ValidationErrors, Validators } from '@angular/forms';
@@ -24,19 +25,21 @@ import { toUserMessage } from '../../../interceptors/error.interceptor';
 import { isProblemDetails } from '../../../models/problem-details';
 import { TICKET_FIELD_LIMITS } from '../../../models/ticket.models';
 import { NotificationService } from '../../../services/notification.service';
+import { FileUpload } from '../../shared/file-upload/file-upload';
 import { FormAlert, FormAlertBox } from '../../shared/form-alert/form-alert';
 import { PageHeader } from '../../shared/page-header/page-header';
-import { applyServerErrors, clearServerErrors } from '../../../services/server-errors';
-import { HasUnsavedChanges } from '../../../guards/unsaved-changes.guard';
+import {
+  FILES_FIELD,
+  applyServerErrors,
+  attachmentServerError,
+  clearServerErrors,
+} from '../../../services/server-errors';
+import { HasUnsavedChanges, unsavedMessage } from '../../../guards/unsaved-changes.guard';
+import { COUNTER_ANNOUNCE_DELAY_MS, describeCount, formatCount } from '../character-count';
 import { MY_TICKETS_URL, ticketUrl } from '../employee-urls';
 import { NewTicketStore } from '../../../services/new-ticket.store';
 
 const { subjectMaxLength, descriptionMinLength, descriptionMaxLength } = TICKET_FIELD_LIMITS;
-
-/** Wait this long after the last keystroke before announcing the character count to screen readers. */
-export const COUNTER_ANNOUNCE_DELAY_MS = 800;
-
-const NUMBER = new Intl.NumberFormat('he-IL');
 
 /** Required, and not only spaces. */
 function requiredText(control: AbstractControl<string>): ValidationErrors | null {
@@ -55,8 +58,8 @@ function minTrimmedLength(min: number) {
 const FIELD_ORDER = ['subject', 'description'] as const;
 
 /**
- * "פנייה חדשה" (spec 7.4): optional subject, required free-text description. Saved immediately; classification and
- * routing run in the background. Attachments come in task 3.2.
+ * "פנייה חדשה" (spec 7.4): optional subject, required free-text description, up to 3 files. Saved immediately;
+ * classification and routing run in the background (the files are never sent to the AI).
  */
 @Component({
   selector: 'app-new-ticket-page',
@@ -70,6 +73,7 @@ const FIELD_ORDER = ['subject', 'description'] as const;
     MatProgressSpinnerModule,
     PageHeader,
     FormAlertBox,
+    FileUpload,
   ],
   providers: [NewTicketStore],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -84,10 +88,11 @@ export class NewTicketPage implements HasUnsavedChanges {
   private readonly destroyRef = inject(DestroyRef);
   private readonly injector = inject(Injector);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly fileUpload = viewChild.required(FileUpload);
 
   protected readonly myTicketsUrl = MY_TICKETS_URL;
   protected readonly limits = TICKET_FIELD_LIMITS;
-  protected readonly descriptionMaxText = NUMBER.format(descriptionMaxLength);
+  protected readonly descriptionMaxText = formatCount(descriptionMaxLength);
 
   protected readonly form = new FormGroup({
     subject: new FormControl('', { nonNullable: true, validators: [Validators.maxLength(subjectMaxLength)] }),
@@ -95,9 +100,12 @@ export class NewTicketPage implements HasUnsavedChanges {
       nonNullable: true,
       validators: [requiredText, minTrimmedLength(descriptionMinLength), Validators.maxLength(descriptionMaxLength)],
     }),
+    files: new FormControl<File[]>([], { nonNullable: true }),
   });
 
   protected readonly alert = signal<FormAlert | null>(null);
+  /** The server's error about the files (400 files / files[i], 413), next to the file picker. */
+  protected readonly filesError = signal<string | null>(null);
   /** Sent successfully: leaving no longer asks for confirmation. */
   private submitted = false;
 
@@ -110,17 +118,33 @@ export class NewTicketPage implements HasUnsavedChanges {
   protected readonly counterAnnouncement = toSignal(
     this.form.controls.description.valueChanges.pipe(
       debounceTime(COUNTER_ANNOUNCE_DELAY_MS),
-      map((value) => describeCount(value.trim().length, value.length)),
+      map((value) => describeCount(value, { min: descriptionMinLength, max: descriptionMaxLength })),
     ),
     { initialValue: '' },
   );
 
+  constructor() {
+    // The server's error is about the files that were sent: a new choice clears it.
+    this.form.controls.files.valueChanges
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.filesError.set(null));
+  }
+
   hasUnsavedChanges(): boolean {
-    if (this.submitted) {
-      return false;
-    }
+    return !this.submitted && (this.hasText() || this.hasFiles());
+  }
+
+  unsavedChangesMessage(): string {
+    return unsavedMessage(this.hasText(), this.hasFiles());
+  }
+
+  private hasText(): boolean {
     const { subject, description } = this.form.getRawValue();
     return subject.trim() !== '' || description.trim() !== '';
+  }
+
+  private hasFiles(): boolean {
+    return this.form.controls.files.value.length > 0;
   }
 
   /** Refresh / closing the tab with text typed: the browser's own "leave site?" prompt. */
@@ -136,6 +160,7 @@ export class NewTicketPage implements HasUnsavedChanges {
       return;
     }
     this.alert.set(null);
+    this.filesError.set(null);
     clearServerErrors(this.form);
     if (this.form.invalid) {
       this.form.markAllAsTouched();
@@ -143,9 +168,9 @@ export class NewTicketPage implements HasUnsavedChanges {
       return;
     }
 
-    const { subject, description } = this.form.getRawValue();
+    const { subject, description, files } = this.form.getRawValue();
     this.store
-      .create({ subject: subject.trim() || null, description: description.trim() })
+      .create({ subject: subject.trim() || null, description: description.trim(), files })
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (created) => {
@@ -154,15 +179,24 @@ export class NewTicketPage implements HasUnsavedChanges {
           // replaceUrl: "back" from the ticket goes to the list, not to an empty form.
           void this.router.navigateByUrl(ticketUrl(created.id), { replaceUrl: true });
         },
-        error: (error: unknown) => this.showError(error),
+        error: (error: unknown) => this.showError(error, files),
       });
   }
 
-  /** 400 next to the fields; anything else (429 – too many tickets, network, 500) above the form. */
-  private showError(error: unknown): void {
-    const applied = applyServerErrors(this.form, error);
-    if (applied.fields.length > 0 && applied.unmatched.length === 0) {
-      this.focusField(applied.fields[0]);
+  /**
+   * 400 next to the fields, errors about the files (400, 413) next to the file picker; anything else
+   * (429 – too many tickets, network, 500) above the form.
+   */
+  private showError(error: unknown, files: readonly File[]): void {
+    const filesError = attachmentServerError(error, files);
+    this.filesError.set(filesError);
+    const applied = applyServerErrors(this.form, error, { skipFields: [FILES_FIELD] });
+    if (applied.unmatched.length === 0 && (filesError || applied.fields.length > 0)) {
+      if (applied.fields.length > 0) {
+        this.focusField(applied.fields[0]);
+      } else {
+        this.fileUpload().focus();
+      }
       return;
     }
     const httpError = error instanceof HttpErrorResponse ? error : new HttpErrorResponse({ status: 500 });
@@ -188,20 +222,4 @@ export class NewTicketPage implements HasUnsavedChanges {
       { injector: this.injector },
     );
   }
-}
-
-/** "נותרו 3,950 תווים" / "נדרשים עוד 4 תווים לפחות". */
-function describeCount(trimmedLength: number, length: number): string {
-  if (length === 0) {
-    return '';
-  }
-  if (trimmedLength < descriptionMinLength) {
-    const missing = descriptionMinLength - trimmedLength;
-    return missing === 1 ? 'נדרש עוד תו אחד לפחות' : `נדרשים עוד ${missing} תווים לפחות`;
-  }
-  const remaining = descriptionMaxLength - length;
-  if (remaining <= 0) {
-    return 'הגעת למספר התווים המרבי';
-  }
-  return remaining === 1 ? 'נותר תו אחד' : `נותרו ${NUMBER.format(remaining)} תווים`;
 }

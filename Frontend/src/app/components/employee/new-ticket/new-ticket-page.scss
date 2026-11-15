@@ -60,9 +60,8 @@
   white-space: nowrap;
 }
 
-// Task 3.2 puts the file picker here; empty for now.
-.attachments-slot:empty {
-  display: none;
+.attachments {
+  margin-top: 4px;
 }
 
 .form-actions {

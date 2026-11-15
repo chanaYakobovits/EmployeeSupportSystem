@@ -40,8 +40,19 @@
 
           <section class="surface-card card" aria-labelledby="timeline-title">
             <h2 id="timeline-title" class="card-title">מה קרה עם הפנייה</h2>
-            <app-ticket-timeline [items]="ticket.timeline" />
+            @if (store.history(); as history) {
+              <app-timeline [ticketId]="ticket.id" [items]="history.items" />
+            }
           </section>
+
+          @if (store.canReply()) {
+            <app-ticket-reply [waiting]="ticket.status === 'WaitingForEmployee'" />
+          } @else {
+            <p class="surface-card card closed-note" role="status">
+              <mat-icon aria-hidden="true">lock</mat-icon>
+              <span>הפנייה סגורה ולא ניתן להוסיף תגובות</span>
+            </p>
+          }
         </div>
 
         <aside class="surface-card card details" aria-labelledby="details-title">

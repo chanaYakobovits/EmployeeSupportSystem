@@ -1,3 +1,4 @@
+import { TicketAttachment } from './attachment.models';
 import { PageQuery } from './paging.models';
 
 /** Ticket handling status (spec 3.2, Backend Common.Enums.TicketStatus), in workflow order. */
@@ -27,10 +28,22 @@ export const TICKET_FIELD_LIMITS = {
   descriptionMaxLength: 4000,
 } as const;
 
+/** Limits of a comment – same value as the server's CommentFieldLimits (counted after trimming). */
+export const COMMENT_FIELD_LIMITS = {
+  bodyMaxLength: 4000,
+} as const;
+
 /** POST /api/tickets. No requester or department: the server takes them from the signed-in user. */
 export interface CreateTicketRequest {
   subject: string | null;
   description: string;
+  /** Up to 3 files (ATTACHMENT_LIMITS), already checked by validateFiles. */
+  files: readonly File[];
+}
+
+/** Response of POST /api/tickets/{id}/comments. */
+export interface CommentCreated {
+  id: number;
 }
 
 /** Response of POST /api/tickets: the ticket number. */
@@ -82,8 +95,55 @@ export interface RequesterTicketDetails {
   updatedAt: string;
   resolvedAt: string | null;
   closedAt: string | null;
+  /** Status changes only (task 3.1). The ticket view shows GET /history instead. */
   timeline: RequesterTicketHistoryItem[];
 }
+
+/** A status change in the timeline of GET /history. No reason (it may be internal). */
+export interface RequesterTimelineStatus {
+  kind: 'status';
+  at: string;
+  /** Null for the opening entry. */
+  previousStatus: TicketStatus | null;
+  newStatus: TicketStatus;
+  /** Null when the system made the change. */
+  changedByName: string | null;
+}
+
+/** A comment visible to the requester, with its files. */
+export interface RequesterTimelineComment {
+  kind: 'comment';
+  at: string;
+  id: number;
+  authorName: string;
+  /** Written by the requester – shown on their side of the conversation. */
+  isFromRequester: boolean;
+  body: string;
+  /** The handler's resolution reply (task 3.5). */
+  isResolution: boolean;
+  attachments: TicketAttachment[];
+}
+
+/** A file attached without a comment (including the files of the new-ticket form). */
+export interface RequesterTimelineAttachment {
+  kind: 'attachment';
+  at: string;
+  attachment: TicketAttachment;
+}
+
+export type RequesterTimelineItem = RequesterTimelineStatus | RequesterTimelineComment | RequesterTimelineAttachment;
+
+/**
+ * GET /api/tickets/{id}/history for the requester (Backend RequesterTicketHistoryDto): oldest first. Internal notes and
+ * reasons are left out by the server – the client shows whatever it gets.
+ */
+export interface RequesterTicketHistory {
+  ticketId: number;
+  items: RequesterTimelineItem[];
+}
+
+/** No comments or files can be added (the server answers 422 ticket-closed). */
+export const CLOSED_TICKET_STATUSES: readonly TicketStatus[] = ['Closed', 'Cancelled'];
 
 /** Closed list of sortBy values of GET /api/tickets/my (Backend MyTicketSortFields). */
 export const MY_TICKET_SORT_FIELDS = ['createdAt', 'updatedAt', 'status'] as const;

@@ -61,8 +61,7 @@
   </mat-form-field>
   <p class="visually-hidden" aria-live="polite" aria-atomic="true">{{ counterAnnouncement() }}</p>
 
-  <!-- Reserved for attachments (task 3.2: up to 3 files, 5MB each). -->
-  <section class="attachments-slot" aria-hidden="true"></section>
+  <app-file-upload class="attachments" formControlName="files" [serverError]="filesError()" [busy]="store.saving()" />
 
   <div class="form-actions">
     <a mat-button [routerLink]="myTicketsUrl">ביטול</a>

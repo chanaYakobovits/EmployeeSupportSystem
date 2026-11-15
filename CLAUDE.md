@@ -8,10 +8,10 @@
 - הושלמו: 1.1–1.5 (תשתית), 4.1 PiiRedactor, 4.2 לקוח OpenAI (נבנו מוקדם, לפני שלב ב'),
   2.1 אימות, 2.2 מסכי התחברות, 2.3א API לניהול עובדים ומחלקות, 2.3ב מסכי ניהול עובדים ומחלקות,
   2.4 ניהול קטגוריות ו-SLA (API + מסכים), 3.1 חלק א' (API ליצירת פנייה וצפייה של עובד),
-  3.1 חלק ב' (מסכי "הפניות שלי", "פנייה חדשה", "צפייה בפנייה" ב-Angular), 3.2 חלק א' (API לקבצים ותגובות).
+  3.1 חלק ב' (מסכי "הפניות שלי", "פנייה חדשה", "צפייה בפנייה" ב-Angular), 3.2 חלק א' (API לקבצים ותגובות),
+  3.2 חלק ב' (קבצים ותגובות במסכי העובד ב-Angular).
 - שינוי מבנה Frontend (לא באפיון): `src/app` עבר ממבנה core/features/shared למבנה לפי סוג קובץ – הושלם.
-- הבא בתור: 3.2 חלק ב' – מסכי קבצים ותגובות ב-Angular. **קודם כל**: `TicketsApiService.create` עדיין שולח JSON,
-  והשרת מחזיר עליו 415 – לעבור ל-FormData.
+- הבא בתור: 3.3 – ניתוב ו-SLA.
 - תוספת שלא באפיון: בדיקת איכות סיווג AI על 30 פניות לדוגמה – אחרי משימה 4.3.
 - תוספת שלא באפיון: הזמנת עובד במייל (האפיון 14 שאלה 3, "בעתיד"). שלב א' (שרת) ושלב ב' (מסך set-password, סטטוס הזמנה
   ברשימה ובעריכה, שליחה מחדש, סינון לפי סטטוס הזמנה) – הושלמו.
@@ -246,6 +246,25 @@
   * GET /tickets/{id} עובר דרך TicketAccess. גם איש צוות מקבל כרגע את ה-DTO של הפונה (תצוגת צוות – 3.4).
   * Seeder: מרוקן את תיקיית הקבצים (רק שמות GUID) ומצרף PNG/PDF לכ-10% מהפניות (`SampleAttachments`, בלי ה-Random של
     הפניות). דוגמאות ל-API.http ב-`API/HttpSamples`. פנייה 149 של נועה מטופלת ע"י עדי שמעוני, 49 סגורה.
+
+- קבצים ותגובות – צד העובד ב-Frontend (משימה 3.2ב):
+  * מגבלות בלקוח – `models/attachment.models.ts` (`ATTACHMENT_LIMITS`, סיומות, `accept`) ו-`COMMENT_FIELD_LIMITS`, אותם ערכים
+    כמו בשרת. `validateFiles` (services/attachment-validation.ts): ריק ← גודל ← סיומת ← כפילות ← מעל 3, בנוסח הודעות השרת.
+    בדיקת התוכן רק בשרת.
+  * `app-file-upload` (components/shared): ControlValueAccessor עם ערך `File[]`, כפתור בחירה (מקלדת) + גרירה, דחיות
+    באזור `aria-live` קבוע. `serverError` לשגיאת שרת, `busy` נועל בזמן שליחה **בלי** disable לטופס (enable מריץ את
+    ה-validators מחדש ומוחק שגיאות שרת). שגיאות שרת על קבצים: `attachmentServerError` (400 `files`/`files[i]` עם שם הקובץ, 413),
+    ו-`applyServerErrors(..., { skipFields: ['files'] })` כדי שלא יוצגו פעמיים.
+  * `app-timeline` (components/shared) – הציר היחיד של פנייה (status / comment / attachment מ-GET /history), החליף את
+    `ticket-timeline` של 3.1. מציג מה שהשרת החזיר, בלי סינון. מיועד גם לתצוגת הצוות ב-3.4 (יקבל אז גם הערות פנימיות).
+  * `app-attachment-chip` + `AttachmentDownloadService`: הורדה ב-HttpClient כ-blob (Bearer), שם מ-`filename*` ואז `filename`
+    (`fileNameFromContentDisposition`), Object URL משוחרר מיד אחרי ה-click. 404 ← "הקובץ לא נמצא או שאין לך גישה אליו" (toast).
+  * תגובה: טקסט (עם/בלי קבצים) ← POST /comments; קבצים בלי טקסט ← POST /attachments; בלי שניהם ← שגיאה מקומית, לא נשלח.
+    `TicketViewStore.sendReply` מסתיים רק אחרי טעינה מחדש של הפנייה וה-history (התגובה כבר בציר כשהשדות מתאפסים).
+    Closed/Cancelled או 422 `ticket-closed` ← "הפנייה סגורה ולא ניתן להוסיף תגובות" במקום אזור התגובה. 409 ← הודעה + טעינה מחדש.
+  * `HasUnsavedChanges.unsavedChangesMessage?()` + `unsavedMessage(hasText, hasFiles)`: נוסח ה-confirm לטקסט / קבצים / שניהם.
+    הנתיב `tickets/:id` מוגן ב-`unsavedChangesGuard` + `beforeunload`.
+  * מונה תווים משותף: `components/employee/character-count.ts` (`describeCount`, `COUNTER_ANNOUNCE_DELAY_MS`).
 
 ## בהמשך
 - משימה 2.2: לטעון את Shell ב-loadComponent (lazy), מסך ההתחברות מחוצה לו –

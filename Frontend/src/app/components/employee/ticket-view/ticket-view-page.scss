@@ -105,6 +105,20 @@
   }
 }
 
+.closed-note {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin: 0;
+  background: var(--bg-page);
+  color: var(--text-secondary);
+  font-size: 15px;
+
+  mat-icon {
+    flex-shrink: 0;
+  }
+}
+
 .muted {
   color: var(--text-secondary);
 }

@@ -1,0 +1,167 @@
+:host {
+  display: block;
+}
+
+.timeline {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.entry {
+  position: relative;
+  display: flex;
+  gap: 12px;
+  padding-bottom: 18px;
+
+  // The line that joins the markers.
+  &:not(:last-child)::before {
+    content: '';
+    position: absolute;
+    inset-inline-start: 15px;
+    top: 32px;
+    bottom: 0;
+    width: 2px;
+    background: var(--border);
+  }
+
+  &:last-child {
+    padding-bottom: 0;
+  }
+}
+
+.marker {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--primary-soft);
+  color: var(--primary);
+
+  mat-icon {
+    width: 18px;
+    height: 18px;
+    font-size: 18px;
+  }
+
+  .opening &,
+  .from-staff & {
+    background: var(--accent-soft);
+    color: var(--accent-text);
+  }
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+  padding-top: 4px;
+}
+
+.what {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.file {
+  max-width: 100%;
+}
+
+// ----- Comments: the employee's on the start side, the handler's offset to the other side. -----
+
+.bubble {
+  flex: 1;
+  min-width: 0;
+  max-width: 640px;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+
+  .from-me & {
+    margin-inline-end: 40px;
+    border-color: transparent;
+    background: var(--primary-soft);
+  }
+
+  .from-staff & {
+    margin-inline-start: 40px;
+    border-inline-start: 3px solid var(--accent);
+    background: var(--surface);
+  }
+}
+
+.bubble-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.author {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.resolution-tag {
+  padding: 0 10px;
+  border-radius: 20px;
+  background: var(--success-soft);
+  color: var(--success-text);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.body {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+
+  li {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 599.98px) {
+  // Narrow: every bubble full width; only the colour tells who wrote it.
+  .from-me .bubble,
+  .from-staff .bubble {
+    max-width: none;
+    margin-inline: 0;
+  }
+
+  .bubble {
+    padding: 10px 12px;
+  }
+}

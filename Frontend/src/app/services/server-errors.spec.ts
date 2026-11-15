@@ -1,7 +1,8 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { FormControl, FormGroup, Validators } from '@angular/forms';
 
-import { applyServerErrors, clearServerErrors } from './server-errors';
+import { fakeFile } from '../components/employee/testing/ticket-fixtures';
+import { applyServerErrors, attachmentServerError, clearServerErrors } from './server-errors';
 
 function problem(status: number, body: Record<string, unknown>): HttpErrorResponse {
   return new HttpErrorResponse({ status, error: { status, title: 'הבקשה אינה תקינה', ...body } });
@@ -97,5 +98,47 @@ describe('applyServerErrors', () => {
     clearServerErrors(form);
     expect(form.controls.firstName.hasError('server')).toBeFalse();
     expect(form.controls.firstName.hasError('required')).toBeTrue();
+  });
+});
+
+describe('applyServerErrors – skipFields', () => {
+  it('neither applies nor returns the messages of a skipped field', () => {
+    const form = new FormGroup({ body: new FormControl('', { nonNullable: true }), files: new FormControl([]) });
+    const result = applyServerErrors(
+      form,
+      problem(400, { errors: { body: ['יש לכתוב את התגובה'], 'files[0]': ['הקובץ ריק'], files: ['ניתן לצרף עד 3 קבצים'] } }),
+      { skipFields: ['files'] },
+    );
+    expect(result.fields).toEqual(['body']);
+    expect(result.unmatched).toEqual([]);
+    expect(form.controls.files.errors).toBeNull();
+  });
+});
+
+describe('attachmentServerError', () => {
+  const files = [fakeFile('תלוש.pdf'), fakeFile('צילום.png')];
+
+  it('400 files[i]: the message with the name of that file', () => {
+    const error = problem(400, { errors: { 'files[1]': ['תוכן הקובץ אינו תואם לסוג הקובץ'] } });
+    expect(attachmentServerError(error, files)).toBe('צילום.png: תוכן הקובץ אינו תואם לסוג הקובץ');
+  });
+
+  it('400 files: the message alone', () => {
+    const error = problem(400, { errors: { files: ['ניתן לצרף עד 3 קבצים'], description: ['x'] } });
+    expect(attachmentServerError(error, files)).toBe('ניתן לצרף עד 3 קבצים');
+  });
+
+  it('413: the title and the explanation', () => {
+    const error = problem(413, { title: 'גודל הבקשה חורג מהמותר', detail: 'ניתן לצרף עד 3 קבצים, עד 5MB כל אחד.' });
+    expect(attachmentServerError(error, files)).toBe('גודל הבקשה חורג מהמותר. ניתן לצרף עד 3 קבצים, עד 5MB כל אחד.');
+  });
+
+  it('413 without a body (e.g. from a proxy)', () => {
+    expect(attachmentServerError(new HttpErrorResponse({ status: 413 }), files)).toBe('גודל הבקשה חורג מהמותר');
+  });
+
+  it('nothing about the files → null', () => {
+    expect(attachmentServerError(problem(400, { errors: { body: ['x'] } }), files)).toBeNull();
+    expect(attachmentServerError(new HttpErrorResponse({ status: 500 }), files)).toBeNull();
   });
 });
