@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Common.Enums;
 
 namespace Common.DTOs.Tickets;
@@ -52,3 +53,62 @@ public sealed record RequesterTicketHistoryItemDto(
     TicketStatus NewStatus,
     DateTime ChangedAt,
     string? ChangedByName);
+
+// ===================== Conversation and timeline (task 3.2) =====================
+
+/// <summary>
+/// An attached file as listed in a timeline (requester and staff alike: no internal field). The original name comes from
+/// the database, sanitized on upload; the content is downloaded through GET /api/tickets/{id}/attachments/{attId}.
+/// </summary>
+/// <param name="ContentType">The type detected from the content on upload, not the one the client sent.</param>
+public sealed record TicketAttachmentDto(
+    int Id,
+    string FileName,
+    string ContentType,
+    int SizeBytes,
+    string UploadedByName,
+    DateTime CreatedAt);
+
+/// <summary>
+/// GET /api/tickets/{id}/history for the requester: status changes, comments and attachments in order. Internal notes,
+/// their files and status-change reasons are left out by the queries themselves, not by the client.
+/// </summary>
+public sealed record RequesterTicketHistoryDto(int TicketId, IReadOnlyList<RequesterTimelineItemDto> Items)
+    : ITicketHistoryDto;
+
+/// <summary>GET /api/tickets/{id}/history: <see cref="RequesterTicketHistoryDto"/> or <see cref="StaffTicketHistoryDto"/>.</summary>
+public interface ITicketHistoryDto
+{
+    int TicketId { get; }
+}
+
+/// <summary>One entry of the requester's timeline. The JSON has a "kind" discriminator: status / comment / attachment.</summary>
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "kind")]
+[JsonDerivedType(typeof(RequesterTimelineStatusDto), "status")]
+[JsonDerivedType(typeof(RequesterTimelineCommentDto), "comment")]
+[JsonDerivedType(typeof(RequesterTimelineAttachmentDto), "attachment")]
+public abstract record RequesterTimelineItemDto(DateTime At);
+
+/// <summary>A status change. The reason is not included (it may be internal).</summary>
+/// <param name="ChangedByName">Null when the system made the change.</param>
+public sealed record RequesterTimelineStatusDto(
+    DateTime At,
+    TicketStatus? PreviousStatus,
+    TicketStatus NewStatus,
+    string? ChangedByName) : RequesterTimelineItemDto(At);
+
+/// <summary>A comment visible to the requester, with the files attached to it.</summary>
+/// <param name="IsFromRequester">Written by the requester (shown on the requester's side of the conversation).</param>
+/// <param name="IsResolution">The handler's resolution reply (task 3.5).</param>
+public sealed record RequesterTimelineCommentDto(
+    DateTime At,
+    int Id,
+    string AuthorName,
+    bool IsFromRequester,
+    string Body,
+    bool IsResolution,
+    IReadOnlyList<TicketAttachmentDto> Attachments) : RequesterTimelineItemDto(At);
+
+/// <summary>A file attached without a comment (including the files of the new-ticket form).</summary>
+public sealed record RequesterTimelineAttachmentDto(DateTime At, TicketAttachmentDto Attachment)
+    : RequesterTimelineItemDto(At);

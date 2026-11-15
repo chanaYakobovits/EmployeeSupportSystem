@@ -6,7 +6,7 @@ namespace API.Middleware;
 
 /// <summary>
 /// Single place that converts exceptions to ProblemDetails (spec 11.4):
-/// Validation → 400, AuthenticationFailed → 401, NotFound → 404, Conflict → 409, BusinessRule → 422,
+/// Validation → 400, AuthenticationFailed → 401, Forbidden → 403, NotFound → 404, Conflict → 409, BusinessRule → 422,
 /// anything else → 500 without technical details.
 /// </summary>
 public class ExceptionHandlingMiddleware
@@ -51,12 +51,19 @@ public class ExceptionHandlingMiddleware
 
     private static ProblemDetails CreateProblem(Exception exception)
     {
+        // Kestrel's request-size limit hit while the body is read outside model binding (binding: ServiceCollectionExtensions).
+        if (exception is BadHttpRequestException { StatusCode: StatusCodes.Status413PayloadTooLarge })
+        {
+            return ProblemTitles.RequestTooLarge();
+        }
+
         if (exception is AppException appException)
         {
             var status = appException switch
             {
                 ValidationException => StatusCodes.Status400BadRequest,
                 AuthenticationFailedException => StatusCodes.Status401Unauthorized,
+                ForbiddenException => StatusCodes.Status403Forbidden,
                 NotFoundException => StatusCodes.Status404NotFound,
                 ConflictException => StatusCodes.Status409Conflict,
                 BusinessRuleException => StatusCodes.Status422UnprocessableEntity,
@@ -104,6 +111,12 @@ public class ExceptionHandlingMiddleware
             case StatusCodes.Status401Unauthorized:
                 // The cause (unknown user / wrong password / lockout) is logged by AuthService, by user id only.
                 _logger.LogInformation("Authentication failed: {ErrorType}", (exception as AppException)?.ErrorType);
+                break;
+            case StatusCodes.Status413PayloadTooLarge:
+                _logger.LogInformation("Request body too large");
+                break;
+            case StatusCodes.Status403Forbidden:
+                _logger.LogInformation("Forbidden: {ErrorType}", (exception as AppException)?.ErrorType);
                 break;
             case StatusCodes.Status404NotFound:
                 _logger.LogInformation("Not found: {ErrorType}", (exception as AppException)?.ErrorType);

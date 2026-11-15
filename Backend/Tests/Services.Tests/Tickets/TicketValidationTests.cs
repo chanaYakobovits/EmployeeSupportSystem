@@ -56,7 +56,7 @@ public sealed class TicketValidationTests : TicketTestBase
     public async Task An_empty_or_whitespace_description_is_rejected_with_a_field_error(string? description)
     {
         var error = await Assert.ThrowsAsync<ValidationException>(() =>
-            ServiceFor(NoaId).CreateAsync(new CreateTicketRequest { Description = description! }, CancellationToken.None));
+            ServiceFor(NoaId).CreateAsync(new CreateTicketRequest { Description = description! }, [], CancellationToken.None));
 
         Assert.Equal([CreateTicketRequestValidator.DescriptionRequiredMessage], error.Errors!["description"]);
     }
@@ -65,7 +65,7 @@ public sealed class TicketValidationTests : TicketTestBase
     public async Task Errors_are_keyed_by_the_camelCase_field_names()
     {
         var error = await Assert.ThrowsAsync<ValidationException>(() => ServiceFor(NoaId).CreateAsync(
-            new CreateTicketRequest { Subject = new string('א', 151), Description = "קצר" }, CancellationToken.None));
+            new CreateTicketRequest { Subject = new string('א', 151), Description = "קצר" }, [], CancellationToken.None));
 
         Assert.Equal(["description", "subject"], error.Errors!.Keys.Order());
     }

@@ -82,8 +82,14 @@ public sealed class FakeTicketRepository : ITicketRepository
     public Task<RequesterTicketsSummaryDto> GetRequesterSummaryAsync(int requesterId, DateTime monthStartUtc,
         CancellationToken cancellationToken) => throw new NotSupportedException();
 
-    public Task<RequesterTicketDetailsDto?> GetForRequesterAsync(int ticketId, int requesterId,
-        CancellationToken cancellationToken) => throw new NotSupportedException();
+    public Task<RequesterTicketDetailsDto?> GetDetailsAsync(int ticketId, CancellationToken cancellationToken) =>
+        throw new NotSupportedException();
+
+    public Task<TicketAccessFacts?> GetAccessFactsAsync(int ticketId, CancellationToken cancellationToken) =>
+        throw new NotSupportedException();
+
+    public Task<Ticket?> FindForUpdateAsync(int ticketId, CancellationToken cancellationToken) =>
+        throw new NotSupportedException();
 
     public Task<int> UnassignUnresolvedTicketsAsync(int handlerUserId, DateTime now, CancellationToken cancellationToken)
     {

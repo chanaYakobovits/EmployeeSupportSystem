@@ -808,28 +808,52 @@ Content-Type: application/json
 
 { "identifier": "ido.sagi@example.com", "password": "{{password}}" }
 
-### Create → 201 + Location /api/tickets/{id} + { "id": ... }. "requesterId" in the body is ignored:
+### Create (multipart since task 3.2) → 201 + Location /api/tickets/{id} + { "id": ... }. "requesterId" is ignored:
 ### the requester is Noa (from the token), the department is her current one (from the database).
 # @name newTicket
 POST {{API_HostAddress}}/api/tickets
 Authorization: Bearer {{noa.response.body.$.accessToken}}
-Content-Type: application/json
+Content-Type: multipart/form-data; boundary=EssBoundary
 
-{ "requesterId": 2, "subject": "שעות נוספות שלא שולמו", "description": "בתלוש של אוקטובר חסרות 6 שעות נוספות מה-14 בחודש." }
+--EssBoundary
+Content-Disposition: form-data; name="requesterId"
+
+2
+--EssBoundary
+Content-Disposition: form-data; name="subject"
+
+שעות נוספות שלא שולמו
+--EssBoundary
+Content-Disposition: form-data; name="description"
+
+בתלוש של אוקטובר חסרות 6 שעות נוספות מה-14 בחודש.
+--EssBoundary--
 
 ### Create without a subject → 201; the list shows the start of the description ("isSubjectExcerpt": true)
 POST {{API_HostAddress}}/api/tickets
 Authorization: Bearer {{noa.response.body.$.accessToken}}
-Content-Type: application/json
+Content-Type: multipart/form-data; boundary=EssBoundary
 
-{ "description": "המחשב נתקע כל בוקר בזמן ההפעלה ולוקח לו כרבע שעה לעלות." }
+--EssBoundary
+Content-Disposition: form-data; name="description"
+
+המחשב נתקע כל בוקר בזמן ההפעלה ולוקח לו כרבע שעה לעלות.
+--EssBoundary--
 
 ### Description too short / whitespace only, subject over 150 → 400 with errors by field
 POST {{API_HostAddress}}/api/tickets
 Authorization: Bearer {{noa.response.body.$.accessToken}}
-Content-Type: application/json
+Content-Type: multipart/form-data; boundary=EssBoundary
 
-{ "subject": "אאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאא", "description": "    " }
+--EssBoundary
+Content-Disposition: form-data; name="subject"
+
+אאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאאא
+--EssBoundary
+Content-Disposition: form-data; name="description"
+
+
+--EssBoundary--
 
 ### My tickets – newest first (default), page 1 of 25
 GET {{API_HostAddress}}/api/tickets/my
@@ -866,3 +890,193 @@ Authorization: Bearer {{noa.response.body.$.accessToken}}
 
 ### Rate limit: more than 20 new tickets per hour per user → 429 with
 ### detail "ניתן לפתוח עד 20 פניות בשעה. יש לנסות שוב מאוחר יותר." (requests rejected with 400 also count).
+
+### ============ Files and comments – task 3.2 ============
+### Sample files in HttpSamples/ (sample.pdf/png/docx are valid; fake.pdf is plain text). Run --seed first.
+### Ticket 149: Noa's, InProgress, handled by Adi Shimoni (HR). Ticket 49: Noa's, Closed (deterministic seed).
+@handledTicket = 149
+@closedTicket = 49
+
+###
+# @name adi
+POST {{API_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{ "identifier": "adi.shimoni@example.com", "password": "{{password}}" }
+
+###
+# @name avner
+POST {{API_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{ "identifier": "avner.goldman@example.com", "password": "{{password}}" }
+
+### Create with 2 files → 201. Each file: an attachment without a comment; the name is sanitized ("../../" removed).
+POST {{API_HostAddress}}/api/tickets
+Authorization: Bearer {{noa.response.body.$.accessToken}}
+Content-Type: multipart/form-data; boundary=EssBoundary
+
+--EssBoundary
+Content-Disposition: form-data; name="subject"
+
+תלוש אוקטובר
+--EssBoundary
+Content-Disposition: form-data; name="description"
+
+בתלוש של אוקטובר חסרות 6 שעות נוספות.
+--EssBoundary
+Content-Disposition: form-data; name="files"; filename="../../תלוש אוקטובר.pdf"
+Content-Type: application/pdf
+
+< ./HttpSamples/sample.pdf
+--EssBoundary
+Content-Disposition: form-data; name="files"; filename="צילום מסך.png"
+Content-Type: image/png
+
+< ./HttpSamples/sample.png
+--EssBoundary--
+
+### Fake file: text named .pdf → 400 { "files[0]": ["תוכן הקובץ אינו תואם לסוג הקובץ"] }. Nothing is saved.
+POST {{API_HostAddress}}/api/tickets
+Authorization: Bearer {{noa.response.body.$.accessToken}}
+Content-Type: multipart/form-data; boundary=EssBoundary
+
+--EssBoundary
+Content-Disposition: form-data; name="description"
+
+בדיקה של קובץ מזויף כאן
+--EssBoundary
+Content-Disposition: form-data; name="files"; filename="fake.pdf"
+Content-Type: application/pdf
+
+< ./HttpSamples/fake.pdf
+--EssBoundary--
+
+### 4 files → 400 { "files": ["ניתן לצרף עד 3 קבצים"] }. A file over 5MB → 400 on "files[i]";
+### a request over 16MB → 413 "גודל הבקשה חורג מהמותר". The old JSON body → 415.
+POST {{API_HostAddress}}/api/tickets
+Authorization: Bearer {{noa.response.body.$.accessToken}}
+Content-Type: multipart/form-data; boundary=EssBoundary
+
+--EssBoundary
+Content-Disposition: form-data; name="description"
+
+ארבעה קבצים בבקשה אחת
+--EssBoundary
+Content-Disposition: form-data; name="files"; filename="1.pdf"
+
+< ./HttpSamples/sample.pdf
+--EssBoundary
+Content-Disposition: form-data; name="files"; filename="2.pdf"
+
+< ./HttpSamples/sample.pdf
+--EssBoundary
+Content-Disposition: form-data; name="files"; filename="3.png"
+
+< ./HttpSamples/sample.png
+--EssBoundary
+Content-Disposition: form-data; name="files"; filename="4.docx"
+
+< ./HttpSamples/sample.docx
+--EssBoundary--
+
+### Noa comments with a docx → 201 { "id": ... }; the ticket's updatedAt changes
+POST {{API_HostAddress}}/api/tickets/{{handledTicket}}/comments
+Authorization: Bearer {{noa.response.body.$.accessToken}}
+Content-Type: multipart/form-data; boundary=EssBoundary
+
+--EssBoundary
+Content-Disposition: form-data; name="body"
+
+מצרפת את הטופס החתום
+--EssBoundary
+Content-Disposition: form-data; name="files"; filename="טופס.docx"
+
+< ./HttpSamples/sample.docx
+--EssBoundary--
+
+### Adi (handler) writes an internal note with a file → 201. updatedAt does not change.
+POST {{API_HostAddress}}/api/tickets/{{handledTicket}}/comments
+Authorization: Bearer {{adi.response.body.$.accessToken}}
+Content-Type: multipart/form-data; boundary=EssBoundary
+
+--EssBoundary
+Content-Disposition: form-data; name="body"
+
+הערה פנימית: לבדוק מול השכר
+--EssBoundary
+Content-Disposition: form-data; name="isInternal"
+
+true
+--EssBoundary
+Content-Disposition: form-data; name="files"; filename="בדיקה פנימית.pdf"
+
+< ./HttpSamples/sample.pdf
+--EssBoundary--
+
+### Noa tries an internal note → 403 "internal-comment-not-allowed"
+POST {{API_HostAddress}}/api/tickets/{{handledTicket}}/comments
+Authorization: Bearer {{noa.response.body.$.accessToken}}
+Content-Type: multipart/form-data; boundary=EssBoundary
+
+--EssBoundary
+Content-Disposition: form-data; name="body"
+
+ניסיון
+--EssBoundary
+Content-Disposition: form-data; name="isInternal"
+
+true
+--EssBoundary--
+
+### Executive comments → 403 "reply-not-allowed" (view only). Another employee (Ido) → 404.
+POST {{API_HostAddress}}/api/tickets/{{handledTicket}}/comments
+Authorization: Bearer {{avner.response.body.$.accessToken}}
+Content-Type: multipart/form-data; boundary=EssBoundary
+
+--EssBoundary
+Content-Disposition: form-data; name="body"
+
+ניסיון
+--EssBoundary--
+
+### Comment on a closed ticket → 422 "ticket-closed"
+POST {{API_HostAddress}}/api/tickets/{{closedTicket}}/comments
+Authorization: Bearer {{noa.response.body.$.accessToken}}
+Content-Type: multipart/form-data; boundary=EssBoundary
+
+--EssBoundary
+Content-Disposition: form-data; name="body"
+
+עוד שאלה
+--EssBoundary--
+
+### A file without a comment → 201 [ { id, fileName, contentType, sizeBytes, uploadedByName, createdAt } ]
+# @name lonely
+POST {{API_HostAddress}}/api/tickets/{{handledTicket}}/attachments
+Authorization: Bearer {{noa.response.body.$.accessToken}}
+Content-Type: multipart/form-data; boundary=EssBoundary
+
+--EssBoundary
+Content-Disposition: form-data; name="files"; filename="צילום מסך.png"
+
+< ./HttpSamples/sample.png
+--EssBoundary--
+
+### History as Noa: status changes, her comment, Adi's visible comments, files – no internal note, no reasons
+GET {{API_HostAddress}}/api/tickets/{{handledTicket}}/history
+Authorization: Bearer {{noa.response.body.$.accessToken}}
+
+### History as Adi: everything, including "isInternal": true, its file, and "reason" on status changes
+GET {{API_HostAddress}}/api/tickets/{{handledTicket}}/history
+Authorization: Bearer {{adi.response.body.$.accessToken}}
+
+### Download as Noa → 200, Content-Type image/png, Content-Disposition attachment with filename*=UTF-8''...,
+### X-Content-Type-Options nosniff, CSP sandbox, Cache-Control no-store. AuditLog "Attachment.Downloaded".
+GET {{API_HostAddress}}/api/tickets/{{handledTicket}}/attachments/{{lonely.response.body.$[0].id}}
+Authorization: Bearer {{noa.response.body.$.accessToken}}
+
+### Download of the internal note's file as Noa → 404 "הקובץ לא נמצא" (same as a missing one); as Adi → 200.
+### Take its id from Adi's history above (the attachment inside the comment with "isInternal": true).
+GET {{API_HostAddress}}/api/tickets/{{handledTicket}}/attachments/37
+Authorization: Bearer {{noa.response.body.$.accessToken}}

@@ -17,6 +17,7 @@ public sealed class RequesterJsonTests : TicketTestBase
     [
         "urgency", "dueAt", "aiStatus", "aiAnalysis", "classificationSource", "reason", "isInternal",
         "summary", "suggestedSolution", "confidence", "comments", "assignedDepartmentId", "requesterDepartmentId",
+        "storedFileName", "uploadedByUserId",
     ];
 
     private const string AiSummary = "סיכום פנימי של ה-AI למטפל";
@@ -72,6 +73,39 @@ public sealed class RequesterJsonTests : TicketTestBase
     }
 
     [Fact]
+    public async Task The_history_json_has_no_internal_note_no_file_of_one_and_no_reason()
+    {
+        // A file of the internal note, and a visible reply with its own file.
+        var internalNoteId = AllComments().Single(c => c.IsInternal).Id;
+        AddAttachment(_ticketId, LiatId, internalNoteId, "בדיקה פנימית.pdf");
+        AddComment(_ticketId, NoaId, "תגובה גלויה");
+        AddAttachment(_ticketId, NoaId, fileName: "קובץ גלוי.pdf");
+
+        // As the controller writes it: the runtime type of the result.
+        var history = await ConversationFor(NoaId).GetHistoryAsync(_ticketId, CancellationToken.None);
+        var json = JsonSerializer.Serialize(history, history.GetType(), ApiJson);
+
+        AssertNoInternalData(json);
+        var values = StringValues(json).ToList();
+        Assert.DoesNotContain("בדיקה פנימית.pdf", values);
+        Assert.Contains("תגובה גלויה", values);      // not vacuous
+        Assert.Contains("קובץ גלוי.pdf", values);
+        Assert.Contains("comment", values);          // the "kind" discriminator is written
+    }
+
+    [Fact]
+    public async Task The_staff_history_json_does_have_the_internal_data()
+    {
+        // Control for the test above: the data is in the database, and staff get it.
+        var history = await ConversationFor(LiatId).GetHistoryAsync(_ticketId, CancellationToken.None);
+        var json = JsonSerializer.Serialize(history, history.GetType(), ApiJson);
+
+        Assert.Contains("isInternal", PropertyNames(json));
+        Assert.Contains("reason", PropertyNames(json));
+        Assert.Contains(InternalComment, StringValues(json));
+    }
+
+    [Fact]
     public async Task The_summary_json_has_only_the_three_counters()
     {
         var json = JsonSerializer.Serialize(await ServiceFor(NoaId).GetMySummaryAsync(CancellationToken.None), ApiJson);
@@ -86,7 +120,8 @@ public sealed class RequesterJsonTests : TicketTestBase
         Type[] roots =
         [
             typeof(TicketCreatedDto), typeof(RequesterTicketListItemDto), typeof(RequesterTicketsSummaryDto),
-            typeof(RequesterTicketDetailsDto),
+            typeof(RequesterTicketDetailsDto), typeof(RequesterTicketHistoryDto), typeof(RequesterTimelineStatusDto),
+            typeof(RequesterTimelineCommentDto), typeof(RequesterTimelineAttachmentDto), typeof(TicketAttachmentDto),
         ];
 
         var names = roots.SelectMany(AllPropertyNames).Select(n => JsonNamingPolicy.CamelCase.ConvertName(n)).ToList();

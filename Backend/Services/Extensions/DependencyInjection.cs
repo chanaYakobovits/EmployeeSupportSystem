@@ -9,6 +9,8 @@ using Repositories.Extensions;
 using Services.Implementations;
 using Services.Implementations.Ai;
 using Services.Implementations.Email;
+using Services.Implementations.Files;
+using Services.Implementations.Tickets;
 using Services.Implementations.Invitations;
 using Services.Interfaces;
 
@@ -37,6 +39,9 @@ public static class DependencyInjection
         services.AddScoped<ICategoryService, CategoryService>();
         services.AddScoped<ISlaPolicyService, SlaPolicyService>();
         services.AddScoped<ITicketService, TicketService>();
+        services.AddScoped<ITicketAccess, TicketAccess>();
+        services.AddScoped<ITicketConversationService, TicketConversationService>();
+        services.AddAttachmentStorage(configuration);
 
         // Departments and categories per organization, 10 minutes (spec 11.3).
         services.AddSingleton<IReferenceDataCache, MemoryReferenceDataCache>();
@@ -56,6 +61,32 @@ public static class DependencyInjection
         // Later tasks: services (Scoped); TicketStatusRules (Singleton).
         // Required from the host: ICurrentUser, IAccessTokenIssuer and IHostEnvironment (registered by API).
         return services;
+    }
+
+    /// <summary>Attachments on the local disk (spec 6.3), in a directory relative to the content root, outside wwwroot.</summary>
+    internal static void AddAttachmentStorage(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddOptions<FileStorageOptions>()
+            .Bind(configuration.GetSection(FileStorageOptions.SectionName))
+            .Validate(o => !string.IsNullOrWhiteSpace(o.Directory), "Attachments:Directory is required.")
+            // Never served as static files: not under the web root (wwwroot) of the API.
+            .Validate<IHostEnvironment>((o, environment) => !IsUnder(AttachmentsRoot(o, environment),
+                    Path.Combine(environment.ContentRootPath, "wwwroot")),
+                "Attachments:Directory must not be under wwwroot.")
+            .ValidateOnStart();
+
+        services.AddSingleton<IFileStorage>(sp => new LocalFileStorage(AttachmentsRoot(
+            sp.GetRequiredService<IOptions<FileStorageOptions>>().Value, sp.GetRequiredService<IHostEnvironment>())));
+    }
+
+    private static string AttachmentsRoot(FileStorageOptions options, IHostEnvironment environment) =>
+        Path.GetFullPath(Path.Combine(environment.ContentRootPath, options.Directory));
+
+    private static bool IsUnder(string path, string directory)
+    {
+        var root = Path.GetFullPath(directory).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        return (Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar)
+            .StartsWith(root, StringComparison.OrdinalIgnoreCase);
     }
 
     internal static void AddInvitations(this IServiceCollection services, IConfiguration configuration)

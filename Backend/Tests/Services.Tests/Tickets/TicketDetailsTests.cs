@@ -53,20 +53,34 @@ public sealed class TicketDetailsTests : TicketTestBase
     }
 
     [Fact]
-    public async Task A_handler_cannot_yet_view_a_ticket_assigned_to_them()
+    public async Task A_handler_views_a_ticket_assigned_to_them_through_ticket_access()
     {
-        // Staff scopes come in task 3.4; until then only the requester sees a ticket.
+        // Since task 3.2 the details go through TicketAccess (staff scopes), with the requester's DTO for now.
         var id = AddTicket(NoaId, TicketStatus.Assigned, Now.AddHours(-1), configure: t => t.AssignedToUserId = LiatId);
 
-        await Assert.ThrowsAsync<NotFoundException>(() => ServiceFor(LiatId).GetAsync(id, CancellationToken.None));
+        var ticket = await ServiceFor(LiatId).GetAsync(id, CancellationToken.None);
+
+        Assert.Equal(id, ticket.Id);
     }
 
     [Fact]
-    public async Task A_ticket_of_another_organization_is_not_found_even_with_the_same_user_id()
+    public async Task A_handler_of_another_department_does_not_see_the_ticket()
     {
-        // Same requester id as in organization B, but signed in to A: the organization filter hides it.
+        var id = AddTicket(NoaId, TicketStatus.Assigned, Now.AddHours(-1), configure: t =>
+        {
+            t.AssignedDepartmentId = HrId;
+            t.AssignedToUserId = LiatId;
+        });
+
+        await Assert.ThrowsAsync<NotFoundException>(() => ServiceFor(AlonId).GetAsync(id, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task A_ticket_of_another_organization_is_not_found_even_for_an_executive()
+    {
+        // The executive sees every ticket of organization A – the organization filter still hides B's.
         await Assert.ThrowsAsync<NotFoundException>(() =>
-            ServiceFor(OrgBUserId, organizationId: OrgA).GetAsync(OrgBTicketId, CancellationToken.None));
+            ServiceFor(AvnerId, organizationId: OrgA).GetAsync(OrgBTicketId, CancellationToken.None));
 
         // Control: its own organization's user does see it.
         var ticket = await ServiceFor(OrgBUserId, organizationId: OrgB).GetAsync(OrgBTicketId, CancellationToken.None);

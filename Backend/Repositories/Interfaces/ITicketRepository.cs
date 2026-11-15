@@ -27,8 +27,19 @@ public interface ITicketRepository
     Task<RequesterTicketsSummaryDto> GetRequesterSummaryAsync(int requesterId, DateTime monthStartUtc,
         CancellationToken cancellationToken);
 
-    /// <summary>The ticket with its status timeline, only if <paramref name="requesterId"/> opened it; otherwise null.</summary>
-    Task<RequesterTicketDetailsDto?> GetForRequesterAsync(int ticketId, int requesterId, CancellationToken cancellationToken);
+    /// <summary>
+    /// The ticket with its status timeline (no reasons), or null. Does not check the viewing scope: call it only after
+    /// TicketAccess allowed the ticket.
+    /// </summary>
+    Task<RequesterTicketDetailsDto?> GetDetailsAsync(int ticketId, CancellationToken cancellationToken);
+
+    // ---- access (task 3.2) ----
+
+    /// <summary>The columns that decide who may see and act on the ticket (one row, no content). Null if not found.</summary>
+    Task<TicketAccessFacts?> GetAccessFactsAsync(int ticketId, CancellationToken cancellationToken);
+
+    /// <summary>Tracked ticket (no navigations), to update it with SaveChanges – RowVersion is its concurrency token.</summary>
+    Task<Ticket?> FindForUpdateAsync(int ticketId, CancellationToken cancellationToken);
 
     // ---- user administration (task 2.3) ----
 

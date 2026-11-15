@@ -1,8 +1,8 @@
 namespace Common.DTOs.Tickets;
 
 /// <summary>
-/// POST /api/tickets (task 3.1; attachments come in 3.2). Deliberately has no requester or department field:
-/// both come from the signed-in user (spec 3.1, 6.2). Unknown JSON properties (e.g. "requesterId") are ignored.
+/// The text fields of POST /api/tickets (multipart; the files are passed apart). Deliberately has no requester or department field:
+/// both come from the signed-in user (spec 3.1, 6.2). Unknown form fields (e.g. "requesterId") are ignored.
 /// </summary>
 public sealed class CreateTicketRequest
 {

@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 using API.Errors;
 using API.Middleware;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
@@ -54,7 +55,8 @@ public static class ServiceCollectionExtensions
                 .AllowCredentials()
                 .AllowAnyHeader()
                 .AllowAnyMethod()
-                .WithExposedHeaders(CorrelationIdMiddleware.HeaderName));
+                // Content-Disposition: the Angular app reads the original (Hebrew) name of a downloaded attachment.
+                .WithExposedHeaders(CorrelationIdMiddleware.HeaderName, "Content-Disposition"));
         });
 
         // Errors produced by the framework itself (model validation, 404 for an unknown route, 405, ...)
@@ -82,6 +84,14 @@ public static class ServiceCollectionExtensions
     /// </summary>
     private static IActionResult BindingErrorResponse(ActionContext context)
     {
+        // A multipart form that could not be read (e.g. over the size limit). MVC reports it as a model error on the
+        // empty key, with an English message only (the exception is not kept).
+        if (context.HttpContext.Request.HasFormContentType
+            && context.ModelState.TryGetValue(string.Empty, out var formEntry) && formEntry.Errors.Count > 0)
+        {
+            return FormReadErrorResponse(context.HttpContext, formEntry.Errors[0].ErrorMessage);
+        }
+
         var errors = new ModelStateDictionary();
         foreach (var (key, entry) in context.ModelState)
         {
@@ -96,6 +106,34 @@ public static class ServiceCollectionExtensions
             .CreateValidationProblemDetails(context.HttpContext, errors, StatusCodes.Status400BadRequest);
         return new BadRequestObjectResult(problem) { ContentTypes = { "application/problem+json" } };
     }
+
+    /// <summary>
+    /// Over the endpoint's size limit ([RequestSizeLimit] / [RequestFormLimits]) → 413; any other unreadable form → 400.
+    /// Hebrew, never the framework's text. The size is judged by Content-Length against the endpoint's limit; without
+    /// Content-Length (chunked upload) by the framework's message ("Request body too large", "... limit ... exceeded").
+    /// </summary>
+    private static IActionResult FormReadErrorResponse(HttpContext httpContext, string frameworkMessage)
+    {
+        var limit = httpContext.Features.Get<IHttpMaxRequestBodySizeFeature>()?.MaxRequestBodySize;
+        var tooLarge = httpContext.Request.ContentLength is long length && limit is long max
+            ? length > max
+            : frameworkMessage.Contains("too large", StringComparison.OrdinalIgnoreCase)
+              || frameworkMessage.Contains("limit", StringComparison.OrdinalIgnoreCase);
+
+        var problem = tooLarge
+            ? ProblemTitles.RequestTooLarge()
+            : new ProblemDetails
+            {
+                Status = StatusCodes.Status400BadRequest,
+                Type = ProblemTitles.GetType(StatusCodes.Status400BadRequest),
+                Title = ProblemTitles.GetTitle(StatusCodes.Status400BadRequest),
+                Detail = UnreadableFormDetail,
+            };
+        ProblemDetailsEnricher.AddTraceIds(problem, httpContext);
+        return new ObjectResult(problem) { StatusCode = problem.Status, ContentTypes = { "application/problem+json" } };
+    }
+
+    private const string UnreadableFormDetail = "לא ניתן היה לקרוא את הטופס שנשלח";
 
     private const string InvalidValueMessage = "הערך אינו תקין";
 

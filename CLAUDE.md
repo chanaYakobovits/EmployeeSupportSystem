@@ -8,9 +8,10 @@
 - הושלמו: 1.1–1.5 (תשתית), 4.1 PiiRedactor, 4.2 לקוח OpenAI (נבנו מוקדם, לפני שלב ב'),
   2.1 אימות, 2.2 מסכי התחברות, 2.3א API לניהול עובדים ומחלקות, 2.3ב מסכי ניהול עובדים ומחלקות,
   2.4 ניהול קטגוריות ו-SLA (API + מסכים), 3.1 חלק א' (API ליצירת פנייה וצפייה של עובד),
-  3.1 חלק ב' (מסכי "הפניות שלי", "פנייה חדשה", "צפייה בפנייה" ב-Angular).
+  3.1 חלק ב' (מסכי "הפניות שלי", "פנייה חדשה", "צפייה בפנייה" ב-Angular), 3.2 חלק א' (API לקבצים ותגובות).
 - שינוי מבנה Frontend (לא באפיון): `src/app` עבר ממבנה core/features/shared למבנה לפי סוג קובץ – הושלם.
-- הבא בתור: 3.2 – קבצים ותגובות.
+- הבא בתור: 3.2 חלק ב' – מסכי קבצים ותגובות ב-Angular. **קודם כל**: `TicketsApiService.create` עדיין שולח JSON,
+  והשרת מחזיר עליו 415 – לעבור ל-FormData.
 - תוספת שלא באפיון: בדיקת איכות סיווג AI על 30 פניות לדוגמה – אחרי משימה 4.3.
 - תוספת שלא באפיון: הזמנת עובד במייל (האפיון 14 שאלה 3, "בעתיד"). שלב א' (שרת) ושלב ב' (מסך set-password, סטטוס הזמנה
   ברשימה ובעריכה, שליחה מחדש, סינון לפי סטטוס הזמנה) – הושלמו.
@@ -182,7 +183,7 @@
   טבלת תור של 4.3 תעבוד באותו דפוס: OrganizationId בשורה, claim בלי סינון, עיבוד בתוך Scope של הארגון.
 
 - פניות – צד העובד (משימה 3.1א):
-  * `POST /api/tickets` (JSON; קבצים ב-3.2): הפונה מ-ICurrentUser. `CreateTicketRequest` בלי שדה פונה/מחלקה, ושדות לא מוכרים
+  * `POST /api/tickets` (מ-3.2: multipart עם קבצים): הפונה מ-ICurrentUser. `CreateTicketRequest` בלי שדה פונה/מחלקה, ושדות לא מוכרים
     בגוף נזרקים. המחלקה נקראת מה-DB (`GetActiveDepartmentIdAsync`), לא מה-claim. עובד לא פעיל ← 401 (גם בחלון 15 הדקות).
     Status=New, ‏AiStatus=Pending, בלי קטגוריה/דחיפות/שיוך/DueAt. נשמרת גם שורת היסטוריה `null → New` (ChangedBy = הפונה).
     Trim לנושא ולתיאור, נושא ריק ← null. ‏201 + Location + `{ id }`. מגבלות ב-`Common/Constants/TicketFieldLimits`.
@@ -194,7 +195,7 @@
     (סדר ה-enum), שובר שוויון Id יורד. בלי נושא ← 80 התווים הראשונים של התיאור + `isSubjectExcerpt` (ה-"…" בלקוח).
   * `GET /tickets/my/summary`: שאילתה מקובצת אחת. פתוחות = `TicketStatuses.RequesterOpen` (New, Assigned, InProgress, Resolved),
     ממתינות לתגובתי = WaitingForEmployee, נסגרו החודש = Closed עם ClosedAt מתחילת החודש בשעון ישראל (`IsraelTime`). Cancelled – באף כרטיס.
-  * `GET /tickets/{id}`: כרגע רק לפונה (`Where(Id && RequesterId)` בשאילתה), אחרת 404. ב-3.4 היקפי הצוות נבדקים לפניו ב-`TicketService.GetAsync`.
+  * `GET /tickets/{id}`: מ-3.2 דרך `TicketAccess` (כל ההיקפים), אחרת 404. ב-3.4 – DTO נפרד לצוות.
     ציר הזמן: שינויי סטטוס בלבד, בלי `Reason` (עלול להיות פנימי – להחליט ב-3.5), `changedByName` null = מערכת.
   * DTOs של הפונה (`Common/DTOs/Tickets/RequesterTicketDtos.cs`) – אסור להוסיף Urgency, DueAt, AiStatus, ניתוח AI,
     ClassificationSource, Reason או הערות פנימיות. `RequesterJsonTests` בודק את ה-JSON ואת הטיפוסים.
@@ -215,6 +216,37 @@
     מלא לקורא מסך). `formatRelativeTime` כתוב ידנית בעברית (צורת זוגי) – `Intl.RelativeTimeFormat('he')` נותן "לפני שעתיים (2)".
   * מונה התווים מוכרז ב-`aria-live` רק 800ms אחרי הפסקת הקלדה.
 
+- קבצים ותגובות – API (משימה 3.2א):
+  * `TicketAccess` (`Services/Implementations/Tickets`): כל endpoint של פנייה בודדת מתחיל בו. הצופה (מחלקה, מחלקה מנוהלת
+    לפי `Departments.ManagerUserId`, תפקידים) ועמודות הניתוב של הפנייה נקראים מה-DB, לא מה-token. משתמש לא פעיל ← 401.
+    המטריצה עצמה ב-`TicketAccessPolicy` (טהורה):
+    - היקפים: פונה; מטפל (משויך אליו, או `AssignedDepartmentId` = המחלקה שלו); מנהל מחלקה (מחלקת הפונה או המחלקה המטפלת
+      = המחלקה שהוא מנהל); מנכ"ל (כל הארגון). מחוץ להיקף ← 404.
+    - פונה שהוא גם איש צוות ← **תצוגת פונה** (בלי פנימי). `CanSeeInternal`: מטפל, מנהל ומנכ"ל, לא הפונה.
+    - `CanReply` (תגובה גלויה וקובץ בלי תגובה): הפונה או מטפל. `CanWriteInternal`: מטפל או מנהל, לא הפונה. מנכ"ל רק צופה.
+  * `ForbiddenException` ← 403 (`internal-comment-not-allowed`, `reply-not-allowed`). סדר הבדיקות: 400 ← 404 ← 403 ← 422
+    (`ticket-closed` ל-Closed/Cancelled).
+  * POST /tickets, ‏/comments, ‏/attachments – **multipart בלבד** (JSON ← 415). מגבלת בקשה לכל endpoint:
+    `AttachmentLimits.MaxRequestBytes` (16MB). חריגה ← 413 בעברית: ב-binding לפי Content-Length מול המגבלה, ובמידלוור
+    `BadHttpRequestException` 413.
+  * קבצים: עד 3 בבקשה, עד 5MB, ‏pdf/jpg(jpeg)/png/docx. הסוג נקבע **מהסיומת של השם אחרי ניקוי** וגם מהתוכן
+    (`AttachmentFileTypes`; ‏docx = ZIP עם `word/document.xml`, בלי `vbaProject.bin`). ‏ContentType נשמר לפי הסוג שאומת.
+    `FileNameSanitizer`: רק הקטע האחרון, NFC, בלי Cc/Cf (כולל U+202E), בלי `<>:"|?*`, עד 120 תווים כולל הסיומת.
+  * אחסון: `IFileStorage` ב-Common (ה-Seeder משתמש בו), ‏`LocalFileStorage` ב-`Attachments:Directory`
+    (`App_Data/attachments`, לא תחת wwwroot – נבדק בעלייה). שם בדיסק: GUID בלי סיומת, ונבדק מול `^[0-9a-f]{32}$` לפני כל גישה.
+    `StagedFiles`: ולידציה ← כתיבה ← SaveChanges ← Commit. בלי Commit (כשל במסד, ביטול) הקבצים נמחקים.
+  * קובץ של הערה פנימית הוא פנימי בעצמו (נגיש רק דרך התגובה). קבצי הפנייה החדשה ו-/attachments: ‏`CommentId` null, גלויים.
+  * תגובה גלויה וקובץ מעדכנים `Ticket.UpdatedAt` (Tracked ← RowVersion משתנה, ושינוי מתחרה ← 409). **הערה פנימית לא
+    מעדכנת** – אחרת העובד היה רואה "עודכן" בלי שום דבר גלוי.
+  * GET /history: ‏`RequesterTicketHistoryDto` או `StaffTicketHistoryDto` (‏`ITicketHistoryDto`). פריטים פולימורפיים עם
+    `kind`: ‏status / comment / attachment. שלוש שאילתות מהפנייה המסוננת (סינון פנימי ונימוקים בשאילתה), ומיזוג בזיכרון לפי
+    (זמן, סוג, Id). ‏`RequesterTicketDetailsDto.Timeline` מ-3.1 נשאר.
+  * הורדה: 404 זהה לקובץ פנימי ולקובץ שלא קיים. `nosniff`, ‏`CSP: sandbox`, ‏`no-store`, ‏`Content-Disposition: attachment`
+    עם `filename*` (חשוף ב-CORS). AuditLog `Attachment.Downloaded` (EntityType `TicketAttachment`) – רק אחרי שהקובץ נפתח.
+  * GET /tickets/{id} עובר דרך TicketAccess. גם איש צוות מקבל כרגע את ה-DTO של הפונה (תצוגת צוות – 3.4).
+  * Seeder: מרוקן את תיקיית הקבצים (רק שמות GUID) ומצרף PNG/PDF לכ-10% מהפניות (`SampleAttachments`, בלי ה-Random של
+    הפניות). דוגמאות ל-API.http ב-`API/HttpSamples`. פנייה 149 של נועה מטופלת ע"י עדי שמעוני, 49 סגורה.
+
 ## בהמשך
 - משימה 2.2: לטעון את Shell ב-loadComponent (lazy), מסך ההתחברות מחוצה לו –
   כדי להוריד את ה-bundle הראשוני מתחת ל-500KB. לא להגדיל את ה-budget.
@@ -224,6 +256,12 @@
 
   - 6.1 (בדיקות אינטגרציה): 429 ביצירת פנייה; JSON של עובד מ-GET /api/tickets/{id} בלי שדות פנימיים.
 - 3.5: העובד לא רואה נימוקים בציר הזמן – רק תגובות שנכתבו אליו.
+- 3.5: נקודת החיבור ב-`TicketConversationService.AddCommentAsync`: תגובת פונה ב-WaitingForEmployee ← InProgress
+  (TicketStatusRules + שורת היסטוריה, באותו save). ‏IsResolution נקבע רק משם ("שלח פתרון").
+- 3.4: אותם היקפים של `TicketAccessPolicy` כ-Expression לרשימות הצוות (עם בדיקה ששתי הגרסאות תואמות). תצוגת צוות
+  ל-GET /tickets/{id}. ‏AuditLog "צפייה בפנייה של עובד אחר" (6.4).
+- 4.3: ה-AI מקבל רק את התיאור המנוקה – לא קבצים ולא שמות קבצים (הערה ב-`IAiClient` וב-`StageNewTicket`).
+- פתוח (מחוץ ל-3.2): ניקוי קבצים יתומים (כשל במחיקה אחרי כשל במסד – נרשם Warning), סריקת וירוסים, Rate Limit לתגובות.
 
 ## מגבלה ידועה
   - מגבלה ידועה: אחרי השבתה או שינוי תפקידים, Access Token קיים תקף עד 15 דקות.

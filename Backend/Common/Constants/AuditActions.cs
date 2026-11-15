@@ -37,6 +37,9 @@ public static class AuditActions
     public const string InvitationPasswordSet = "Invitation.PasswordSet";
     public const string InvitationPasswordSetFailed = "Invitation.PasswordSetFailed";
     public const string LoginFailedPasswordNotSet = "LoginFailed.PasswordNotSet";
+
+    // Tickets (task 3.2). EntityId = the attachment id; never the file name or content.
+    public const string AttachmentDownloaded = "Attachment.Downloaded";
 }
 
 /// <summary>Values of <c>AuditLog.EntityType</c>.</summary>
@@ -47,4 +50,6 @@ public static class AuditEntityTypes
 
     /// <summary>The organization's SLA policies as a whole (EntityId null).</summary>
     public const string SlaPolicy = "SlaPolicy";
+
+    public const string TicketAttachment = "TicketAttachment";
 }

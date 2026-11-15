@@ -82,6 +82,29 @@ public sealed class UserRepository(AppDbContext db) : IUserRepository
             .Select(u => (int?)u.DepartmentId)
             .SingleOrDefaultAsync(cancellationToken);
 
+    public async Task<Common.DTOs.Tickets.TicketViewer?> GetTicketViewerAsync(int userId, CancellationToken cancellationToken)
+    {
+        var viewer = await db.Users
+            .AsNoTracking()
+            .Where(u => u.Id == userId && u.IsActive)
+            .Select(u => new
+            {
+                u.Id,
+                u.DepartmentId,
+                // A user manages at most one department (DepartmentManagerRules).
+                ManagedDepartmentId = db.Departments
+                    .Where(d => d.ManagerUserId == u.Id)
+                    .Select(d => (int?)d.Id)
+                    .FirstOrDefault(),
+                Roles = u.Roles.Select(r => r.Role).ToList(),
+            })
+            .SingleOrDefaultAsync(cancellationToken);
+
+        return viewer is null
+            ? null
+            : new Common.DTOs.Tickets.TicketViewer(viewer.Id, viewer.DepartmentId, viewer.ManagedDepartmentId, viewer.Roles);
+    }
+
     // ===================== User administration (task 2.3) =====================
 
     public Task<PagedResult<UserListItemDto>> GetPageAsync(UserListQuery query, DateTime now,

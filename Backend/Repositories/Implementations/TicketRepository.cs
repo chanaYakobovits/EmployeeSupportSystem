@@ -75,12 +75,22 @@ public sealed class TicketRepository(AppDbContext db) : ITicketRepository
         return summary ?? new RequesterTicketsSummaryDto(0, 0, 0);
     }
 
-    public Task<RequesterTicketDetailsDto?> GetForRequesterAsync(int ticketId, int requesterId,
-        CancellationToken cancellationToken) =>
-        // The scope is part of the query (spec 6.2): another user's ticket is simply not found.
+    public Task<TicketAccessFacts?> GetAccessFactsAsync(int ticketId, CancellationToken cancellationToken) =>
         db.Tickets
             .AsNoTracking()
-            .Where(t => t.Id == ticketId && t.RequesterId == requesterId)
+            .Where(t => t.Id == ticketId)
+            .Select(t => new TicketAccessFacts(t.Id, t.RequesterId, t.RequesterDepartmentId, t.AssignedDepartmentId,
+                t.AssignedToUserId, t.Status))
+            .SingleOrDefaultAsync(cancellationToken);
+
+    public Task<Ticket?> FindForUpdateAsync(int ticketId, CancellationToken cancellationToken) =>
+        db.Tickets.SingleOrDefaultAsync(t => t.Id == ticketId, cancellationToken);
+
+    public Task<RequesterTicketDetailsDto?> GetDetailsAsync(int ticketId, CancellationToken cancellationToken) =>
+        // The viewing scope was checked by TicketAccess before this query.
+        db.Tickets
+            .AsNoTracking()
+            .Where(t => t.Id == ticketId)
             .Select(t => new RequesterTicketDetailsDto(
                 t.Id,
                 t.Subject,

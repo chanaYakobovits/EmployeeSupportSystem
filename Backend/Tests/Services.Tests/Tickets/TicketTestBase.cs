@@ -5,7 +5,9 @@ using Common.Models;
 using Microsoft.EntityFrameworkCore;
 using Repositories.Data;
 using Repositories.Implementations;
+using Repositories.Interfaces;
 using Services.Implementations;
+using Services.Implementations.Tickets;
 using Services.Tests.Auth.Fakes;
 using Services.Tests.Fakes;
 using Services.Validators;
@@ -13,9 +15,11 @@ using Services.Validators;
 namespace Services.Tests.Tickets;
 
 /// <summary>
-/// The ticket service over real repositories and EF Core InMemory, with two organizations.
-/// Organization A: Development (Noa, Ido – employees; Orit – inactive), HR (Liat – handler), category PAYROLL.
+/// The ticket services over real repositories and EF Core InMemory, with two organizations.
+/// Organization A: Development (Noa, Ido – employees; Orit – inactive; Ron – its manager; Alon – handler),
+/// HR (Liat – handler; Rina – its manager; Avner – executive), category PAYROLL.
 /// Organization B: one employee with one ticket. Every operation uses a fresh context, as a new request would.
+/// Attachments go to an in-memory <see cref="FakeFileStorage"/> shared by the test.
 /// </summary>
 public abstract class TicketTestBase
 {
@@ -27,8 +31,12 @@ public abstract class TicketTestBase
 
     protected const int NoaId = 1;
     protected const int IdoId = 2;
-    protected const int LiatId = 3;   // handler
+    protected const int LiatId = 3;   // handler in HR
     protected const int OritId = 4;   // inactive
+    protected const int RonId = 5;    // DepartmentManager of Development
+    protected const int RinaId = 6;   // DepartmentManager of HR (a handling department)
+    protected const int AvnerId = 7;  // Executive
+    protected const int AlonId = 8;   // handler in Development
     protected const int OrgBUserId = 200;
 
     protected const int PayrollId = 1;
@@ -48,6 +56,11 @@ public abstract class TicketTestBase
 
     protected readonly FakeDateTimeProvider Clock = new(Now);
     protected readonly CapturingLogger<TicketService> Logger = new();
+    protected readonly CapturingLogger<TicketConversationService> ConversationLogger = new();
+    protected readonly FakeFileStorage Files = new();
+
+    /// <summary>Replaces the unit of work of the services (e.g. one that fails), given the request's context.</summary>
+    protected Func<AppDbContext, IUnitOfWork>? UnitOfWorkFactory { get; set; }
 
     private readonly string _databaseName = Guid.NewGuid().ToString();
     private int _nextTicketId = 1000;
@@ -59,14 +72,18 @@ public abstract class TicketTestBase
             new Organization { Id = OrgA, Name = "A", IsActive = true },
             new Organization { Id = OrgB, Name = "B", IsActive = true });
         db.Departments.AddRange(
-            new Department { Id = DevId, OrganizationId = OrgA, Name = "פיתוח", IsActive = true },
-            new Department { Id = HrId, OrganizationId = OrgA, Name = "משאבי אנוש", IsActive = true },
+            new Department { Id = DevId, OrganizationId = OrgA, Name = "פיתוח", IsActive = true, ManagerUserId = RonId },
+            new Department { Id = HrId, OrganizationId = OrgA, Name = "משאבי אנוש", IsActive = true, ManagerUserId = RinaId },
             new Department { Id = OrgBDeptId, OrganizationId = OrgB, Name = "פיתוח", IsActive = true });
         db.Users.AddRange(
             NewUser(NoaId, OrgA, DevId, "נועה", "ברקוביץ"),
             NewUser(IdoId, OrgA, DevId, "עידו", "שגיא"),
             NewUser(LiatId, OrgA, HrId, "ליאת", "שחר", Role.Handler),
             NewUser(OritId, OrgA, DevId, "אורית", "דנון", isActive: false),
+            NewUser(RonId, OrgA, DevId, "רון", "כהנוביץ", Role.DepartmentManager),
+            NewUser(RinaId, OrgA, HrId, "רינה", "קפלן", Role.DepartmentManager),
+            NewUser(AvnerId, OrgA, HrId, "אבנר", "גולדמן", Role.Executive),
+            NewUser(AlonId, OrgA, DevId, "אלון", "ביטון", Role.Handler),
             NewUser(OrgBUserId, OrgB, OrgBDeptId, "משתמש", "בארגון ב"));
         db.Categories.Add(new Category
         {
@@ -89,8 +106,80 @@ public abstract class TicketTestBase
     {
         var db = CreateContext(userId, organizationId);
         var currentUser = new FakeCurrentUser { SignedInUserId = userId, SignedInOrganizationId = organizationId };
-        return new TicketService(new TicketRepository(db), new UserRepository(db), new UnitOfWork(db), Clock, currentUser,
-            new CreateTicketRequestValidator(), new MyTicketsQueryValidator(), Logger);
+        return new TicketService(new TicketRepository(db), new UserRepository(db), UnitOfWorkFor(db),
+            AccessFor(db, currentUser), Files, Clock, currentUser, new CreateTicketRequestValidator(),
+            new AttachmentFilesValidator(), new MyTicketsQueryValidator(), Logger);
+    }
+
+    /// <summary>The conversation service (comments, attachments, history) as in a request of <paramref name="userId"/>.</summary>
+    protected TicketConversationService ConversationFor(int userId, int organizationId = OrgA)
+    {
+        var db = CreateContext(userId, organizationId);
+        var currentUser = new FakeCurrentUser { SignedInUserId = userId, SignedInOrganizationId = organizationId };
+        return new TicketConversationService(AccessFor(db, currentUser), new TicketRepository(db),
+            new TicketConversationRepository(db), new AuditLogRepository(db), UnitOfWorkFor(db), Files, Clock,
+            currentUser, new CreateCommentRequestValidator(), new AttachmentFilesValidator(), ConversationLogger);
+    }
+
+    protected TicketAccess AccessFor(int userId, int organizationId = OrgA)
+    {
+        var db = CreateContext(userId, organizationId);
+        return AccessFor(db, new FakeCurrentUser { SignedInUserId = userId, SignedInOrganizationId = organizationId });
+    }
+
+    private static TicketAccess AccessFor(AppDbContext db, FakeCurrentUser currentUser) =>
+        new(new TicketRepository(db), new UserRepository(db), currentUser);
+
+    private IUnitOfWork UnitOfWorkFor(AppDbContext db) => UnitOfWorkFactory?.Invoke(db) ?? new UnitOfWork(db);
+
+    /// <summary>Comments and attachments as the database has them (no query filter).</summary>
+    protected List<TicketComment> AllComments()
+    {
+        using var db = CreateContext(signedInUserId: null);
+        return db.TicketComments.Include(c => c.Attachments).AsNoTracking().ToList();
+    }
+
+    protected List<TicketAttachment> AllAttachments()
+    {
+        using var db = CreateContext(signedInUserId: null);
+        return db.TicketAttachments.AsNoTracking().ToList();
+    }
+
+    protected List<AuditLog> AllAuditLogs()
+    {
+        using var db = CreateContext(signedInUserId: null);
+        return db.AuditLogs.IgnoreQueryFilters().AsNoTracking().ToList();
+    }
+
+    /// <summary>Seeds an attachment of the ticket (to <paramref name="commentId"/>, if given) with a stored PDF.</summary>
+    protected int AddAttachment(int ticketId, int uploadedBy, int? commentId = null, string fileName = "קובץ.pdf")
+    {
+        var name = Guid.NewGuid().ToString("N");
+        Files.Files[name] = TestFiles.Pdf;
+        using var db = CreateContext(signedInUserId: null);
+        var attachment = new TicketAttachment
+        {
+            TicketId = ticketId, CommentId = commentId, OriginalFileName = fileName, StoredFileName = name,
+            ContentType = "application/pdf", SizeBytes = TestFiles.Pdf.Length, UploadedByUserId = uploadedBy,
+            CreatedAt = Now.AddMinutes(-30),
+        };
+        db.TicketAttachments.Add(attachment);
+        db.SaveChanges();
+        return attachment.Id;
+    }
+
+    /// <summary>Seeds a comment on the ticket and returns its id.</summary>
+    protected int AddComment(int ticketId, int authorId, string body, bool isInternal = false, DateTime? at = null)
+    {
+        using var db = CreateContext(signedInUserId: null);
+        var comment = new TicketComment
+        {
+            TicketId = ticketId, AuthorUserId = authorId, Body = body, IsInternal = isInternal,
+            CreatedAt = at ?? Now.AddMinutes(-40),
+        };
+        db.TicketComments.Add(comment);
+        db.SaveChanges();
+        return comment.Id;
     }
 
     /// <summary>Reads tickets as the database has them (no query filter: nobody signed in, so IgnoreQueryFilters).</summary>

@@ -18,7 +18,7 @@ public sealed class CreateTicketTests : TicketTestBase
         var json = $$"""{ "requesterId": {{IdoId}}, "requesterDepartmentId": {{HrId}}, "subject": "תלוש", "description": "{{Description}}" }""";
         var request = JsonSerializer.Deserialize<CreateTicketRequest>(json, ApiJson)!;
 
-        var created = await ServiceFor(NoaId).CreateAsync(request, CancellationToken.None);
+        var created = await ServiceFor(NoaId).CreateAsync(request, [], CancellationToken.None);
 
         var ticket = AllTickets().Single(t => t.Id == created.Id);
         Assert.Equal(NoaId, ticket.RequesterId);
@@ -30,7 +30,7 @@ public sealed class CreateTicketTests : TicketTestBase
     public async Task The_department_is_read_from_the_database_and_kept_as_a_snapshot()
     {
         // The token's department claim (1) is stale; the database says Development.
-        var created = await ServiceFor(NoaId).CreateAsync(Request(), CancellationToken.None);
+        var created = await ServiceFor(NoaId).CreateAsync(Request(), [], CancellationToken.None);
         Assert.NotEqual(ClaimDepartmentId, DevId);
         Assert.Equal(DevId, AllTickets().Single(t => t.Id == created.Id).RequesterDepartmentId);
 
@@ -42,7 +42,7 @@ public sealed class CreateTicketTests : TicketTestBase
             await db.SaveChangesAsync();
         }
 
-        var afterMove = await ServiceFor(NoaId).CreateAsync(Request(), CancellationToken.None);
+        var afterMove = await ServiceFor(NoaId).CreateAsync(Request(), [], CancellationToken.None);
 
         Assert.Equal(DevId, AllTickets().Single(t => t.Id == created.Id).RequesterDepartmentId);
         Assert.Equal(HrId, AllTickets().Single(t => t.Id == afterMove.Id).RequesterDepartmentId);
@@ -53,7 +53,7 @@ public sealed class CreateTicketTests : TicketTestBase
     {
         var created = await ServiceFor(NoaId).CreateAsync(
             new CreateTicketRequest { Subject = "  תלוש נובמבר  ", Description = "  " + Description + "\n" },
-            CancellationToken.None);
+            [], CancellationToken.None);
 
         var ticket = AllTickets().Single(t => t.Id == created.Id);
         Assert.True(created.Id > 0);
@@ -84,7 +84,7 @@ public sealed class CreateTicketTests : TicketTestBase
     public async Task An_empty_subject_is_stored_as_null(string? subject)
     {
         var created = await ServiceFor(NoaId).CreateAsync(
-            new CreateTicketRequest { Subject = subject, Description = Description }, CancellationToken.None);
+            new CreateTicketRequest { Subject = subject, Description = Description }, [], CancellationToken.None);
 
         Assert.Null(AllTickets().Single(t => t.Id == created.Id).Subject);
     }
@@ -93,7 +93,7 @@ public sealed class CreateTicketTests : TicketTestBase
     public async Task An_inactive_user_with_a_still_valid_token_cannot_open_a_ticket()
     {
         var error = await Assert.ThrowsAsync<AuthenticationFailedException>(() =>
-            ServiceFor(OritId).CreateAsync(Request(), CancellationToken.None));
+            ServiceFor(OritId).CreateAsync(Request(), [], CancellationToken.None));
 
         Assert.Equal(AuthenticationFailedException.NotSignedInTitle, error.Title);
         Assert.DoesNotContain(AllTickets(), t => t.RequesterId == OritId);
@@ -105,7 +105,7 @@ public sealed class CreateTicketTests : TicketTestBase
         var before = AllTickets().Count;
 
         await Assert.ThrowsAsync<ValidationException>(() =>
-            ServiceFor(NoaId).CreateAsync(new CreateTicketRequest { Description = "קצר" }, CancellationToken.None));
+            ServiceFor(NoaId).CreateAsync(new CreateTicketRequest { Description = "קצר" }, [], CancellationToken.None));
 
         Assert.Equal(before, AllTickets().Count);
     }
@@ -114,7 +114,7 @@ public sealed class CreateTicketTests : TicketTestBase
     public async Task The_log_has_ids_only_never_the_subject_or_description()
     {
         var created = await ServiceFor(NoaId).CreateAsync(
-            new CreateTicketRequest { Subject = "נושא סודי", Description = Description }, CancellationToken.None);
+            new CreateTicketRequest { Subject = "נושא סודי", Description = Description }, [], CancellationToken.None);
 
         var log = Logger.AllText;
         Assert.Contains(created.Id.ToString(), log);

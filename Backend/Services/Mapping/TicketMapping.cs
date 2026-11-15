@@ -27,4 +27,16 @@ internal static class TicketMapping
             UpdatedAt = now,
         };
     }
+
+    /// <summary>A comment by the signed-in user. Never a resolution reply here (task 3.5 sends those).</summary>
+    public static TicketComment ToNewComment(this CreateCommentRequest request, int ticketId, int authorUserId,
+        DateTime now) => new()
+    {
+        TicketId = ticketId,
+        AuthorUserId = authorUserId,
+        Body = request.Body.Trim(),
+        IsInternal = request.IsInternal,
+        IsResolution = false,
+        CreatedAt = now,
+    };
 }

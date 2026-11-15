@@ -12,7 +12,8 @@ namespace Repositories.Data.Seed;
 /// Deterministic: a fixed Random seed, and all dates relative to one "now" captured at the start.
 /// The caller (API, --seed) is responsible for allowing this only in Development.
 /// </summary>
-internal sealed class DatabaseSeeder(AppDbContext db, IPasswordHasher passwordHasher, ILogger<DatabaseSeeder> logger)
+internal sealed class DatabaseSeeder(AppDbContext db, IPasswordHasher passwordHasher, IFileStorage fileStorage,
+    ILogger<DatabaseSeeder> logger)
     : IDatabaseSeeder
 {
     private const int RandomSeed = 1042;
@@ -21,6 +22,9 @@ internal sealed class DatabaseSeeder(AppDbContext db, IPasswordHasher passwordHa
     {
         // Validate the demo data before touching the database.
         ValidateManagerRoles();
+
+        // The attachment files of the old database would be left without rows.
+        await fileStorage.ClearAllAsync(cancellationToken);
 
         logger.LogWarning("Dropping and recreating database {Database}", db.Database.GetDbConnection().Database);
         await db.Database.EnsureDeletedAsync(cancellationToken);
@@ -135,6 +139,7 @@ internal sealed class DatabaseSeeder(AppDbContext db, IPasswordHasher passwordHa
 
         // Counted from the list: a query would return nothing here, since no user is signed in (organization filter).
         var tickets = generator.Generate();
+        var attachments = await SampleAttachments.AddAsync(tickets, fileStorage, cancellationToken);
         db.Tickets.AddRange(tickets);
         await db.SaveChangesAsync(cancellationToken);
 
@@ -142,8 +147,8 @@ internal sealed class DatabaseSeeder(AppDbContext db, IPasswordHasher passwordHa
 
         // Counts only – never ticket content (spec 6.4).
         logger.LogInformation(
-            "Seed completed: {Users} users, {Departments} departments, {Categories} categories, {Tickets} tickets",
-            users.Count, departments.Count, categories.Count, tickets.Count);
+            "Seed completed: {Users} users, {Departments} departments, {Categories} categories, {Tickets} tickets, {Attachments} attachments",
+            users.Count, departments.Count, categories.Count, tickets.Count, attachments);
     }
 
     /// <summary>

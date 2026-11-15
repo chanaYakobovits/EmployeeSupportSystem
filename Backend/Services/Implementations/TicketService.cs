@@ -7,6 +7,8 @@ using Common.Models;
 using FluentValidation;
 using Microsoft.Extensions.Logging;
 using Repositories.Interfaces;
+using Services.Implementations.Files;
+using Services.Implementations.Tickets;
 using Services.Interfaces;
 using Services.Mapping;
 using Services.Validators;
@@ -14,26 +16,33 @@ using Services.Validators;
 namespace Services.Implementations;
 
 /// <summary>
-/// Tickets – task 3.1: opening a ticket and the requester's own view. The requester is always the signed-in user
-/// (spec 6.2). Logs carry ticket and user ids only – never the subject or description (spec 6.4).
+/// Tickets – task 3.1: opening a ticket (with attachments since 3.2) and the requester's own view. The requester is
+/// always the signed-in user (spec 6.2). Logs carry ids, sizes and types only – never the subject, description or a file
+/// name (spec 6.4).
 /// </summary>
 public sealed class TicketService(
     ITicketRepository tickets,
     IUserRepository users,
     IUnitOfWork unitOfWork,
+    ITicketAccess ticketAccess,
+    IFileStorage storage,
     IDateTimeProvider clock,
     ICurrentUser currentUser,
     IValidator<CreateTicketRequest> createValidator,
+    IValidator<IReadOnlyList<IncomingFile>> filesValidator,
     IValidator<MyTicketsQuery> listValidator,
     ILogger<TicketService> logger) : ITicketService
 {
-    public const string TicketNotFoundTitle = "הפנייה לא נמצאה";
+    public const string TicketNotFoundTitle = TicketAccess.TicketNotFoundTitle;
 
     // ===================== Create (spec 4.3 – what the employee experiences) =====================
 
-    public async Task<TicketCreatedDto> CreateAsync(CreateTicketRequest request, CancellationToken cancellationToken)
+    public async Task<TicketCreatedDto> CreateAsync(CreateTicketRequest request, IReadOnlyList<IncomingFile> files,
+        CancellationToken cancellationToken)
     {
         await createValidator.EnsureValidAsync(request, cancellationToken);
+        // Every file is checked (count, size, type by content) before anything is written.
+        await filesValidator.EnsureValidAsync(files, cancellationToken);
 
         var requesterId = currentUser.UserId;
         // Snapshot of the department at this moment (spec 3.1), from the database: the token's claim may be stale.
@@ -43,19 +52,38 @@ public sealed class TicketService(
 
         var now = clock.UtcNow;
         var ticket = request.ToNewTicket(currentUser.OrganizationId, requesterId, departmentId, now);
+
+        // Written to disk first; deleted again if the database save below fails or is cancelled.
+        await using var staged = new StagedFiles(storage, logger);
+        foreach (var file in files)
+        {
+            // Files of the new-ticket form have no comment: visible to the requester and the staff.
+            ticket.Attachments.Add(await staged.SaveAttachmentAsync(file, requesterId, now, cancellationToken));
+        }
+
         StageNewTicket(ticket, now);
 
         // One SaveChanges = one transaction for the ticket and every row staged with it (spec 4.3: the ticket and its
         // analysis job are never saved apart).
         await unitOfWork.SaveChangesAsync(cancellationToken);
+        staged.Commit();
 
-        logger.LogInformation("Ticket {TicketId} created by user {UserId}", ticket.Id, requesterId);
+        logger.LogInformation("Ticket {TicketId} created by user {UserId} with {AttachmentCount} attachments",
+            ticket.Id, requesterId, ticket.Attachments.Count);
+        foreach (var attachment in ticket.Attachments)
+        {
+            logger.LogInformation("Attachment {AttachmentId} added to ticket {TicketId} ({SizeBytes} bytes, {ContentType})",
+                attachment.Id, ticket.Id, attachment.SizeBytes, attachment.ContentType);
+        }
+
         return new TicketCreatedDto(ticket.Id);
     }
 
     /// <summary>
     /// Everything saved together with a new ticket. Later tasks add their rows here, in the same transaction:
     /// routing and SLA (3.3) and the AI analysis job (4.3).
+    /// The AI job of 4.3 analyzes only the redacted description – attachments are never sent to the AI (spec 4.3, 5.1):
+    /// not their content, not their names.
     /// </summary>
     private void StageNewTicket(Ticket ticket, DateTime now)
     {
@@ -85,9 +113,10 @@ public sealed class TicketService(
 
     public async Task<RequesterTicketDetailsDto> GetAsync(int ticketId, CancellationToken cancellationToken)
     {
-        // Viewing scopes, each filtered in its own query. Task 3.4 adds the staff scopes (handler, department manager,
-        // executive) before this one, with a staff view of the ticket.
-        var asRequester = await tickets.GetForRequesterAsync(ticketId, currentUser.UserId, cancellationToken);
-        return asRequester ?? throw new NotFoundException(TicketNotFoundTitle);
+        // Any viewing scope (spec 2.4). Staff get the requester's DTO for now – it holds less, nothing internal;
+        // task 3.4 adds the staff view (AI analysis, urgency, SLA).
+        await ticketAccess.GetAsync(ticketId, cancellationToken);
+        return await tickets.GetDetailsAsync(ticketId, cancellationToken)
+               ?? throw new NotFoundException(TicketNotFoundTitle);
     }
 }

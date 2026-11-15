@@ -25,6 +25,12 @@ public interface IUserRepository
     /// </summary>
     Task<int?> GetActiveDepartmentIdAsync(int userId, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// The user as the ticket permission matrix needs them (department, managed department, roles), in one query from
+    /// the database. Null if the user does not exist or is inactive.
+    /// </summary>
+    Task<Common.DTOs.Tickets.TicketViewer?> GetTicketViewerAsync(int userId, CancellationToken cancellationToken);
+
     // ---- user administration (task 2.3); all within the signed-in user's organization unless stated ----
 
     /// <summary>Filtered, sorted and paged in SQL. The query must already be validated (page, pageSize, sortBy).</summary>
