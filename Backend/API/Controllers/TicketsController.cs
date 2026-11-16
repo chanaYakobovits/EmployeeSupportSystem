@@ -116,6 +116,17 @@ public class TicketsController(
         Ok(await handlingService.AssignAsync(id, request, cancellationToken));
 
     /// <summary>
+    /// The targets of the transfer dialog (task 3.4): active handlers of the handling department (not the requester, not
+    /// the current handler), and – for handlers – other departments with an active handler. 403 without assign permission.
+    /// </summary>
+    [HttpGet("{id:int}/assign-options")]
+    [ProducesResponseType<TicketAssignOptionsDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<TicketAssignOptionsDto>> GetAssignOptions(int id,
+        CancellationToken cancellationToken) =>
+        Ok(await handlingService.GetAssignOptionsAsync(id, cancellationToken));
+
+    /// <summary>
     /// The timeline: status changes, comments and files in order. The requester gets
     /// <see cref="RequesterTicketHistoryDto"/> (no internal notes, their files or reasons); staff get
     /// <see cref="StaffTicketHistoryDto"/>.

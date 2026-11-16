@@ -1251,7 +1251,7 @@ Authorization: Bearer {{staffAlon.response.body.$.accessToken}}
 ### ---------- Details: the staff view (spec 7.7) ----------
 
 ### Ticket 7 (assigned to Alon) → 200 StaffTicketDetailsDto: requester (name, department, jobTitle), urgency, dueAt,
-### isOverdue, classificationSource, assignedTo, assignedDepartment, rowVersion, permissions { canReply, canWriteInternal }.
+### isOverdue, classificationSource, assignedTo, assignedDepartment, rowVersion, allowedActions ["reply", "internalNote", ...].
 ### Recorded in AuditLogs: SELECT TOP 5 * FROM AuditLogs WHERE Action = 'Ticket.Viewed' ORDER BY Id DESC
 GET {{API_HostAddress}}/api/tickets/7
 Authorization: Bearer {{staffAlon.response.body.$.accessToken}}
@@ -1286,7 +1286,7 @@ Content-Type: application/json
 GET {{API_HostAddress}}/api/tickets?scope=handling&status=Assigned&status=InProgress
 Authorization: Bearer {{staffLiat.response.body.$.accessToken}}
 
-### 1. Alon reads ticket 152 → permissions all true, assignedTo null, urgency null
+### 1. Alon reads ticket 152 → allowedActions incl. "takeFromQueue", assignedTo null, urgency null
 # @name t152
 GET {{API_HostAddress}}/api/tickets/152
 Authorization: Bearer {{staffAlon.response.body.$.accessToken}}
@@ -1399,3 +1399,8 @@ Authorization: Bearer {{staffAlon.response.body.$.accessToken}}
 Content-Type: application/json
 
 { "urgency": "Low", "reason": "בדיקה", "rowVersion": "{{t7.response.body.$.rowVersion}}" }
+
+### Assign options of ticket 152 (Alon) → 200 { handlers: [{ id, name, openTicketCount }], departments: [{ id, name }] }
+### – the other active handlers of פיתוח, and other departments with an active handler. Executive → 403.
+GET {{API_HostAddress}}/api/tickets/152/assign-options
+Authorization: Bearer {{staffAlon.response.body.$.accessToken}}

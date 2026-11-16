@@ -102,4 +102,44 @@ describe('TicketsApiService', () => {
     const form = request.request.body as FormData;
     expect([...form.keys()]).toEqual(['files', 'files']);
   });
+
+  describe('staff (task 3.4)', () => {
+    it('listStaff: the scope and repeated filters as query params', () => {
+      service
+        .listStaff({ scope: 'queue', status: ['New', 'Assigned'], urgency: ['NotSet'], overdueOnly: true, page: 1, pageSize: 25 })
+        .subscribe();
+
+      const request = http.expectOne((r) => r.url === url);
+      expect(request.request.params.get('scope')).toBe('queue');
+      expect(request.request.params.getAll('status')).toEqual(['New', 'Assigned']);
+      expect(request.request.params.getAll('urgency')).toEqual(['NotSet']);
+      expect(request.request.params.get('overdueOnly')).toBe('true');
+      request.flush({ items: [], page: 1, pageSize: 25, totalCount: 0 });
+    });
+
+    it('addComment from the handling screen sends isInternal explicitly', () => {
+      service.addComment(152, 'הערה', [], true).subscribe();
+      let form = http.expectOne(`${url}/152/comments`).request.body as FormData;
+      expect(form.get('isInternal')).toBe('true');
+
+      service.addComment(152, 'תגובה', [], false).subscribe();
+      form = http.expectOne(`${url}/152/comments`).request.body as FormData;
+      expect(form.get('isInternal')).toBe('false');
+    });
+
+    it('reclassify, assign and assign-options', () => {
+      service.reclassify(152, { categoryId: 3, reason: 'נימוק', rowVersion: 'AAA=' }).subscribe();
+      const patch = http.expectOne(`${url}/152/classification`);
+      expect(patch.request.method).toBe('PATCH');
+      expect(patch.request.body).toEqual({ categoryId: 3, reason: 'נימוק', rowVersion: 'AAA=' });
+
+      service.assign(152, { targetUserId: 14, rowVersion: 'AAA=' }).subscribe();
+      const post = http.expectOne(`${url}/152/assign`);
+      expect(post.request.method).toBe('POST');
+      expect(post.request.body).toEqual({ targetUserId: 14, rowVersion: 'AAA=' });
+
+      service.assignOptions(152).subscribe();
+      expect(http.expectOne(`${url}/152/assign-options`).request.method).toBe('GET');
+    });
+  });
 });

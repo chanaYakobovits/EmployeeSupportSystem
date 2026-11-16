@@ -43,6 +43,11 @@
   --status-closed: var(--text-secondary);
   --status-cancelled: #737373; // lighter grey, outline only (no tint)
   --accent-soft: rgba(0, 163, 173, 0.1);
+  // Internal notes (task 3.4): yellowish, visible to staff only. The text colour passes WCAG AA on these backgrounds.
+  --internal-bg: #fff8e1;
+  --internal-border: #f3dc8f;
+  --internal-tag-bg: #ffecb3;
+  --internal-text: #6d4c00;
   --auth-bg-start: #f0f7ff;
   --on-primary-overlay: rgba(255, 255, 255, 0.15);
   --on-primary-line: rgba(255, 255, 255, 0.12);

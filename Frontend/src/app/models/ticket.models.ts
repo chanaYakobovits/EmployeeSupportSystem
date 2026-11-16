@@ -1,4 +1,5 @@
 import { TicketAttachment } from './attachment.models';
+import { Urgency } from './sla.models';
 import { PageQuery } from './paging.models';
 
 /** Ticket handling status (spec 3.2, Backend Common.Enums.TicketStatus), in workflow order. */
@@ -168,3 +169,199 @@ export const REQUESTER_STATUS_GROUPS: Readonly<Record<RequesterStatusGroup, read
   waiting: ['WaitingForEmployee'],
   closed: ['Closed', 'Cancelled'],
 };
+
+// ===================== Staff (task 3.4) =====================
+
+/** Statuses in which the SLA clock runs – same as the server's TicketStatuses.Open (WaitingForEmployee: paused). */
+export const OPEN_SLA_STATUSES: readonly TicketStatus[] = ['New', 'Assigned', 'InProgress'];
+
+/** Classification and assignment are possible – not once resolved (the server's EnsureOpen). */
+export const ACTIVE_TICKET_STATUSES: readonly TicketStatus[] = ['New', 'Assigned', 'InProgress', 'WaitingForEmployee'];
+
+/** Who set the category (Backend ClassificationSource). */
+export type ClassificationSource = 'Ai' | 'Fallback' | 'Manual';
+
+/** The staff lists of GET /api/tickets (Backend TicketListScope). The handler's tabs are assigned / queue / handling. */
+export type TicketListScope = 'assigned' | 'queue' | 'handling' | 'department';
+
+/** An urgency filter value; NotSet = "לא נקבעה" (Backend UrgencyFilter). */
+export type UrgencyFilter = Urgency | 'NotSet';
+
+export const URGENCY_FILTER_VALUES: readonly UrgencyFilter[] = ['Critical', 'High', 'Medium', 'Low', 'NotSet'];
+
+/**
+ * Closed and cancelled: the staff lists leave them out unless the status filter asks for them
+ * (Backend TicketStatuses.Final).
+ */
+export const FINAL_TICKET_STATUSES: readonly TicketStatus[] = ['Closed', 'Cancelled'];
+
+/**
+ * Closed list of sortBy values of GET /api/tickets (Backend StaffTicketSortFields). priority is the default: waiting
+ * for the handler first (overdue, then the most urgent, then the nearest due time), then waiting for the employee,
+ * resolved, closed – those by the latest update. It has one fixed order (sortDir is ignored).
+ */
+export const STAFF_TICKET_SORT_FIELDS = ['priority', 'dueAt', 'urgency', 'createdAt', 'updatedAt', 'status'] as const;
+
+export type StaffTicketSortField = (typeof STAFF_TICKET_SORT_FIELDS)[number];
+
+/** The options of the queue's sort select. */
+export const STAFF_TICKET_SORT_LABELS: Record<StaffTicketSortField, string> = {
+  priority: 'עדיפות',
+  dueAt: 'מועד יעד',
+  urgency: 'דחיפות',
+  createdAt: 'תאריך פתיחה',
+  updatedAt: 'עדכון אחרון',
+  status: 'סטטוס',
+};
+
+/** Without sortDir the server sorts these descending (StaffTicketSortFields.IsDescendingByDefault). */
+export const STAFF_TICKET_DESCENDING_BY_DEFAULT: readonly string[] = ['urgency', 'createdAt', 'updatedAt'];
+
+/** GET /api/tickets. Dates are calendar days (yyyy-MM-dd, Israel time), both included. */
+export interface StaffTicketsQuery extends PageQuery {
+  scope: TicketListScope;
+  status?: readonly TicketStatus[] | null;
+  categoryId?: number | null;
+  urgency?: readonly UrgencyFilter[] | null;
+  from?: string | null;
+  to?: string | null;
+  overdueOnly?: boolean | null;
+  search?: string | null;
+}
+
+/** A row of the staff lists (Backend StaffTicketListItemDto). */
+export interface StaffTicketListItem {
+  id: number;
+  subject: string;
+  isSubjectExcerpt: boolean;
+  requesterName: string;
+  /** The requester's department when the ticket was opened. */
+  requesterDepartmentName: string;
+  categoryName: string | null;
+  /** Null until set; its SLA is then Medium. */
+  urgency: Urgency | null;
+  status: TicketStatus;
+  handlerName: string | null;
+  assignedDepartmentName: string | null;
+  dueAt: string | null;
+  /** Computed by the server when the list was loaded. */
+  isOverdue: boolean;
+  classificationSource: ClassificationSource | null;
+  createdAt: string;
+  updatedAt: string;
+  /** Base64 – sent back with "קח לטיפולי" (and the bulk actions of task 3.6). */
+  rowVersion: string;
+}
+
+/** The actions the server allows on one ticket (Backend TicketActions) – the screen shows only these. */
+export type TicketAction = 'reply' | 'internalNote' | 'reclassify' | 'assign' | 'transferToDepartment' | 'takeFromQueue';
+
+export interface NamedRef {
+  id: number;
+  name: string;
+}
+
+/** GET /api/tickets/{id} for staff (Backend StaffTicketDetailsDto). */
+export interface StaffTicketDetails {
+  id: number;
+  subject: string | null;
+  description: string;
+  status: TicketStatus;
+  requester: { id: number; name: string; departmentName: string; jobTitle: string };
+  category: NamedRef | null;
+  urgency: Urgency | null;
+  classificationSource: ClassificationSource | null;
+  dueAt: string | null;
+  isOverdue: boolean;
+  assignedTo: NamedRef | null;
+  assignedDepartment: NamedRef | null;
+  createdAt: string;
+  updatedAt: string;
+  resolvedAt: string | null;
+  closedAt: string | null;
+  /** Base64; sent back with every change (spec 11.2). */
+  rowVersion: string;
+  allowedActions: TicketAction[];
+}
+
+/** GET /api/tickets/{id}: the requester's view (also for staff who opened the ticket) or the staff view. */
+export type TicketDetails = RequesterTicketDetails | StaffTicketDetails;
+
+export function isStaffTicketDetails(ticket: TicketDetails): ticket is StaffTicketDetails {
+  return 'allowedActions' in ticket;
+}
+
+/** A status change in the staff timeline, with its reason. */
+export interface StaffTimelineStatus extends RequesterTimelineStatus {
+  reason: string | null;
+}
+
+/** A comment or an internal note (isInternal – yellow, "פנימי"; never sent to the requester). */
+export interface StaffTimelineComment extends RequesterTimelineComment {
+  isInternal: boolean;
+}
+
+export type TicketChangeKind = 'Reclassified' | 'Transferred' | 'Taken';
+
+/** A reclassification or a transfer, with its reason (staff only). Names; null handler = the department's queue. */
+export interface StaffTimelineChange {
+  kind: 'change';
+  at: string;
+  changeKind: TicketChangeKind;
+  changedByName: string;
+  reason: string | null;
+  fromCategoryName: string | null;
+  toCategoryName: string | null;
+  fromUrgency: Urgency | null;
+  toUrgency: Urgency | null;
+  fromDepartmentName: string | null;
+  toDepartmentName: string | null;
+  fromHandlerName: string | null;
+  toHandlerName: string | null;
+}
+
+export type StaffTimelineItem =
+  | StaffTimelineStatus
+  | StaffTimelineComment
+  | RequesterTimelineAttachment
+  | StaffTimelineChange;
+
+/** GET /api/tickets/{id}/history for staff: internal notes, reasons and changes included. */
+export interface StaffTicketHistory {
+  ticketId: number;
+  items: StaffTimelineItem[];
+}
+
+export type TimelineItem = RequesterTimelineItem | StaffTimelineItem;
+
+/** PATCH /classification: the fields not sent keep their value. */
+export interface ReclassifyTicketRequest {
+  categoryId?: number;
+  urgency?: Urgency;
+  reason: string;
+  rowVersion: string;
+}
+
+/** POST /assign: exactly one target. No reason when a handler takes a ticket from the queue. */
+export interface AssignTicketRequest {
+  targetUserId?: number;
+  targetDepartmentId?: number;
+  reason?: string;
+  rowVersion: string;
+}
+
+/** Response of a change. canView false: the ticket left the user's scope – back to the list. */
+export interface TicketUpdated {
+  id: number;
+  rowVersion: string;
+  canView: boolean;
+}
+
+/** GET /api/tickets/{id}/assign-options. */
+export interface TicketAssignOptions {
+  handlers: { id: number; name: string; openTicketCount: number }[];
+  departments: NamedRef[];
+}
+
+/** Same limits as the server's TicketFieldLimits.Reason*. */
+export const REASON_LIMITS = { minLength: 3, maxLength: 500 } as const;

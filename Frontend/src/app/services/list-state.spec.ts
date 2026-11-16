@@ -3,9 +3,11 @@ import { convertToParamMap } from '@angular/router';
 import {
   ListStateDef,
   boolParam,
+  dateParam,
   enumParam,
   hasActiveFilters,
   idParam,
+  listParam,
   readListState,
   textParam,
   toPageQuery,
@@ -123,6 +125,42 @@ describe('list-state', () => {
       pageSize: 25,
       sortBy: 'name',
       sortDir: 'asc',
+    });
+  });
+
+  describe('listParam / dateParam / descendingByDefault', () => {
+    type Multi = { status: ('New' | 'Assigned' | 'Closed')[] | null; from: string | null };
+    const MULTI: ListStateDef<Multi> = {
+      filters: { status: listParam(enumParam(['New', 'Assigned', 'Closed'])), from: dateParam },
+      sortFields: ['dueAt', 'urgency', 'status'],
+      defaultSort: { by: 'dueAt', dir: 'asc' },
+      descendingByDefault: ['urgency'],
+    };
+    const readMulti = (params: Record<string, string>) => readListState(convertToParamMap(params), MULTI);
+
+    it('reads several values from one param, dropping invalid and repeated ones', () => {
+      expect(readMulti({ status: 'New,Bogus,Assigned,New' }).filters.status).toEqual(['New', 'Assigned']);
+      expect(readMulti({ status: 'Bogus' }).filters.status).toBeNull();
+    });
+
+    it('writes a list comma separated, and an empty list not at all', () => {
+      const state = readMulti({});
+      expect(toQueryParams(withFilters(state, { status: ['New', 'Closed'] }), MULTI)['status']).toBe('New,Closed');
+      expect(toQueryParams(withFilters(state, { status: [] }), MULTI)['status']).toBeNull();
+      expect(hasActiveFilters(withFilters(state, { status: [] }))).toBeFalse();
+    });
+
+    it('accepts a calendar day only', () => {
+      expect(readMulti({ from: '2026-11-01' }).filters.from).toBe('2026-11-01');
+      expect(readMulti({ from: '01/11/2026' }).filters.from).toBeNull();
+      expect(readMulti({ from: '2026-13-45' }).filters.from).toBeNull();
+    });
+
+    it('a column the server sorts descending by default is read and written without sortDir', () => {
+      expect(readMulti({ sortBy: 'urgency' }).sort).toEqual({ by: 'urgency', dir: 'desc' });
+      expect(readMulti({ sortBy: 'status' }).sort).toEqual({ by: 'status', dir: 'asc' });
+      const params = toQueryParams(withSort(readMulti({}), { by: 'urgency', dir: 'desc' }), MULTI);
+      expect(params['sortDir']).toBeNull();
     });
   });
 });

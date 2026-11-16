@@ -150,10 +150,8 @@ public sealed class TicketService(
         }
 
         var now = clock.UtcNow;
-        var p = access.Permissions;
-        var permissions = new StaffTicketPermissionsDto(p.CanReply, p.CanWriteInternal, p.CanReclassify, p.CanAssign,
-            p.CanTransferToDepartment);
-        var details = await tickets.GetStaffDetailsAsync(ticketId, permissions, now, cancellationToken)
+        var allowedActions = TicketAllowedActions.For(access.Permissions, access.Ticket, access.Viewer);
+        var details = await tickets.GetStaffDetailsAsync(ticketId, allowedActions, now, cancellationToken)
                       ?? throw new NotFoundException(TicketNotFoundTitle);
 
         // Spec 6.4: viewing another employee's ticket – every staff view, after the ticket was actually read.

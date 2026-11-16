@@ -1,0 +1,95 @@
+<section
+  class="surface-card composer"
+  [class.mode-internal]="isInternal()"
+  [class.mode-reply]="!isInternal()"
+  aria-labelledby="composer-title"
+>
+  <div class="composer-top">
+    <h2 id="composer-title" class="card-title">כתיבה</h2>
+
+    @if (showSwitch()) {
+      <mat-button-toggle-group
+        class="mode-switch"
+        aria-label="סוג ההודעה"
+        hideSingleSelectionIndicator
+        [value]="mode()"
+        (change)="setMode($event.value)"
+      >
+        <mat-button-toggle value="internal" data-mode="internal">
+          <mat-icon aria-hidden="true">lock</mat-icon>
+          הערה פנימית
+        </mat-button-toggle>
+        <mat-button-toggle value="reply" data-mode="reply">
+          <mat-icon aria-hidden="true">forward_to_inbox</mat-icon>
+          תגובה לעובד
+        </mat-button-toggle>
+      </mat-button-toggle-group>
+    }
+  </div>
+
+  <!-- What the current mode means, in words – the colour is never the only cue. -->
+  @if (isInternal()) {
+    <p class="mode-banner internal-banner">
+      <mat-icon aria-hidden="true">visibility_off</mat-icon>
+      <span><strong>גלוי לצוות בלבד</strong> – העובד לא יראה את ההערה ואת הקבצים שלה.</span>
+    </p>
+  } @else {
+    <p class="mode-banner reply-banner">
+      <mat-icon aria-hidden="true">person</mat-icon>
+      <span><strong>התגובה תישלח לעובד</strong> – הוא יראה אותה ואת הקבצים בפנייה.</span>
+    </p>
+  }
+  <p class="visually-hidden" aria-live="polite" aria-atomic="true">{{ modeAnnouncement() }}</p>
+
+  <form class="composer-form" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+    @if (alert(); as alert) {
+      <app-form-alert [alert]="alert" />
+    }
+
+    <mat-form-field appearance="outline" class="field">
+      <mat-label>{{ isInternal() ? 'הערה פנימית' : 'תגובה לעובד' }}</mat-label>
+      <textarea
+        #bodyField
+        matInput
+        formControlName="body"
+        dir="auto"
+        cdkTextareaAutosize
+        cdkAutosizeMinRows="4"
+        cdkAutosizeMaxRows="16"
+        [attr.maxlength]="bodyMaxLength"
+        [readonly]="store.busy()"
+      ></textarea>
+      <mat-hint align="end" class="counter">{{ bodyLength() }} / {{ bodyMaxText }}</mat-hint>
+      @let body = form.controls.body;
+      @if (body.hasError('required')) {
+        <mat-error>{{ emptyMessage() }}</mat-error>
+      } @else if (body.hasError('maxlength')) {
+        <mat-error>הטקסט יכול להכיל עד {{ bodyMaxText }} תווים</mat-error>
+      } @else if (body.hasError('server')) {
+        <mat-error>{{ body.getError('server') }}</mat-error>
+      }
+    </mat-form-field>
+    <p class="visually-hidden" aria-live="polite" aria-atomic="true">{{ counterAnnouncement() }}</p>
+
+    <!-- Locked while sending (not disabled: enabling again would run the validators and drop the server's errors). -->
+    <app-file-upload formControlName="files" [serverError]="filesError()" [busy]="store.busy()" />
+
+    <div class="form-actions">
+      <button
+        mat-flat-button
+        type="submit"
+        class="submit-button"
+        [class.btn-primary-gradient]="!isInternal()"
+        [class.internal-button]="isInternal()"
+        [disabled]="store.busy()"
+      >
+        @if (store.busy()) {
+          <mat-spinner diameter="18" aria-hidden="true" />
+        } @else {
+          <mat-icon aria-hidden="true">{{ isInternal() ? 'lock' : 'send' }}</mat-icon>
+        }
+        {{ isInternal() ? 'שמירת הערה פנימית' : 'שליחה לעובד' }}
+      </button>
+    </div>
+  </form>
+</section>

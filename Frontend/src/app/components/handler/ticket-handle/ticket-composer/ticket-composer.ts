@@ -1,0 +1,243 @@
+import { HttpErrorResponse } from '@angular/common/http';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  DestroyRef,
+  ElementRef,
+  Injector,
+  afterNextRender,
+  computed,
+  effect,
+  inject,
+  signal,
+  untracked,
+  viewChild,
+} from '@angular/core';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
+import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
+import { MatButtonModule } from '@angular/material/button';
+import { MatButtonToggleModule } from '@angular/material/button-toggle';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatIconModule } from '@angular/material/icon';
+import { MatInputModule } from '@angular/material/input';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { debounceTime, map } from 'rxjs';
+
+import { toUserMessage } from '../../../../interceptors/error.interceptor';
+import { isProblemDetails } from '../../../../models/problem-details';
+import { COMMENT_FIELD_LIMITS } from '../../../../models/ticket.models';
+import { NotificationService } from '../../../../services/notification.service';
+import {
+  FILES_FIELD,
+  applyServerErrors,
+  attachmentServerError,
+  clearServerErrors,
+} from '../../../../services/server-errors';
+import { TicketHandleStore, isConflictError } from '../../../../services/ticket-handle.store';
+import { isTicketClosedError } from '../../../../services/ticket-view.store';
+import { COUNTER_ANNOUNCE_DELAY_MS, describeCount, formatCount } from '../../../employee/character-count';
+import { FileUpload } from '../../../shared/file-upload/file-upload';
+import { FormAlert, FormAlertBox } from '../../../shared/form-alert/form-alert';
+import { CONFLICT_MESSAGE } from '../../handler-messages';
+
+const { bodyMaxLength } = COMMENT_FIELD_LIMITS;
+
+/** Internal note (staff only) or a reply the employee sees. */
+export type ComposerMode = 'internal' | 'reply';
+
+export const INTERNAL_SAVED_MESSAGE = 'ההערה הפנימית נשמרה';
+export const REPLY_SENT_MESSAGE = 'התגובה נשלחה לעובד';
+export const EMPTY_INTERNAL_MESSAGE = 'יש לכתוב את ההערה הפנימית';
+export const EMPTY_REPLY_MESSAGE = 'יש לכתוב תגובה או לצרף קובץ';
+
+const MODE_ANNOUNCEMENTS: Record<ComposerMode, string> = {
+  internal: 'מצב כתיבה: הערה פנימית – גלוי לצוות בלבד',
+  reply: 'מצב כתיבה: תגובה לעובד – העובד יראה את ההודעה',
+};
+
+/**
+ * The writing area of the handling screen (spec 7.7, area 3): two clearly different modes – "הערה פנימית" (yellowish,
+ * "גלוי לצוות בלבד", the default) and "תגובה לעובד" (plain, "שליחה לעובד"). Only the modes the server allows are shown.
+ * Switching keeps the text and the files: one form for both. The mode is announced to screen readers.
+ */
+@Component({
+  selector: 'app-ticket-composer',
+  imports: [
+    ReactiveFormsModule,
+    MatButtonModule,
+    MatButtonToggleModule,
+    MatFormFieldModule,
+    MatIconModule,
+    MatInputModule,
+    MatProgressSpinnerModule,
+    FileUpload,
+    FormAlertBox,
+  ],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  templateUrl: './ticket-composer.html',
+  styleUrl: './ticket-composer.scss',
+})
+export class TicketComposer {
+  protected readonly store = inject(TicketHandleStore);
+  private readonly notifications = inject(NotificationService);
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly injector = inject(Injector);
+  private readonly bodyField = viewChild<ElementRef<HTMLTextAreaElement>>('bodyField');
+  private readonly fileUpload = viewChild(FileUpload);
+
+  protected readonly bodyMaxLength = bodyMaxLength;
+  protected readonly bodyMaxText = formatCount(bodyMaxLength);
+
+  protected readonly canInternal = computed(() => this.store.can('internalNote'));
+  protected readonly canReply = computed(() => this.store.can('reply'));
+  /** Both modes allowed: the switch is shown; otherwise the one mode, labelled. */
+  protected readonly showSwitch = computed(() => this.canInternal() && this.canReply());
+
+  private readonly chosenMode = signal<ComposerMode>('internal');
+  /** The chosen mode if allowed; otherwise the allowed one. The default is the internal note (no accidental reply). */
+  readonly mode = computed<ComposerMode>(() => {
+    const chosen = this.chosenMode();
+    if (chosen === 'internal' && this.canInternal()) {
+      return 'internal';
+    }
+    if (chosen === 'reply' && this.canReply()) {
+      return 'reply';
+    }
+    return this.canInternal() ? 'internal' : 'reply';
+  });
+  protected readonly isInternal = computed(() => this.mode() === 'internal');
+  protected readonly modeAnnouncement = signal('');
+
+  protected readonly form = new FormGroup({
+    body: new FormControl('', { nonNullable: true, validators: [Validators.maxLength(bodyMaxLength)] }),
+    files: new FormControl<File[]>([], { nonNullable: true }),
+  });
+
+  protected readonly alert = signal<FormAlert | null>(null);
+  protected readonly filesError = signal<string | null>(null);
+
+  private readonly bodyValue = toSignal(this.form.controls.body.valueChanges, { initialValue: '' });
+  private readonly filesValue = toSignal(this.form.controls.files.valueChanges, { initialValue: [] as File[] });
+  protected readonly bodyLength = computed(() => this.bodyValue().length);
+
+  protected readonly counterAnnouncement = toSignal(
+    this.form.controls.body.valueChanges.pipe(
+      debounceTime(COUNTER_ANNOUNCE_DELAY_MS),
+      map((value) => describeCount(value, { max: bodyMaxLength })),
+    ),
+    { initialValue: '' },
+  );
+
+  constructor() {
+    this.form.controls.files.valueChanges
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.filesError.set(null));
+
+    // A required error belongs to the mode it was raised in.
+    effect(() => {
+      this.mode();
+      untracked(() => {
+        if (this.form.controls.body.hasError('required')) {
+          this.form.controls.body.setErrors(null);
+          this.form.controls.body.updateValueAndValidity({ emitEvent: false });
+        }
+      });
+    });
+  }
+
+  /** Text typed or files chosen – leaving the page asks first. */
+  hasText(): boolean {
+    return this.bodyValue().trim() !== '';
+  }
+
+  hasFiles(): boolean {
+    return this.filesValue().length > 0;
+  }
+
+  /** Switching keeps the text and the files (one form for both modes). */
+  protected setMode(mode: ComposerMode): void {
+    if (mode === this.mode()) {
+      return;
+    }
+    this.chosenMode.set(mode);
+    this.alert.set(null);
+    this.modeAnnouncement.set(MODE_ANNOUNCEMENTS[this.mode()]);
+  }
+
+  protected submit(): void {
+    if (this.store.busy()) {
+      return;
+    }
+    this.alert.set(null);
+    this.filesError.set(null);
+    clearServerErrors(this.form);
+
+    const internal = this.isInternal();
+    const body = this.form.controls.body.value.trim();
+    const files = this.form.controls.files.value;
+    // An internal note needs text (its files are internal through it); a reply may be files only.
+    if (body === '' && (internal || files.length === 0)) {
+      this.form.controls.body.setErrors({ required: true });
+      this.form.controls.body.markAsTouched();
+      this.focusBody();
+      return;
+    }
+    if (this.form.invalid) {
+      this.form.markAllAsTouched();
+      this.focusBody();
+      return;
+    }
+
+    this.store
+      .sendComment(body, files, internal)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: () => {
+          this.form.reset({ body: '', files: [] });
+          this.notifications.success(internal ? INTERNAL_SAVED_MESSAGE : REPLY_SENT_MESSAGE);
+          this.focusBody();
+        },
+        error: (error: unknown) => this.showError(error, files),
+      });
+  }
+
+  protected emptyMessage(): string {
+    return this.isInternal() ? EMPTY_INTERNAL_MESSAGE : EMPTY_REPLY_MESSAGE;
+  }
+
+  /** The text and files stay in the form whatever the error. */
+  private showError(error: unknown, files: readonly File[]): void {
+    if (isConflictError(error)) {
+      this.alert.set({ title: CONFLICT_MESSAGE, detail: 'מה שכתבת לא נשלח ונשאר כאן.' });
+      return;
+    }
+    if (isTicketClosedError(error)) {
+      this.alert.set({ title: 'הפנייה נסגרה ולא ניתן להוסיף לה תגובות או הערות' });
+      return;
+    }
+    const filesError = attachmentServerError(error, files);
+    this.filesError.set(filesError);
+    const applied = applyServerErrors(this.form, error, { skipFields: [FILES_FIELD] });
+    if (applied.unmatched.length === 0 && (filesError || applied.fields.length > 0)) {
+      if (applied.fields.length > 0) {
+        this.focusBody();
+      } else {
+        this.fileUpload()?.focus();
+      }
+      return;
+    }
+
+    const httpError = error instanceof HttpErrorResponse ? error : new HttpErrorResponse({ status: 500 });
+    const alert: FormAlert = { title: toUserMessage(httpError) };
+    if (applied.unmatched.length > 0) {
+      alert.detail = applied.unmatched.join(' ');
+    } else if (isProblemDetails(httpError.error) && httpError.error.detail) {
+      alert.detail = httpError.error.detail;
+    }
+    this.alert.set(alert);
+  }
+
+  private focusBody(): void {
+    afterNextRender(() => this.bodyField()?.nativeElement.focus(), { injector: this.injector });
+  }
+}

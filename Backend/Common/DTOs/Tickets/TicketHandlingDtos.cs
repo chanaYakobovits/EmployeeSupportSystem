@@ -24,3 +24,15 @@ public sealed record AssignTicketRequest(int? TargetUserId, int? TargetDepartmen
 /// <param name="CanView">False when the change moved the ticket out of the user's scopes (e.g. to another department):
 /// the screen goes back to the list instead of reloading the ticket.</param>
 public sealed record TicketUpdatedDto(int Id, byte[] RowVersion, bool CanView);
+
+/// <summary>
+/// GET /api/tickets/{id}/assign-options: the targets of the transfer dialog, by the same rules as POST /assign.
+/// </summary>
+/// <param name="Handlers">Active handlers of the handling department, without the requester and the current handler, by name.</param>
+/// <param name="Departments">Other active departments with at least one active handler, by name – empty when the user may
+/// not move the ticket to another department.</param>
+public sealed record TicketAssignOptionsDto(IReadOnlyList<AssigneeOptionDto> Handlers,
+    IReadOnlyList<NamedRefDto> Departments);
+
+/// <param name="OpenTicketCount">The handler's assigned tickets that are not resolved yet (as routing counts the load).</param>
+public sealed record AssigneeOptionDto(int Id, string Name, int OpenTicketCount);

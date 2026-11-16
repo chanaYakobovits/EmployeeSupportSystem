@@ -1,0 +1,106 @@
+<h2 mat-dialog-title id="assign-dialog-title">העברת הפנייה</h2>
+
+<form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+  <mat-dialog-content>
+    @if (alert(); as alert) {
+      <app-form-alert [alert]="alert" />
+    }
+
+    @switch (optionsState().status) {
+      @case ('loading') {
+        <app-loading-state message="טוען את האפשרויות..." />
+      }
+      @case ('error') {
+        <div class="options-error" role="alert">
+          <p>לא ניתן לטעון את רשימת המטפלים.</p>
+          <button mat-stroked-button type="button" (click)="loadOptions()">נסה שוב</button>
+        </div>
+      }
+    }
+
+    @if (options(); as options) {
+      @if (canTransfer) {
+        <mat-radio-group class="targets" formControlName="target" aria-label="יעד ההעברה">
+          <mat-radio-button value="handler">מטפל אחר במחלקה</mat-radio-button>
+          <mat-radio-button value="department">מחלקה אחרת (לתור שלה)</mat-radio-button>
+        </mat-radio-group>
+      }
+
+      @if (target() === 'handler') {
+        @if (options.handlers.length === 0) {
+          <p class="empty" role="status">אין מטפלים אחרים פעילים במחלקה.</p>
+        }
+        <mat-form-field appearance="outline" class="field">
+          <mat-label>מטפל</mat-label>
+          <mat-select formControlName="userId" required cdkFocusInitial>
+            @for (handler of options.handlers; track handler.id) {
+              <mat-option [value]="handler.id">
+                {{ handler.name }}
+                <span class="load">({{ handler.openTicketCount }} פתוחות)</span>
+              </mat-option>
+            }
+          </mat-select>
+          @let userId = form.controls.userId;
+          @if (userId.hasError('required')) {
+            <mat-error>יש לבחור מטפל</mat-error>
+          } @else if (userId.hasError('server')) {
+            <mat-error>{{ userId.getError('server') }}</mat-error>
+          }
+        </mat-form-field>
+      } @else {
+        @if (options.departments.length === 0) {
+          <p class="empty" role="status">אין מחלקות אחרות עם מטפלים פעילים.</p>
+        }
+        <mat-form-field appearance="outline" class="field">
+          <mat-label>מחלקה</mat-label>
+          <mat-select formControlName="departmentId" required>
+            @for (department of options.departments; track department.id) {
+              <mat-option [value]="department.id">{{ department.name }}</mat-option>
+            }
+          </mat-select>
+          <mat-hint>הפנייה תעבור לתור המחלקה, ואחד המטפלים שם ייקח אותה</mat-hint>
+          @let departmentId = form.controls.departmentId;
+          @if (departmentId.hasError('required')) {
+            <mat-error>יש לבחור מחלקה</mat-error>
+          } @else if (departmentId.hasError('server')) {
+            <mat-error>{{ departmentId.getError('server') }}</mat-error>
+          }
+        </mat-form-field>
+      }
+    }
+
+    <mat-form-field appearance="outline" class="field">
+      <mat-label>נימוק</mat-label>
+      <textarea
+        matInput
+        formControlName="reason"
+        dir="auto"
+        required
+        cdkTextareaAutosize
+        cdkAutosizeMinRows="3"
+        cdkAutosizeMaxRows="8"
+        [attr.maxlength]="reasonLimits.maxLength"
+        aria-describedby="assign-reason-hint"
+      ></textarea>
+      <mat-hint id="assign-reason-hint">גלוי לצוות בלבד – נשמר בהיסטוריה של הפנייה</mat-hint>
+      @let reason = form.controls.reason;
+      @if (reason.hasError('required')) {
+        <mat-error>יש לכתוב נימוק</mat-error>
+      } @else if (reason.hasError('minlength') || reason.hasError('maxlength')) {
+        <mat-error>נימוק: בין {{ reasonLimits.minLength }} ל-{{ reasonLimits.maxLength }} תווים</mat-error>
+      } @else if (reason.hasError('server')) {
+        <mat-error>{{ reason.getError('server') }}</mat-error>
+      }
+    </mat-form-field>
+  </mat-dialog-content>
+
+  <mat-dialog-actions align="end">
+    <button mat-button type="button" mat-dialog-close>ביטול</button>
+    <button mat-flat-button type="submit" class="btn-primary-gradient" [disabled]="store.busy() || options() === null">
+      @if (store.busy()) {
+        <mat-spinner diameter="18" aria-hidden="true" />
+      }
+      העברה
+    </button>
+  </mat-dialog-actions>
+</form>

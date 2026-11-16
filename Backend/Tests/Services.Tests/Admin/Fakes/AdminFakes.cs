@@ -103,7 +103,7 @@ public sealed class FakeTicketRepository : ITicketRepository
         System.Linq.Expressions.Expression<Func<Ticket, bool>> scope, StaffTicketsQuery query, DateTime? fromUtc,
         DateTime? toUtc, DateTime now, CancellationToken cancellationToken) => throw new NotSupportedException();
 
-    public Task<StaffTicketDetailsDto?> GetStaffDetailsAsync(int ticketId, StaffTicketPermissionsDto permissions,
+    public Task<StaffTicketDetailsDto?> GetStaffDetailsAsync(int ticketId, IReadOnlyList<string> allowedActions,
         DateTime now, CancellationToken cancellationToken) => throw new NotSupportedException();
 
     public Task<int> UnassignUnresolvedTicketsAsync(int handlerUserId, DateTime now, CancellationToken cancellationToken)

@@ -403,6 +403,62 @@ public sealed class TicketHandlingTests : TicketTestBase
         Assert.Contains($"Ticket {id} reclassified by user {AlonId}", HandlingLogger.AllText);
     }
 
+    // ===================== Assign options =====================
+
+    [Fact]
+    public async Task The_options_are_the_other_active_handlers_and_the_departments_with_handlers()
+    {
+        var id = Ticket(DevId, AlonId, TicketStatus.InProgress);
+        Ticket(DevId, DanaId, TicketStatus.Assigned);
+
+        var options = await HandlingFor(AlonId).GetAssignOptionsAsync(id, CancellationToken.None);
+
+        // Not Alon (the current handler), not Gil (inactive); Dana with her one open ticket.
+        Assert.Equal([new AssigneeOptionDto(DanaId, "דנה לוי", 1)], options.Handlers);
+        // HR has Liat; the secretariat has no handlers, the closed department is inactive, Development is the current one.
+        Assert.Equal([new NamedRefDto(HrId, "משאבי אנוש")], options.Departments);
+    }
+
+    [Fact]
+    public async Task The_requester_is_not_an_option_even_when_they_are_a_handler()
+    {
+        var id = Ticket(DevId, null, TicketStatus.Assigned, requester: DanaId);
+
+        var options = await HandlingFor(AlonId).GetAssignOptionsAsync(id, CancellationToken.None);
+
+        Assert.Equal([AlonId], options.Handlers.Select(h => h.Id));
+    }
+
+    [Fact]
+    public async Task A_department_manager_gets_the_handlers_but_no_other_departments()
+    {
+        var id = Ticket(DevId, AlonId, TicketStatus.InProgress);
+
+        var options = await HandlingFor(RonId).GetAssignOptionsAsync(id, CancellationToken.None);
+
+        Assert.Equal([DanaId], options.Handlers.Select(h => h.Id));
+        Assert.Empty(options.Departments);
+    }
+
+    [Fact]
+    public async Task The_executive_may_not_ask_for_the_options()
+    {
+        var id = Ticket(DevId, AlonId, TicketStatus.InProgress);
+
+        var error = await Assert.ThrowsAsync<ForbiddenException>(() =>
+            HandlingFor(AvnerId).GetAssignOptionsAsync(id, CancellationToken.None));
+        Assert.Equal("assign-not-allowed", error.ErrorType);
+    }
+
+    [Fact]
+    public async Task The_options_of_a_ticket_outside_the_scope_are_not_found()
+    {
+        var id = Ticket(DevId, AlonId, TicketStatus.InProgress);
+
+        await Assert.ThrowsAsync<NotFoundException>(() =>
+            HandlingFor(LiatId).GetAssignOptionsAsync(id, CancellationToken.None));
+    }
+
     // ===================== helpers =====================
 
     /// <summary>A ticket (by default Noa's, PAYROLL, Medium) handled by <paramref name="department"/>.</summary>

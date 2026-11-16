@@ -37,7 +37,10 @@ public sealed record StaffTicketListItemDto(
 /// <param name="Urgency">Null until set (the fallback path); its SLA is then Medium.</param>
 /// <param name="IsOverdue">Past its due time while the SLA clock runs – computed by the server.</param>
 /// <param name="RowVersion">Sent back with every update of the ticket (spec 11.2); a newer version → 409.</param>
-/// <param name="Permissions">What the user may do on this ticket, so the screen shows only the allowed actions.</param>
+/// <param name="AllowedActions">
+/// What the user may do on this ticket now (<see cref="Constants.TicketActions"/>), by the permission matrix, the status
+/// and the assignment – so the screen shows only the allowed actions and never computes permissions itself.
+/// </param>
 public sealed record StaffTicketDetailsDto(
     int Id,
     string? Subject,
@@ -56,7 +59,7 @@ public sealed record StaffTicketDetailsDto(
     DateTime? ResolvedAt,
     DateTime? ClosedAt,
     byte[] RowVersion,
-    StaffTicketPermissionsDto Permissions) : ITicketDetailsDto;
+    IReadOnlyList<string> AllowedActions) : ITicketDetailsDto;
 
 /// <param name="DepartmentName">The department when the ticket was opened (a snapshot).</param>
 /// <param name="JobTitle">The role in the organization (spec 7.7).</param>
@@ -64,18 +67,6 @@ public sealed record StaffTicketRequesterDto(int Id, string Name, string Departm
 
 /// <summary>An id with its display name (category, user, department).</summary>
 public sealed record NamedRefDto(int Id, string Name);
-
-/// <param name="CanReply">A comment the requester sees: a handler in scope.</param>
-/// <param name="CanWriteInternal">An internal note: a handler or department manager in scope.</param>
-/// <param name="CanReclassify">Change category / urgency: a handler in scope, or the manager of the handling department.</param>
-/// <param name="CanAssign">Assign to a handler of the handling department: as <paramref name="CanReclassify"/>.</param>
-/// <param name="CanTransferToDepartment">Move to another department's queue: a handler in scope.</param>
-public sealed record StaffTicketPermissionsDto(
-    bool CanReply,
-    bool CanWriteInternal,
-    bool CanReclassify,
-    bool CanAssign,
-    bool CanTransferToDepartment);
 
 /// <summary>GET /api/tickets/{id}/history for staff: the full timeline, internal notes and reasons included.</summary>
 public sealed record StaffTicketHistoryDto(int TicketId, IReadOnlyList<StaffTimelineItemDto> Items)

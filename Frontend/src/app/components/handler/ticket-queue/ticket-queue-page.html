@@ -1,0 +1,232 @@
+<app-page-header heading="תור פניות" subtitle="ממתינות לטיפול בראש: בחריגה, ואחריהן הדחופות ביותר" />
+
+<nav mat-tab-nav-bar class="tabs" aria-label="תצוגות התור" [tabPanel]="tabPanel" mat-stretch-tabs="false">
+  @for (tab of tabs; track tab.scope) {
+    <a
+      mat-tab-link
+      [routerLink]="queueTabUrl(tab)"
+      [queryParams]="tabQueryParams()"
+      [active]="tab.scope === store.scope"
+      [attr.data-scope]="tab.scope"
+    >
+      {{ tab.label }}
+    </a>
+  }
+</nav>
+
+<mat-tab-nav-panel #tabPanel>
+  <app-filter-bar label="סינון פניות">
+    <app-search-field
+      class="grow"
+      label="חיפוש בנושא או בשם העובד"
+      [value]="state().filters.search"
+      (search)="onSearch($event)"
+    />
+
+    <mat-form-field appearance="outline" class="filter" subscriptSizing="dynamic">
+      <mat-label>סטטוס</mat-label>
+      <mat-select multiple [value]="state().filters.status ?? []" (selectionChange)="onStatuses($event.value)">
+        @for (status of statusOptions; track status) {
+          <mat-option [value]="status">{{ status | statusLabel }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+
+    <mat-slide-toggle [checked]="includesFinal()" (change)="onIncludeFinal($event.checked)">
+      כולל סגורות ומבוטלות
+    </mat-slide-toggle>
+
+    <mat-form-field appearance="outline" class="filter" subscriptSizing="dynamic">
+      <mat-label>דחיפות</mat-label>
+      <mat-select multiple [value]="state().filters.urgency ?? []" (selectionChange)="onUrgencies($event.value)">
+        @for (urgency of urgencyOptions; track urgency) {
+          <mat-option [value]="urgency">{{ urgencyOptionLabel(urgency) }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+
+    @if (store.categories().length > 0) {
+      <mat-form-field appearance="outline" class="filter" subscriptSizing="dynamic">
+        <mat-label>קטגוריה</mat-label>
+        <mat-select [value]="state().filters.categoryId" (selectionChange)="onCategory($event.value)">
+          <mat-option [value]="null">הכל</mat-option>
+          @for (category of store.categories(); track category.id) {
+            <mat-option [value]="category.id">{{ category.name }}</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+    }
+
+    <mat-form-field appearance="outline" class="filter date" subscriptSizing="dynamic">
+      <mat-label>נפתחה מתאריך</mat-label>
+      <input
+        matInput
+        type="date"
+        [value]="state().filters.from ?? ''"
+        [max]="state().filters.to ?? ''"
+        (change)="onDate('from', $any($event.target).value)"
+      />
+    </mat-form-field>
+
+    <mat-form-field appearance="outline" class="filter date" subscriptSizing="dynamic">
+      <mat-label>עד תאריך</mat-label>
+      <input
+        matInput
+        type="date"
+        [value]="state().filters.to ?? ''"
+        [min]="state().filters.from ?? ''"
+        (change)="onDate('to', $any($event.target).value)"
+      />
+    </mat-form-field>
+
+    <mat-form-field appearance="outline" class="filter" subscriptSizing="dynamic">
+      <mat-label>מיון</mat-label>
+      <mat-select [value]="state().sort.by" (selectionChange)="onSortBy($event.value)">
+        @for (field of sortOptions; track field) {
+          <mat-option [value]="field">{{ sortLabels[field] }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+
+    <mat-slide-toggle [checked]="state().filters.overdueOnly === true" (change)="onOverdueOnly($event.checked)">
+      בחריגה בלבד
+    </mat-slide-toggle>
+
+    @if (list.hasActiveFilters()) {
+      <button mat-button type="button" class="clear-button" (click)="list.clearFilters()">
+        <mat-icon aria-hidden="true">filter_alt_off</mat-icon>
+        ניקוי סינון
+      </button>
+    }
+  </app-filter-bar>
+
+  <app-data-table
+    caption="רשימת הפניות"
+    [columns]="columns"
+    [rows]="list.items()"
+    [status]="list.status()"
+    [sort]="state().sort"
+    [totalCount]="list.totalCount()"
+    [page]="state().page"
+    [pageSize]="state().pageSize"
+    [rowClickable]="true"
+    [rowClass]="rowClass"
+    (sortChange)="list.setSort($event)"
+    (pageChange)="list.setPage($event.page, $event.pageSize)"
+    (rowActivate)="openTicket($event)"
+    (retry)="list.reload()"
+  >
+    <ng-template appCell="id" let-ticket>
+      <a class="ticket-number" [routerLink]="ticketUrl(ticket.id)" [state]="navigationState()">
+        <span class="visually-hidden">פנייה מספר</span>
+        <span dir="ltr">#{{ ticket.id }}</span>
+      </a>
+    </ng-template>
+
+    <ng-template appCell="subject" let-ticket>
+      <span class="subject" dir="auto" [class.excerpt]="ticket.isSubjectExcerpt">
+        @if (ticket.isSubjectExcerpt) {
+          <span class="visually-hidden">תקציר התיאור: </span>{{ ticket.subject }}…
+        } @else {
+          {{ ticket.subject }}
+        }
+      </span>
+    </ng-template>
+
+    <ng-template appCell="requester" let-ticket>{{ ticket.requesterName }}</ng-template>
+    <ng-template appCell="requesterDepartment" let-ticket>{{ ticket.requesterDepartmentName }}</ng-template>
+
+    <ng-template appCell="category" let-ticket>
+      @if (ticket.categoryName) {
+        {{ ticket.categoryName }}
+      } @else {
+        <span class="muted">טרם סווגה</span>
+      }
+    </ng-template>
+
+    <ng-template appCell="urgency" let-ticket>
+      <app-urgency-badge [urgency]="ticket.urgency" />
+    </ng-template>
+
+    <ng-template appCell="status" let-ticket>
+      <app-status-badge [status]="ticket.status" />
+    </ng-template>
+
+    <ng-template appCell="dueAt" let-ticket>
+      <span class="due">
+        <app-due-countdown [dueAt]="ticket.dueAt" [status]="ticket.status" [isOverdue]="ticket.isOverdue" />
+        @if (isOverdue(ticket)) {
+          <span class="overdue-mark"><mat-icon aria-hidden="true">error</mat-icon>חריגה</span>
+        }
+      </span>
+    </ng-template>
+
+    <ng-template appCell="source" let-ticket>
+      <app-classification-source-badge [source]="ticket.classificationSource" />
+    </ng-template>
+
+    <ng-template appCell="actions" let-ticket>
+      @if (canTake(ticket)) {
+        <button
+          mat-stroked-button
+          type="button"
+          class="take-button"
+          [disabled]="store.isTaking()"
+          [attr.aria-label]="'קח לטיפולי את פנייה מספר ' + ticket.id"
+          (click)="take(ticket)"
+        >
+          @if (store.taking() === ticket.id) {
+            <mat-spinner diameter="16" aria-hidden="true" />
+          } @else {
+            <mat-icon aria-hidden="true">pan_tool</mat-icon>
+          }
+          קח לטיפולי
+        </button>
+      }
+    </ng-template>
+
+    <!-- Phones: one card per ticket. The number is the link; "קח לטיפולי" stays a separate button. -->
+    <ng-template appRowCard let-ticket>
+      <div class="ticket-card">
+        <span class="ticket-card-top">
+          <a class="ticket-number" [routerLink]="ticketUrl(ticket.id)" [state]="navigationState()">
+            <span class="visually-hidden">פנייה מספר </span><span dir="ltr">#{{ ticket.id }}</span>
+          </a>
+          <app-status-badge [status]="ticket.status" />
+        </span>
+        <span class="subject" dir="auto" [class.excerpt]="ticket.isSubjectExcerpt">
+          @if (ticket.isSubjectExcerpt) {
+            <span class="visually-hidden">תקציר התיאור: </span>{{ ticket.subject }}…
+          } @else {
+            {{ ticket.subject }}
+          }
+        </span>
+        <span class="ticket-card-meta">{{ ticket.requesterName }} · {{ ticket.requesterDepartmentName }}</span>
+        <span class="ticket-card-meta">
+          <app-urgency-badge [urgency]="ticket.urgency" />
+          <app-due-countdown [dueAt]="ticket.dueAt" [status]="ticket.status" [isOverdue]="ticket.isOverdue" />
+          @if (isOverdue(ticket)) {
+            <span class="overdue-mark"><mat-icon aria-hidden="true">error</mat-icon>חריגה</span>
+          }
+          <app-classification-source-badge [source]="ticket.classificationSource" />
+        </span>
+        @if (canTake(ticket)) {
+          <button mat-stroked-button type="button" class="take-button" [disabled]="store.isTaking()" (click)="take(ticket)">
+            <mat-icon aria-hidden="true">pan_tool</mat-icon>
+            קח לטיפולי
+          </button>
+        }
+      </div>
+    </ng-template>
+
+    <div tableEmpty>
+      @if (list.hasActiveFilters()) {
+        <app-empty-state icon="search_off" heading="לא נמצאו פניות" description="אף פנייה אינה מתאימה לחיפוש או לסינון שנבחרו.">
+          <button mat-stroked-button type="button" (click)="list.clearFilters()">ניקוי סינון</button>
+        </app-empty-state>
+      } @else {
+        <app-empty-state icon="inbox" [heading]="emptyText.heading" [description]="emptyText.description" />
+      }
+    </div>
+  </app-data-table>
+</mat-tab-nav-panel>

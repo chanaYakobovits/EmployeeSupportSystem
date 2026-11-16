@@ -132,6 +132,12 @@ public sealed class TicketRepository(AppDbContext db) : ITicketRepository
         {
             tickets = tickets.Where(t => statuses.Contains(t.Status));
         }
+        else
+        {
+            // Closed and cancelled tickets only when the filter asks for them (decision in CLAUDE.md).
+            var final = TicketStatuses.Final;
+            tickets = tickets.Where(t => !final.Contains(t.Status));
+        }
 
         if (query.CategoryId is { } categoryId)
         {
@@ -184,6 +190,7 @@ public sealed class TicketRepository(AppDbContext db) : ITicketRepository
         var desc = query.SortDir is null ? StaffTicketSortFields.IsDescendingByDefault(sortBy) : query.IsDescending;
         var ordered = sortBy switch
         {
+            StaffTicketSortFields.Priority => tickets.OrderByPriority(now),
             // No urgency sorts as Medium, like its SLA (spec 3.4). Ties: the nearest due time, then the oldest ticket.
             StaffTicketSortFields.Urgency => tickets
                 .OrderByDirection(t => t.Urgency ?? Urgency.Medium, desc)
@@ -228,18 +235,11 @@ public sealed class TicketRepository(AppDbContext db) : ITicketRepository
         return tickets.ToPagedResultAsync(ordered, projection, query, cancellationToken);
     }
 
-    public Task<StaffTicketDetailsDto?> GetStaffDetailsAsync(int ticketId, StaffTicketPermissionsDto permissions,
+    public async Task<StaffTicketDetailsDto?> GetStaffDetailsAsync(int ticketId, IReadOnlyList<string> allowedActions,
         DateTime now, CancellationToken cancellationToken)
     {
-        // Plain values: only they are captured by the projection.
-        var canReply = permissions.CanReply;
-        var canWriteInternal = permissions.CanWriteInternal;
-        var canReclassify = permissions.CanReclassify;
-        var canAssign = permissions.CanAssign;
-        var canTransfer = permissions.CanTransferToDepartment;
-
-        // The viewing scope was checked by TicketAccess before this query.
-        return db.Tickets
+        // The viewing scope was checked by TicketAccess before this query. The actions are added after it (not SQL).
+        var details = await db.Tickets
             .AsNoTracking()
             .Where(t => t.Id == ticketId)
             .Select(TicketSlaQueries.WithIsOverdue<StaffTicketDetailsDto?>((t, isOverdue) => new StaffTicketDetailsDto(
@@ -266,8 +266,10 @@ public sealed class TicketRepository(AppDbContext db) : ITicketRepository
                 t.ResolvedAt,
                 t.ClosedAt,
                 t.RowVersion,
-                new StaffTicketPermissionsDto(canReply, canWriteInternal, canReclassify, canAssign, canTransfer)), now))
+                Array.Empty<string>()), now))
             .SingleOrDefaultAsync(cancellationToken);
+
+        return details is null ? null : details with { AllowedActions = allowedActions };
     }
 
     // ===================== User administration (task 2.3) =====================

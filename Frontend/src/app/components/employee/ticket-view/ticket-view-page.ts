@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, effect, inject, input, untracked, viewChild } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 
 import { EmptyState } from '../../shared/empty-state/empty-state';
 import { ErrorState } from '../../shared/error-state/error-state';
@@ -14,6 +14,8 @@ import { Timeline } from '../../shared/timeline/timeline';
 import { HasUnsavedChanges, unsavedMessage } from '../../../guards/unsaved-changes.guard';
 import { TicketViewStore } from '../../../services/ticket-view.store';
 import { TicketReply } from './ticket-reply/ticket-reply';
+import { AuthService } from '../../../services/auth.service';
+import { handlerTicketUrl } from '../../handler/handler-urls';
 
 /**
  * The employee's view of their ticket (spec 7.5): details, the description as entered, one timeline of status changes,
@@ -49,11 +51,23 @@ export class TicketViewPage implements HasUnsavedChanges {
   protected readonly myTicketsUrl = MY_TICKETS_URL;
   /** Not there while loading, or when the ticket is closed. */
   private readonly reply = viewChild(TicketReply);
+  private readonly router = inject(Router);
+  private readonly auth = inject(AuthService);
 
   constructor() {
     effect(() => {
       const id = this.id();
       untracked(() => this.load(id));
+    });
+
+    // Not the user's own ticket, but one they handle: it belongs on the handling screen (spec 7.7).
+    effect(() => {
+      if (this.store.status() === 'staffView' && this.auth.roles().includes('Handler')) {
+        const id = idParam.parse(untracked(this.id));
+        if (id !== null) {
+          void this.router.navigateByUrl(handlerTicketUrl(id), { replaceUrl: true });
+        }
+      }
     });
   }
 

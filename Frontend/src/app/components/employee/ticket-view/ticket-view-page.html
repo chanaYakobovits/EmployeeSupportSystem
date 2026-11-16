@@ -15,6 +15,12 @@
   @case ('error') {
     <app-error-state (retry)="reload()" />
   }
+  @case ('staffView') {
+    <!-- A handler is moved to the handling screen; other staff (managers) see their tickets in later screens. -->
+    <app-empty-state icon="badge" heading="הפנייה אינה שלך" description="זו פנייה של עובד אחר. ניתן לצפות בה ממסכי הצוות.">
+      <a mat-stroked-button [routerLink]="myTicketsUrl">חזרה לפניות שלי</a>
+    </app-empty-state>
+  }
   @default {
     @if (ticket(); as ticket) {
       <header class="ticket-header">

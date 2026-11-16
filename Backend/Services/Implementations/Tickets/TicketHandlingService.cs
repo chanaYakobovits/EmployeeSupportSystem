@@ -31,6 +31,7 @@ public sealed class TicketHandlingService(
     ITicketClassifier classifier,
     IUnitOfWork unitOfWork,
     IDateTimeProvider clock,
+    ICurrentUser currentUser,
     IValidator<ReclassifyTicketRequest> reclassifyValidator,
     IValidator<AssignTicketRequest> assignValidator,
     ILogger<TicketHandlingService> logger) : ITicketHandlingService
@@ -171,6 +172,49 @@ public sealed class TicketHandlingService(
             change.ToUserId);
 
         return Result(ticket, access);
+    }
+
+    // ===================== GET /assign-options =====================
+
+    public async Task<TicketAssignOptionsDto> GetAssignOptionsAsync(int ticketId, CancellationToken cancellationToken)
+    {
+        var access = await ticketAccess.GetAsync(ticketId, cancellationToken);
+        if (!access.Permissions.CanAssign)
+        {
+            throw new ForbiddenException(AssignNotAllowedTitle, errorType: "assign-not-allowed");
+        }
+
+        var ticket = access.Ticket;
+        if (ticket.AssignedDepartmentId is not { } handlingDepartmentId)
+        {
+            return new TicketAssignOptionsDto([], []);
+        }
+
+        // The same targets POST /assign accepts (EnsureAssigneeAsync): not the requester, not the current handler.
+        var handlers = (await users.GetHandlerOptionsAsync(handlingDepartmentId, cancellationToken))
+            .Where(h => h.Id != ticket.RequesterId && h.Id != ticket.AssignedToUserId)
+            .ToList();
+
+        IReadOnlyList<NamedRefDto> targetDepartments = [];
+        if (access.Permissions.CanTransferToDepartment)
+        {
+            // EnsureTargetDepartmentAsync: another active department with at least one active handler.
+            var others = (await ReferenceDataLookups.DepartmentsAsync(cache, departments, currentUser.OrganizationId,
+                    cancellationToken))
+                .Where(d => d.IsActive && d.Id != handlingDepartmentId)
+                .ToList();
+            var withHandlers = (await users.GetHandlerCandidatesAsync(others.Select(d => d.Id).ToList(), null,
+                    cancellationToken))
+                .Select(h => h.DepartmentId)
+                .ToHashSet();
+            targetDepartments = others
+                .Where(d => withHandlers.Contains(d.Id))
+                .OrderBy(d => d.Name, StringComparer.Ordinal)
+                .Select(d => new NamedRefDto(d.Id, d.Name))
+                .ToList();
+        }
+
+        return new TicketAssignOptionsDto(handlers, targetDepartments);
     }
 
     // ===================== Shared steps =====================

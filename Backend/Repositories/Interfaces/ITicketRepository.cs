@@ -62,9 +62,9 @@ public interface ITicketRepository
 
     /// <summary>
     /// The staff view of the ticket, or null. Does not check the viewing scope: call it only after TicketAccess allowed
-    /// the ticket, with the permissions it returned.
+    /// the ticket, with the actions it allows.
     /// </summary>
-    Task<StaffTicketDetailsDto?> GetStaffDetailsAsync(int ticketId, StaffTicketPermissionsDto permissions, DateTime now,
+    Task<StaffTicketDetailsDto?> GetStaffDetailsAsync(int ticketId, IReadOnlyList<string> allowedActions, DateTime now,
         CancellationToken cancellationToken);
 
     // ---- user administration (task 2.3) ----

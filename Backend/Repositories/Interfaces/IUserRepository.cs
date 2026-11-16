@@ -41,6 +41,13 @@ public interface IUserRepository
     Task<IReadOnlyList<Common.DTOs.Routing.HandlerCandidate>> GetHandlerCandidatesAsync(
         IReadOnlyCollection<int> departmentIds, int? userId, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// The active handlers of a department with their names and load (assigned unresolved tickets), by name – the
+    /// "transfer to a handler" choices (task 3.4). Read fresh from the database.
+    /// </summary>
+    Task<IReadOnlyList<Common.DTOs.Tickets.AssigneeOptionDto>> GetHandlerOptionsAsync(int departmentId,
+        CancellationToken cancellationToken);
+
     // ---- user administration (task 2.3); all within the signed-in user's organization unless stated ----
 
     /// <summary>Filtered, sorted and paged in SQL. The query must already be validated (page, pageSize, sortBy).</summary>

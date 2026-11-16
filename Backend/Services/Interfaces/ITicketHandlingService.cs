@@ -31,4 +31,12 @@ public interface ITicketHandlingService
     /// <exception cref="Common.Exceptions.ConflictException">The ticket was changed since the user's version.</exception>
     /// <exception cref="Common.Exceptions.BusinessRuleException">An invalid target, a final status, or nothing changes.</exception>
     Task<TicketUpdatedDto> AssignAsync(int ticketId, AssignTicketRequest request, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The targets of the transfer dialog: active handlers of the handling department (not the requester, not the current
+    /// handler) and – for handlers who may move the ticket – other departments with an active handler.
+    /// </summary>
+    /// <exception cref="Common.Exceptions.NotFoundException">Missing or outside the user's scope.</exception>
+    /// <exception cref="Common.Exceptions.ForbiddenException">The user may not assign this ticket.</exception>
+    Task<TicketAssignOptionsDto> GetAssignOptionsAsync(int ticketId, CancellationToken cancellationToken);
 }

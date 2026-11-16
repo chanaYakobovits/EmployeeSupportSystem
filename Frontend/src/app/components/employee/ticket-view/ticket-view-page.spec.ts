@@ -13,6 +13,8 @@ import { NotificationService } from '../../../services/notification.service';
 import { TicketsApiService } from '../../../services/tickets-api.service';
 import { fakeAttachment, fakeComment, fakeFile, fakeHistory, fakeTicketDetails } from '../testing/ticket-fixtures';
 import { TicketViewPage } from './ticket-view-page';
+import { AuthService } from '../../../services/auth.service';
+import { fakeAuth, fakeStaffDetails } from '../../handler/testing/handler-fixtures';
 
 @Component({ template: '' })
 class Stub {}
@@ -41,6 +43,7 @@ describe('TicketViewPage', () => {
         provideRouter(
           [
             { path: 'employee', component: Stub },
+            { path: 'handler/tickets/:id', component: Stub },
             { path: 'employee/tickets/:id', component: TicketViewPage, canDeactivate: [unsavedChangesGuard] },
           ],
           withComponentInputBinding(),
@@ -50,8 +53,17 @@ describe('TicketViewPage', () => {
         { provide: NotificationService, useValue: notifications },
         { provide: ConfirmService, useValue: confirm },
         { provide: AttachmentDownloadService, useValue: { download: () => EMPTY } },
+        { provide: AuthService, useValue: fakeAuth() },
       ],
     });
+  });
+
+  it('a ticket the user handles (the staff view) opens on the handling screen', async () => {
+    api.get.and.returnValue(of(fakeStaffDetails({ id: 1042 })));
+    await open();
+    await harness.fixture.whenStable();
+
+    expect(TestBed.inject(Router).url).toBe('/handler/tickets/1042');
   });
 
   async function open(url = '/employee/tickets/1042'): Promise<HTMLElement> {

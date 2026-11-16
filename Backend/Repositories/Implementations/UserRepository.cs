@@ -5,6 +5,7 @@ using Common.DTOs.Invitations;
 using Common.Constants;
 using Common.DTOs.Paging;
 using Common.DTOs.Routing;
+using Common.DTOs.Tickets;
 using Common.DTOs.Users;
 using Common.Enums;
 using Common.Exceptions;
@@ -126,6 +127,18 @@ public sealed class UserRepository(AppDbContext db) : IUserRepository
                 db.Tickets.Count(t => t.AssignedToUserId == u.Id && TicketStatuses.Unresolved.Contains(t.Status))))
             .ToListAsync(cancellationToken);
     }
+
+    public async Task<IReadOnlyList<AssigneeOptionDto>> GetHandlerOptionsAsync(int departmentId,
+        CancellationToken cancellationToken) =>
+        await db.Users
+            .AsNoTracking()
+            .Where(u => u.IsActive && u.DepartmentId == departmentId && u.Roles.Any(r => r.Role == Role.Handler))
+            .OrderBy(u => u.FirstName).ThenBy(u => u.LastName).ThenBy(u => u.Id)
+            .Select(u => new AssigneeOptionDto(
+                u.Id,
+                u.FirstName + " " + u.LastName,
+                db.Tickets.Count(t => t.AssignedToUserId == u.Id && TicketStatuses.Unresolved.Contains(t.Status))))
+            .ToListAsync(cancellationToken);
 
     // ===================== User administration (task 2.3) =====================
 

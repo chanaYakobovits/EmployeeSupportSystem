@@ -1,0 +1,181 @@
+<a class="back-link" [routerLink]="queueUrl">
+  <mat-icon class="icon-mirror-rtl" aria-hidden="true">arrow_forward</mat-icon>
+  חזרה לתור הפניות
+</a>
+
+@switch (store.status()) {
+  @case ('loading') {
+    <app-loading-state message="טוען את הפנייה..." />
+  }
+  @case ('requesterView') {
+    <app-loading-state message="פותח את הפנייה שלך..." />
+  }
+  @case ('notFound') {
+    <app-empty-state icon="search_off" heading="הפנייה לא נמצאה" description="ייתכן שהקישור שגוי, או שהפנייה אינה בטיפולך.">
+      <a mat-stroked-button [routerLink]="queueUrl">חזרה לתור הפניות</a>
+    </app-empty-state>
+  }
+  @case ('error') {
+    <app-error-state (retry)="reload()" />
+  }
+  @default {
+    @if (ticket(); as ticket) {
+      <header class="ticket-header">
+        <p class="ticket-number" dir="ltr">#{{ ticket.id }}</p>
+        <h1 class="ticket-title" dir="auto">
+          <span class="visually-hidden">פנייה מספר {{ ticket.id }}: </span>
+          @if (ticket.subject) {
+            {{ ticket.subject }}
+          } @else {
+            <span class="no-subject">ללא נושא</span>
+          }
+        </h1>
+        <div class="header-badges">
+          <app-status-badge [status]="ticket.status" />
+          <app-urgency-badge [urgency]="ticket.urgency" />
+          <app-due-countdown [dueAt]="ticket.dueAt" [status]="ticket.status" [isOverdue]="ticket.isOverdue" />
+        </div>
+      </header>
+
+      <div class="layout">
+        <div class="main">
+          <!-- Area 1: the ticket and the employee. -->
+          <section class="surface-card card" aria-labelledby="ticket-details-title">
+            <h2 id="ticket-details-title" class="card-title">פרטי הפנייה</h2>
+            <dl class="requester">
+              <div class="fact">
+                <dt>עובד</dt>
+                <dd>{{ ticket.requester.name }}</dd>
+              </div>
+              <div class="fact">
+                <dt>מחלקה</dt>
+                <dd>{{ ticket.requester.departmentName }}</dd>
+              </div>
+              <div class="fact">
+                <dt>תפקיד בארגון</dt>
+                <dd>{{ ticket.requester.jobTitle || '—' }}</dd>
+              </div>
+            </dl>
+            <!-- Plain text (interpolation, never innerHTML); line breaks kept by white-space: pre-wrap. -->
+            <p class="description" dir="auto">{{ ticket.description }}</p>
+            @if (store.openingAttachments().length > 0) {
+              <ul class="attachments" aria-label="קבצים שצורפו לפנייה">
+                @for (attachment of store.openingAttachments(); track attachment.id) {
+                  <li><app-attachment-chip [ticketId]="ticket.id" [attachment]="attachment" /></li>
+                }
+              </ul>
+            }
+          </section>
+
+          <!-- Area 2: the AI analysis – task 4.4. -->
+          <section class="surface-card card ai-card" aria-labelledby="ai-title">
+            <h2 id="ai-title" class="card-title">
+              <mat-icon aria-hidden="true">auto_awesome</mat-icon>
+              ניתוח AI
+            </h2>
+            <p class="placeholder-text">ניתוח AI יתווסף בהמשך.</p>
+          </section>
+
+          <!-- Area 3: writing – only the modes the server allows. -->
+          @if (store.can('internalNote') || store.can('reply')) {
+            <app-ticket-composer />
+          } @else {
+            <p class="surface-card card closed-note" role="status">
+              <mat-icon aria-hidden="true">lock</mat-icon>
+              <span>לא ניתן להוסיף תגובות או הערות לפנייה זו</span>
+            </p>
+          }
+
+          <!-- Area 5: the full timeline, internal notes and reasons included. -->
+          <section class="surface-card card" aria-labelledby="timeline-title">
+            <h2 id="timeline-title" class="card-title">היסטוריה</h2>
+            @if (store.history(); as history) {
+              <app-timeline [ticketId]="ticket.id" [items]="history.items" perspective="staff" />
+            }
+          </section>
+        </div>
+
+        <aside class="side">
+          <!-- Area 4: actions – only those the server allows. -->
+          <section class="surface-card card actions" aria-labelledby="actions-title">
+            <h2 id="actions-title" class="card-title">פעולות</h2>
+            <div class="action-buttons">
+              @if (store.can('takeFromQueue')) {
+                <button
+                  mat-flat-button
+                  type="button"
+                  class="btn-primary-gradient"
+                  data-action="takeFromQueue"
+                  [disabled]="store.busy()"
+                  (click)="take()"
+                >
+                  <mat-icon aria-hidden="true">pan_tool</mat-icon>
+                  קח לטיפולי
+                </button>
+              }
+              @if (store.can('reclassify')) {
+                <button
+                  mat-stroked-button
+                  type="button"
+                  data-action="reclassify"
+                  [disabled]="store.busy()"
+                  (click)="openReclassify()"
+                >
+                  <mat-icon aria-hidden="true">category</mat-icon>
+                  שינוי סיווג
+                </button>
+              }
+              @if (store.can('assign')) {
+                <button mat-stroked-button type="button" data-action="assign" [disabled]="store.busy()" (click)="openAssign()">
+                  <mat-icon aria-hidden="true">swap_horiz</mat-icon>
+                  העברה
+                </button>
+              }
+              <!-- Task 3.5: the status buttons (התחל טיפול, בקש מידע, שלח פתרון) go here. -->
+            </div>
+            @if (store.allowedActions().length === 0) {
+              <p class="muted">אין פעולות זמינות לפנייה זו.</p>
+            }
+          </section>
+
+          <section class="surface-card card" aria-labelledby="facts-title">
+            <h2 id="facts-title" class="card-title">סיווג ושיוך</h2>
+            <dl class="facts">
+              <div class="fact">
+                <dt>קטגוריה</dt>
+                <dd>
+                  {{ ticket.category?.name ?? 'טרם סווגה' }}
+                  <app-classification-source-badge [source]="ticket.classificationSource" />
+                </dd>
+              </div>
+              <div class="fact">
+                <dt>דחיפות</dt>
+                <dd><app-urgency-badge [urgency]="ticket.urgency" /></dd>
+              </div>
+              <div class="fact">
+                <dt>מטפל</dt>
+                <dd>{{ ticket.assignedTo?.name ?? 'תור המחלקה' }}</dd>
+              </div>
+              <div class="fact">
+                <dt>מחלקה מטפלת</dt>
+                <dd>{{ ticket.assignedDepartment?.name ?? '—' }}</dd>
+              </div>
+              <div class="fact">
+                <dt>מועד יעד</dt>
+                <dd>{{ ticket.dueAt ? (ticket.dueAt | dateTime) : '—' }}</dd>
+              </div>
+              <div class="fact">
+                <dt>נפתחה</dt>
+                <dd>{{ ticket.createdAt | dateTime }}</dd>
+              </div>
+              <div class="fact">
+                <dt>עדכון אחרון</dt>
+                <dd>{{ ticket.updatedAt | dateTime }}</dd>
+              </div>
+            </dl>
+          </section>
+        </aside>
+      </div>
+    }
+  }
+}

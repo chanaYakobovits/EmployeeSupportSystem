@@ -13,6 +13,9 @@
               הסטטוס שונה ל-<app-status-badge [status]="item.newStatus" />
             }
           </p>
+          @if (reason(item); as reason) {
+            <p class="reason" dir="auto"><span class="reason-label">נימוק:</span> {{ reason }}</p>
+          }
           <p class="meta">
             <span>{{ item.changedByName ?? 'מערכת' }}</span>
             <span aria-hidden="true">·</span>
@@ -20,15 +23,55 @@
           </p>
         </div>
       </li>
-    } @else if (item.kind === 'comment') {
-      <li class="entry entry-comment" [class.from-me]="item.isFromRequester" [class.from-staff]="!item.isFromRequester">
+    } @else if (item.kind === 'change') {
+      <li class="entry entry-change">
         <span class="marker" aria-hidden="true">
-          <mat-icon>{{ item.isResolution ? 'task_alt' : 'chat_bubble_outline' }}</mat-icon>
+          <mat-icon>{{ item.changeKind === 'Reclassified' ? 'category' : 'swap_horiz' }}</mat-icon>
+        </span>
+        <div class="content">
+          <p class="what">{{ changeTitles[item.changeKind] }}</p>
+          @let lines = changeLines(item);
+          @if (lines.length > 0) {
+            <ul class="change-lines">
+              @for (line of lines; track line.label) {
+                <li>
+                  <span class="change-label">{{ line.label }}:</span>
+                  <span>{{ line.from }}</span>
+                  <mat-icon class="arrow icon-mirror-rtl" aria-hidden="true">arrow_forward</mat-icon>
+                  <span class="visually-hidden">אל</span>
+                  <span>{{ line.to }}</span>
+                </li>
+              }
+            </ul>
+          }
+          @if (item.reason) {
+            <p class="reason" dir="auto"><span class="reason-label">נימוק:</span> {{ item.reason }}</p>
+          }
+          <p class="meta">
+            <span>{{ item.changedByName }}</span>
+            <span aria-hidden="true">·</span>
+            <app-relative-time [value]="item.at" />
+          </p>
+        </div>
+      </li>
+    } @else if (item.kind === 'comment') {
+      @let internal = isInternal(item);
+      <li
+        class="entry entry-comment"
+        [class.from-me]="item.isFromRequester"
+        [class.from-staff]="!item.isFromRequester"
+        [class.internal]="internal"
+      >
+        <span class="marker" aria-hidden="true">
+          <mat-icon>{{ internal ? 'lock' : item.isResolution ? 'task_alt' : 'chat_bubble_outline' }}</mat-icon>
         </span>
         <article class="bubble">
           <header class="bubble-header">
-            <span class="visually-hidden">{{ item.isFromRequester ? 'תגובה שלך' : 'תגובה מ-' + item.authorName }}</span>
+            <span class="visually-hidden">{{ commentLabel(item.authorName, item.isFromRequester, internal) }}</span>
             <span class="author" aria-hidden="true">{{ item.authorName }}</span>
+            @if (internal) {
+              <span class="internal-tag" aria-hidden="true"><mat-icon>lock</mat-icon>פנימי</span>
+            }
             @if (item.isResolution) {
               <span class="resolution-tag">פתרון</span>
             }

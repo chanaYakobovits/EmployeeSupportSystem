@@ -18,7 +18,7 @@ import { MatPaginatorIntl, MatPaginatorModule, PageEvent } from '@angular/materi
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { map } from 'rxjs';
 
-import { PAGE_SIZE_OPTIONS } from '../../../models/paging.models';
+import { PAGE_SIZE_OPTIONS, SortDir } from '../../../models/paging.models';
 import { HebrewPaginatorIntl } from '../../../services/hebrew-paginator-intl';
 import { ListSort } from '../../../services/list-state';
 import { LoadStatus } from '../../../services/list-store';
@@ -30,6 +30,8 @@ export interface DataTableColumn {
   header: string;
   /** The server's sortBy value; omitted → not sortable. */
   sortKey?: string;
+  /** The direction of the first click on this column (default ascending), e.g. urgency: the most urgent first. */
+  firstDir?: SortDir;
   align?: 'start' | 'center' | 'end';
 }
 
@@ -87,7 +89,10 @@ export class DataTable<T> {
   /** Rows react to a click (e.g. open the details). Keyboard users use the link inside the row. */
   readonly rowClickable = input(false);
   readonly trackBy = input<(row: T) => unknown>((row) => (row as { id?: unknown }).id ?? row);
-  /** Extra CSS class of a row (or its card). Styled here: "row-attention" (needs the user's action). */
+  /**
+   * Extra CSS class of a row (or its card). Styled here: "row-attention" (needs the user's action), "row-overdue"
+   * (past its SLA – the row must also say so in text and with an icon, not by colour alone).
+   */
   readonly rowClass = input<(row: T) => string | null>(() => null);
 
   readonly sortChange = output<ListSort>();
@@ -135,7 +140,8 @@ export class DataTable<T> {
       return;
     }
     const current = this.sort();
-    const dir = current?.by === column.sortKey && current.dir === 'asc' ? 'desc' : 'asc';
+    const dir: SortDir =
+      current?.by === column.sortKey ? (current.dir === 'asc' ? 'desc' : 'asc') : (column.firstDir ?? 'asc');
     this.sortChange.emit({ by: column.sortKey, dir });
   }
 

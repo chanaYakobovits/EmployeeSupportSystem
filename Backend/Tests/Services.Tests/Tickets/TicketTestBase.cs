@@ -156,7 +156,7 @@ public abstract class TicketTestBase
         var routing = RoutingFor(db);
         return new TicketHandlingService(AccessFor(db, currentUser), new TicketRepository(db), new UserRepository(db),
             new CategoryRepository(db), new DepartmentRepository(db), ReferenceData, ClassifierFor(db, routing),
-            UnitOfWorkFor(db), Clock, new ReclassifyTicketRequestValidator(), new AssignTicketRequestValidator(),
+            UnitOfWorkFor(db), Clock, currentUser, new ReclassifyTicketRequestValidator(), new AssignTicketRequestValidator(),
             HandlingLogger);
     }
 

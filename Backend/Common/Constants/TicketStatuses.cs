@@ -25,4 +25,10 @@ public static class TicketStatuses
     /// </summary>
     public static readonly IReadOnlyList<TicketStatus> RequesterOpen =
         [TicketStatus.New, TicketStatus.Assigned, TicketStatus.InProgress, TicketStatus.Resolved];
+
+    /// <summary>
+    /// Done with for good. The staff lists (GET /api/tickets) leave them out unless the status filter asks for them
+    /// (decision in CLAUDE.md).
+    /// </summary>
+    public static readonly IReadOnlyList<TicketStatus> Final = [TicketStatus.Closed, TicketStatus.Cancelled];
 }

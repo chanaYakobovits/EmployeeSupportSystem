@@ -2,7 +2,7 @@ import { Route } from '@angular/router';
 
 import { roleGuard } from './guards/auth.guards';
 import { ALL_AREAS } from './services/app-areas';
-import { routes } from './app.routes';
+import { homePath, routes } from './app.routes';
 
 describe('app routes', () => {
   const shellChildren: Route[] = routes.find((route) => route.path === '' && route.children)?.children ?? [];
@@ -32,9 +32,13 @@ describe('app routes', () => {
     expect(guardedPaths).toEqual(areaPaths);
   });
 
-  it('the home page of a signed-in user is "my tickets"', () => {
+  it('the home page: a handler lands on the queue, everyone else on "my tickets"', () => {
     const home = shellChildren.find((child) => child.path === '' && child.pathMatch === 'full');
-    expect(home?.redirectTo).toBe('employee');
+    expect(typeof home?.redirectTo).toBe('function');
+    expect(homePath(['Employee', 'Handler'])).toBe('handler');
+    expect(homePath(['Employee', 'Handler', 'Admin'])).toBe('handler');
+    expect(homePath(['Employee'])).toBe('employee');
+    expect(homePath(['Employee', 'DepartmentManager'])).toBe('employee');
   });
 
   it('voluntary password change is inside the shell, the mandatory one outside it', () => {

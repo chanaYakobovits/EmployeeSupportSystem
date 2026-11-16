@@ -154,3 +154,22 @@ tr.row-attention {
   background: var(--warning-soft);
   border-inline-start: 4px solid var(--warning-text);
 }
+
+// rowClass "row-overdue": a ticket past its SLA (spec 4.4 "מסומנות באדום"). Red tint and stripe; the due-time cell says
+// "חריגה" with an icon, so colour is not the only cue (spec 11.6).
+tr.row-overdue {
+  background: var(--error-bg);
+
+  &:hover {
+    background: var(--error-bg);
+  }
+
+  td:first-child {
+    border-inline-start: 4px solid var(--error-text);
+  }
+}
+
+.row-card.row-overdue {
+  background: var(--error-bg);
+  border-inline-start: 4px solid var(--error-text);
+}

@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
-import { RequesterTimelineItem } from '../../../models/ticket.models';
+import { RequesterTimelineItem, StaffTimelineItem } from '../../../models/ticket.models';
 import { AttachmentDownloadService } from '../../../services/attachment-download.service';
 import { fakeAttachment, fakeComment } from '../../employee/testing/ticket-fixtures';
 import { Timeline } from './timeline';
@@ -18,7 +18,7 @@ describe('Timeline', () => {
     fixture.componentRef.setInput('ticketId', 1042);
   });
 
-  function render(items: RequesterTimelineItem[]): HTMLElement {
+  function render(items: (RequesterTimelineItem | StaffTimelineItem)[]): HTMLElement {
     fixture.componentRef.setInput('items', items);
     fixture.detectChanges();
     return fixture.nativeElement;
@@ -82,5 +82,74 @@ describe('Timeline', () => {
   it('marks the resolution reply', () => {
     const element = render([fakeComment({ isResolution: true })]);
     expect(element.querySelector('.resolution-tag')!.textContent).toContain('פתרון');
+  });
+
+  describe('staff view (task 3.4)', () => {
+    it('an internal note is yellow with a "פנימי" tag and says so to screen readers', () => {
+      fixture.componentRef.setInput('perspective', 'staff');
+      const element = render([
+        { ...fakeComment({ id: 1, body: 'גלוי' }), isInternal: false },
+        { ...fakeComment({ id: 2, body: 'פנימי בלבד', authorName: 'אלון' }), isInternal: true },
+      ]);
+      const [visible, internal] = Array.from(element.querySelectorAll<HTMLElement>('.entry-comment'));
+      expect(visible.classList).not.toContain('internal');
+      expect(visible.querySelector('.internal-tag')).toBeNull();
+      expect(internal.classList).toContain('internal');
+      expect(internal.querySelector('.internal-tag')!.textContent).toContain('פנימי');
+      expect(internal.textContent).toContain('הערה פנימית מ-אלון');
+      expect(getComputedStyle(internal.querySelector('.bubble')!).backgroundColor).not.toBe(
+        getComputedStyle(visible.querySelector('.bubble')!).backgroundColor,
+      );
+    });
+
+    it("the requester's comment is the employee's for staff", () => {
+      fixture.componentRef.setInput('perspective', 'staff');
+      const element = render([{ ...fakeComment({ isFromRequester: true, authorName: 'נועה' }), isInternal: false }]);
+      expect(element.textContent).toContain('תגובה מהעובד נועה');
+      expect(element.textContent).not.toContain('תגובה שלך');
+    });
+
+    it('shows the reason of a status change', () => {
+      const element = render([
+        {
+          kind: 'status',
+          at: '2026-11-10T08:00:00Z',
+          previousStatus: 'InProgress',
+          newStatus: 'Assigned',
+          changedByName: 'אלון',
+          reason: 'הועבר למטפלת אחרת',
+        },
+      ]);
+      expect(element.querySelector('.reason')!.textContent).toContain('הועבר למטפלת אחרת');
+    });
+
+    it('a reclassification / transfer shows only what changed, and its reason', () => {
+      const element = render([
+        {
+          kind: 'change',
+          at: '2026-11-10T09:00:00Z',
+          changeKind: 'Transferred',
+          changedByName: 'אלון ביטון',
+          reason: 'עומס',
+          fromCategoryName: 'מחשוב',
+          toCategoryName: 'מחשוב',
+          fromUrgency: null,
+          toUrgency: 'High',
+          fromDepartmentName: 'פיתוח',
+          toDepartmentName: 'משאבי אנוש',
+          fromHandlerName: 'אלון ביטון',
+          toHandlerName: null,
+        },
+      ]);
+      const entry = element.querySelector('.entry-change')!;
+      const lines = Array.from(entry.querySelectorAll('.change-lines li')).map((li) => li.textContent!.replace(/\s+/g, ' '));
+      expect(entry.textContent).toContain('הפנייה הועברה');
+      expect(lines.length).toBe(3);
+      expect(lines[0]).toContain('לא נקבעה');
+      expect(lines[0]).toContain('גבוהה');
+      expect(lines[1]).toContain('משאבי אנוש');
+      expect(lines[2]).toContain('תור המחלקה');
+      expect(entry.querySelector('.reason')!.textContent).toContain('עומס');
+    });
   });
 });

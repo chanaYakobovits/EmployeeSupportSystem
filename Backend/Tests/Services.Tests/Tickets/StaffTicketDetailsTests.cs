@@ -47,8 +47,8 @@ public sealed class StaffTicketDetailsTests : TicketTestBase
         Assert.Equal(Now.AddDays(-1), ticket.CreatedAt);
         Assert.Equal(Now.AddHours(-1), ticket.UpdatedAt);
         Assert.Equal([1, 2, 3], ticket.RowVersion);
-        Assert.Equal(new StaffTicketPermissionsDto(CanReply: true, CanWriteInternal: true, CanReclassify: true, CanAssign: true,
-            CanTransferToDepartment: true), ticket.Permissions);
+        Assert.Equal([TicketActions.Reply, TicketActions.InternalNote, TicketActions.Reclassify, TicketActions.Assign,
+            TicketActions.TransferToDepartment], ticket.AllowedActions);
     }
 
     [Fact]
@@ -58,9 +58,8 @@ public sealed class StaffTicketDetailsTests : TicketTestBase
         var avner = Assert.IsType<StaffTicketDetailsDto>(await Get(AvnerId));
 
         // Ron manages פיתוח, which handles the ticket: reclassify and assign within it, not to another department.
-        Assert.Equal(new StaffTicketPermissionsDto(CanReply: false, CanWriteInternal: true, CanReclassify: true,
-            CanAssign: true, CanTransferToDepartment: false), ron.Permissions);
-        Assert.Equal(new StaffTicketPermissionsDto(false, false, false, false, false), avner.Permissions);
+        Assert.Equal([TicketActions.InternalNote, TicketActions.Reclassify, TicketActions.Assign], ron.AllowedActions);
+        Assert.Empty(avner.AllowedActions);
     }
 
     [Fact]

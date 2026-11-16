@@ -1,3 +1,4 @@
+using Common.Constants;
 using Common.DTOs.Tickets;
 using Common.Enums;
 
@@ -78,5 +79,62 @@ public static class TicketAccessPolicy
             CanReclassify: asStaff && (asHandler || managesHandling),
             CanAssign: asStaff && (asHandler || managesHandling),
             CanTransferToDepartment: asStaff && asHandler);
+    }
+}
+
+/// <summary>
+/// The actions of <see cref="TicketActions"/> the user may take now (task 3.4): the permission matrix narrowed by the
+/// ticket's status and assignment, with the same rules the endpoints enforce (422 ticket-closed / ticket-not-open,
+/// ticket-not-routed). Pure. The screen shows only these – it does not compute permissions itself.
+/// </summary>
+public static class TicketAllowedActions
+{
+    public static IReadOnlyList<string> For(TicketPermissions permissions, TicketAccessFacts ticket, TicketViewer viewer)
+    {
+        var actions = new List<string>();
+        if (!permissions.CanView || permissions.IsRequesterView)
+        {
+            return actions;
+        }
+
+        // Comments: anything but closed / cancelled (TicketConversationService → 422 ticket-closed).
+        var acceptsComments = ticket.Status is not (TicketStatus.Closed or TicketStatus.Cancelled);
+        // Classification and assignment: not once resolved (TicketHandlingService.EnsureOpen → 422 ticket-not-open).
+        var isOpen = ticket.Status is not (TicketStatus.Resolved or TicketStatus.Closed or TicketStatus.Cancelled);
+        var isRouted = ticket.AssignedDepartmentId is not null;
+
+        if (permissions.CanReply && acceptsComments)
+        {
+            actions.Add(TicketActions.Reply);
+        }
+
+        if (permissions.CanWriteInternal && acceptsComments)
+        {
+            actions.Add(TicketActions.InternalNote);
+        }
+
+        if (permissions.CanReclassify && isOpen)
+        {
+            actions.Add(TicketActions.Reclassify);
+        }
+
+        if (permissions.CanAssign && isOpen && isRouted)
+        {
+            actions.Add(TicketActions.Assign);
+        }
+
+        if (permissions.CanTransferToDepartment && isOpen && isRouted)
+        {
+            actions.Add(TicketActions.TransferToDepartment);
+        }
+
+        // In the queue of the user's own department: an active handler there may take it (EnsureAssigneeAsync).
+        if (permissions.CanAssign && isOpen && ticket.AssignedToUserId is null
+            && viewer.Roles.Contains(Role.Handler) && ticket.AssignedDepartmentId == viewer.DepartmentId)
+        {
+            actions.Add(TicketActions.TakeFromQueue);
+        }
+
+        return actions;
     }
 }

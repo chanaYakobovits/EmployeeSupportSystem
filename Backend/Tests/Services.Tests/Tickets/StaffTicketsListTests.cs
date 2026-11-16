@@ -210,7 +210,7 @@ public sealed class StaffTicketsListTests : TicketTestBase
     // ---- sorting ----
 
     [Fact]
-    public async Task By_default_the_nearest_due_time_first_then_the_most_urgent_and_no_due_time_last()
+    public async Task By_due_time_the_nearest_first_then_the_most_urgent_and_no_due_time_last()
     {
         var noDueAt = HandledBy(DevId, null, configure: t => t.DueAt = null);
         var later = HandledBy(DevId, null, configure: t => t.DueAt = Now.AddHours(5));
@@ -225,10 +225,152 @@ public sealed class StaffTicketsListTests : TicketTestBase
             t.Urgency = Urgency.Critical;
         });
 
-        Assert.Equal([soonCritical, soonLow, later, noDueAt], await Ids(AlonId, TicketListScope.Queue));
+        Assert.Equal([soonCritical, soonLow, later, noDueAt],
+            await Ids(AlonId, TicketListScope.Queue, q => q.SortBy = StaffTicketSortFields.DueAt));
         // Descending: the latest due time first; still no due time last.
-        Assert.Equal([later, soonCritical, soonLow, noDueAt],
-            await Ids(AlonId, TicketListScope.Queue, q => q.SortDir = "desc"));
+        Assert.Equal([later, soonCritical, soonLow, noDueAt], await Ids(AlonId, TicketListScope.Queue, q =>
+        {
+            q.SortBy = StaffTicketSortFields.DueAt;
+            q.SortDir = "desc";
+        }));
+    }
+
+    // ---- sortBy=priority (the default) ----
+
+    [Fact]
+    public async Task By_default_the_groups_are_waiting_for_the_handler_then_the_employee_then_resolved_then_done()
+    {
+        var resolved = HandledBy(DevId, null, TicketStatus.Resolved);
+        var closed = HandledBy(DevId, null, TicketStatus.Closed);
+        var waiting = HandledBy(DevId, null, TicketStatus.WaitingForEmployee);
+        var cancelled = HandledBy(DevId, null, TicketStatus.Cancelled);
+        var inProgress = HandledBy(DevId, null, TicketStatus.InProgress);
+        var isNew = HandledBy(DevId, null, TicketStatus.New);
+
+        var all = await Ids(AlonId, TicketListScope.Queue, q => q.Status = [.. Enum.GetValues<TicketStatus>()]);
+
+        // Same urgency and due time in group 1 → the lowest id; groups 2–4 by the latest update (all equal here) → id.
+        Assert.Equal([inProgress, isNew, waiting, resolved, closed, cancelled], all);
+        // Without sortBy and with sortBy=priority alike; sortDir does not reverse it.
+        Assert.Equal(all, await Ids(AlonId, TicketListScope.Queue, q =>
+        {
+            q.Status = [.. Enum.GetValues<TicketStatus>()];
+            q.SortBy = StaffTicketSortFields.Priority;
+            q.SortDir = "desc";
+        }));
+    }
+
+    [Fact]
+    public async Task By_priority_an_overdue_ticket_comes_before_a_critical_one_that_is_not()
+    {
+        var critical = HandledBy(DevId, null, configure: t =>
+        {
+            t.Urgency = Urgency.Critical;
+            t.DueAt = Now.AddMinutes(10);
+        });
+        var overdueLow = HandledBy(DevId, null, configure: t =>
+        {
+            t.Urgency = Urgency.Low;
+            t.DueAt = Now.AddMinutes(-1);
+        });
+
+        Assert.Equal([overdueLow, critical], await Ids(AlonId, TicketListScope.Queue));
+    }
+
+    [Fact]
+    public async Task By_priority_urgency_beats_a_nearer_due_time_and_no_urgency_counts_as_medium()
+    {
+        var mediumSoon = HandledBy(DevId, null, configure: t =>
+        {
+            t.Urgency = Urgency.Medium;
+            t.DueAt = Now.AddHours(1);
+        });
+        var low = HandledBy(DevId, null, configure: t =>
+        {
+            t.Urgency = Urgency.Low;
+            t.DueAt = Now.AddMinutes(5);
+        });
+        var criticalLater = HandledBy(DevId, null, configure: t =>
+        {
+            t.Urgency = Urgency.Critical;
+            t.DueAt = Now.AddHours(10);
+        });
+        var notSetSooner = HandledBy(DevId, null, configure: t =>
+        {
+            t.Urgency = null;
+            t.DueAt = Now.AddMinutes(30);
+        });
+        var notSetNoDueAt = HandledBy(DevId, null, TicketStatus.New, configure: t =>
+        {
+            t.Urgency = null;
+            t.DueAt = null;
+        });
+
+        // Medium and "not set" share a rank, then the nearest due time; no due time last within the rank.
+        Assert.Equal([criticalLater, notSetSooner, mediumSoon, notSetNoDueAt, low],
+            await Ids(AlonId, TicketListScope.Queue));
+    }
+
+    [Fact]
+    public async Task By_priority_the_other_groups_are_by_the_latest_update()
+    {
+        var older = HandledBy(DevId, null, TicketStatus.WaitingForEmployee, t => t.UpdatedAt = Now.AddHours(-5));
+        var newer = HandledBy(DevId, null, TicketStatus.WaitingForEmployee, t =>
+        {
+            t.UpdatedAt = Now.AddHours(-1);
+            t.Urgency = Urgency.Low;   // urgency and due time do not count outside group 1
+            t.DueAt = Now.AddDays(5);
+        });
+        var resolvedOld = HandledBy(DevId, null, TicketStatus.Resolved, t => t.UpdatedAt = Now.AddDays(-3));
+        var resolvedNew = HandledBy(DevId, null, TicketStatus.Resolved, t => t.UpdatedAt = Now.AddDays(-2));
+        var urgentOld = HandledBy(DevId, null, TicketStatus.WaitingForEmployee, t =>
+        {
+            t.UpdatedAt = Now.AddHours(-9);
+            t.Urgency = Urgency.Critical;
+            t.DueAt = Now.AddHours(-9);
+        });
+
+        Assert.Equal([newer, older, urgentOld, resolvedNew, resolvedOld], await Ids(AlonId, TicketListScope.Queue));
+    }
+
+    [Fact]
+    public async Task By_priority_pages_are_stable_with_ties()
+    {
+        // Identical keys everywhere: only the id orders them.
+        var ids = Enumerable.Range(1, 7).Select(_ => HandledBy(DevId, null)).ToList();
+
+        var pages = new List<int>();
+        for (var page = 1; page <= 3; page++)
+        {
+            var result = await Page(AlonId, TicketListScope.Queue, q =>
+            {
+                q.PageSize = 3;
+                q.Page = page;
+            });
+            Assert.Equal(7, result.TotalCount);
+            pages.AddRange(result.Items.Select(r => r.Id));
+        }
+
+        Assert.Equal(ids.Order(), pages);
+    }
+
+    [Fact]
+    public async Task Closed_and_cancelled_tickets_are_left_out_unless_the_status_filter_asks_for_them()
+    {
+        var open = HandledBy(DevId, null, TicketStatus.InProgress);
+        var resolved = HandledBy(DevId, null, TicketStatus.Resolved);
+        var closed = HandledBy(DevId, null, TicketStatus.Closed);
+        var cancelled = HandledBy(DevId, null, TicketStatus.Cancelled);
+
+        var byDefault = await Page(AlonId, TicketListScope.Handling);
+        Assert.Equal([open, resolved], byDefault.Items.Select(r => r.Id));
+        Assert.Equal(2, byDefault.TotalCount);
+
+        Assert.Equal([closed], await Ids(AlonId, TicketListScope.Handling, q => q.Status = [TicketStatus.Closed]));
+        Assert.Equal([open, closed, cancelled], await Ids(AlonId, TicketListScope.Handling,
+            q => q.Status = [TicketStatus.InProgress, TicketStatus.Closed, TicketStatus.Cancelled]));
+        // The executive's department scope too.
+        Assert.DoesNotContain(closed, await Ids(AvnerId, TicketListScope.Department));
     }
 
     [Fact]

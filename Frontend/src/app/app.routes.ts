@@ -1,10 +1,18 @@
 import { Routes } from '@angular/router';
+import { inject } from '@angular/core';
 
 import { authGuard, changePasswordGuard, guestGuard, mustChangePasswordGuard } from './guards/auth.guards';
 import { APP_AREAS, AppArea, areaRoute } from './services/app-areas';
 import { DEV_AREAS, loadDevRoutes } from './components/dev/dev-area';
+import { AuthService } from './services/auth.service';
+import { Role } from './models/auth.models';
 
 const [EMPLOYEE, HANDLER, DASHBOARD, ADMIN] = APP_AREAS;
+
+/** Where a signed-in user lands: a handler on the ticket queue (spec 7.6), everyone else on "my tickets". */
+export function homePath(roles: readonly Role[]): string {
+  return roles.includes('Handler') ? HANDLER.path : EMPLOYEE.path;
+}
 
 const loadChangePasswordPage = () =>
   import('./components/auth/change-password/change-password-page').then((m) => m.ChangePasswordPage);
@@ -35,7 +43,7 @@ export const routes: Routes = [
     canActivate: [authGuard, mustChangePasswordGuard],
     loadComponent: () => import('./layout/shell/shell').then((m) => m.Shell),
     children: [
-      { path: '', pathMatch: 'full', redirectTo: EMPLOYEE.path },
+      { path: '', pathMatch: 'full', redirectTo: () => homePath(inject(AuthService).roles()) },
       areaRoute(EMPLOYEE, () => import('./components/employee/employee.routes').then((m) => m.EMPLOYEE_ROUTES)),
       areaRoute(HANDLER, () => import('./components/handler/handler.routes').then((m) => m.HANDLER_ROUTES)),
       areaRoute(DASHBOARD, () => import('./components/dashboard/dashboard.routes').then((m) => m.DASHBOARD_ROUTES)),

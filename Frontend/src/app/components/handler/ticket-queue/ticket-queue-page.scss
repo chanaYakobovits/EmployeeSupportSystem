@@ -1,0 +1,102 @@
+.tabs {
+  margin-bottom: 16px;
+}
+
+.filter {
+  flex: 0 1 180px;
+  min-width: 150px;
+
+  &.date {
+    flex-basis: 170px;
+  }
+}
+
+// Table cells and phone cards (templates declared here, so styled here).
+.ticket-number {
+  font-weight: 700;
+  color: var(--primary);
+  text-decoration: none;
+  white-space: nowrap;
+
+  &:hover,
+  &:focus-visible {
+    text-decoration: underline;
+  }
+}
+
+.subject {
+  display: block;
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  &.excerpt {
+    font-style: italic;
+    color: var(--text-secondary);
+  }
+}
+
+.muted {
+  color: var(--text-secondary);
+}
+
+.due {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+// The overdue row says it in words and with an icon, not only in red (spec 11.6).
+.overdue-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--error-text);
+
+  mat-icon {
+    width: 16px;
+    height: 16px;
+    font-size: 16px;
+  }
+}
+
+.take-button {
+  white-space: nowrap;
+
+  mat-spinner {
+    display: inline-block;
+    margin-inline-end: 6px;
+  }
+}
+
+.ticket-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+
+  .subject {
+    max-width: none;
+    white-space: normal;
+  }
+}
+
+.ticket-card-top,
+.ticket-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.ticket-card-top {
+  justify-content: space-between;
+}
+
+.ticket-card-meta {
+  font-size: 13px;
+  color: var(--text-secondary);
+}

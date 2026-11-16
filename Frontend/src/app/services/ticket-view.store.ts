@@ -9,9 +9,14 @@ import {
   CLOSED_TICKET_STATUSES,
   RequesterTicketDetails,
   RequesterTicketHistory,
+  isStaffTicketDetails,
 } from '../models/ticket.models';
 
-export type TicketViewStatus = 'loading' | 'ready' | 'error' | 'notFound';
+/** staffView: the user is staff on this ticket, not its requester – it belongs on the handling screen. */
+export type TicketViewStatus = 'loading' | 'ready' | 'error' | 'notFound' | 'staffView';
+
+/** The ticket is not the user's own: the server sent the staff view. */
+class StaffViewError extends Error {}
 
 interface TicketViewData {
   ticket: RequesterTicketDetails;
@@ -65,11 +70,17 @@ export class TicketViewStore {
           this.apply(data);
           this.statusSignal.set('ready');
         },
-        // 404: no such ticket, or not the user's own (the server does not say which).
+        // 404: no such ticket, or outside the user's scope (the server does not say which).
         error: (error: unknown) => {
           this.ticketSignal.set(null);
           this.historySignal.set(null);
-          this.statusSignal.set(error instanceof HttpErrorResponse && error.status === 404 ? 'notFound' : 'error');
+          this.statusSignal.set(
+            error instanceof StaffViewError
+              ? 'staffView'
+              : error instanceof HttpErrorResponse && error.status === 404
+                ? 'notFound'
+                : 'error',
+          );
         },
       });
   }
@@ -136,8 +147,16 @@ export class TicketViewStore {
       });
   }
 
+  /** The requester's view only; the staff view → StaffViewError (the page moves to the handling screen). */
   private fetch(id: number): Observable<TicketViewData> {
-    return forkJoin({ ticket: this.api.get(id), history: this.api.history(id) });
+    return forkJoin({ ticket: this.api.get(id), history: this.api.history(id) }).pipe(
+      map(({ ticket, history }) => {
+        if (isStaffTicketDetails(ticket)) {
+          throw new StaffViewError();
+        }
+        return { ticket, history: history as RequesterTicketHistory };
+      }),
+    );
   }
 
   private apply(data: TicketViewData): void {

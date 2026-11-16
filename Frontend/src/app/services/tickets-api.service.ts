@@ -8,14 +8,21 @@ import { toHttpParams } from './query-params';
 import { PagedResult } from '../models/paging.models';
 import { TicketAttachment } from '../models/attachment.models';
 import {
+  AssignTicketRequest,
   CommentCreated,
   CreateTicketRequest,
   MyTicketsQuery,
-  RequesterTicketDetails,
+  ReclassifyTicketRequest,
   RequesterTicketHistory,
   RequesterTicketListItem,
   RequesterTicketsSummary,
+  StaffTicketHistory,
+  StaffTicketListItem,
+  StaffTicketsQuery,
+  TicketAssignOptions,
   TicketCreated,
+  TicketDetails,
+  TicketUpdated,
 } from '../models/ticket.models';
 
 /**
@@ -48,23 +55,40 @@ export class TicketsApiService {
     return this.http.get<RequesterTicketsSummary>(`${this.baseUrl}/my/summary`, { context: skipErrorToast() });
   }
 
-  /** 404 for a ticket outside the user's scope. */
-  get(id: number): Observable<RequesterTicketDetails> {
-    return this.http.get<RequesterTicketDetails>(`${this.baseUrl}/${id}`, { context: skipErrorToast() });
-  }
-
-  /** Status changes, comments and files, oldest first – only what the server lets this user see. 404 outside the scope. */
-  history(id: number): Observable<RequesterTicketHistory> {
-    return this.http.get<RequesterTicketHistory>(`${this.baseUrl}/${id}/history`, { context: skipErrorToast() });
+  /** The staff lists (scope = the tab). 403 for a scope that is not the user's. */
+  listStaff(query: StaffTicketsQuery): Observable<PagedResult<StaffTicketListItem>> {
+    return this.http.get<PagedResult<StaffTicketListItem>>(this.baseUrl, {
+      params: toHttpParams({ ...query }),
+      context: skipErrorToast(),
+    });
   }
 
   /**
-   * A visible comment (body 1–4,000 after trimming) with up to 3 files. Never an internal note from here (isInternal is
-   * not sent; the server's default is false). 422 ticket-closed when the ticket is closed or cancelled; 413 when too large.
+   * 404 for a ticket outside the user's scope. The requester – even a staff member who opened it – gets the requester's
+   * view; other staff get the staff view (isStaffTicketDetails).
    */
-  addComment(id: number, body: string, files: readonly File[]): Observable<CommentCreated> {
+  get(id: number): Observable<TicketDetails> {
+    return this.http.get<TicketDetails>(`${this.baseUrl}/${id}`, { context: skipErrorToast() });
+  }
+
+  /** Status changes, comments and files, oldest first – only what the server lets this user see. 404 outside the scope. */
+  history(id: number): Observable<RequesterTicketHistory | StaffTicketHistory> {
+    return this.http.get<RequesterTicketHistory | StaffTicketHistory>(`${this.baseUrl}/${id}/history`, {
+      context: skipErrorToast(),
+    });
+  }
+
+  /**
+   * A comment (body 1–4,000 after trimming) with up to 3 files. isInternal omitted → not sent (the server's default is
+   * false: visible) – the employee's screen never sends it. The handler's screen always sends it explicitly.
+   * 422 ticket-closed when the ticket is closed or cancelled; 413 when too large; 403 when the mode is not allowed.
+   */
+  addComment(id: number, body: string, files: readonly File[], isInternal?: boolean): Observable<CommentCreated> {
     const form = new FormData();
     form.append('body', body);
+    if (isInternal !== undefined) {
+      form.append('isInternal', String(isInternal));
+    }
     appendFiles(form, files);
     return this.http.post<CommentCreated>(`${this.baseUrl}/${id}/comments`, form, { context: skipErrorToast() });
   }
@@ -74,6 +98,21 @@ export class TicketsApiService {
     const form = new FormData();
     appendFiles(form, files);
     return this.http.post<TicketAttachment[]>(`${this.baseUrl}/${id}/attachments`, form, { context: skipErrorToast() });
+  }
+
+  /** Category and/or urgency + a reason. 409 when the ticket changed since rowVersion; 422 when resolved or unchanged. */
+  reclassify(id: number, request: ReclassifyTicketRequest): Observable<TicketUpdated> {
+    return this.http.patch<TicketUpdated>(`${this.baseUrl}/${id}/classification`, request, { context: skipErrorToast() });
+  }
+
+  /** To a handler of the handling department (the user = "קח לטיפולי") or to another department's queue. */
+  assign(id: number, request: AssignTicketRequest): Observable<TicketUpdated> {
+    return this.http.post<TicketUpdated>(`${this.baseUrl}/${id}/assign`, request, { context: skipErrorToast() });
+  }
+
+  /** The targets of the transfer dialog. 403 without the assign permission. */
+  assignOptions(id: number): Observable<TicketAssignOptions> {
+    return this.http.get<TicketAssignOptions>(`${this.baseUrl}/${id}/assign-options`, { context: skipErrorToast() });
   }
 
   /** Download address of an attachment – fetched through HttpClient (AttachmentDownloadService), so the token is sent. */

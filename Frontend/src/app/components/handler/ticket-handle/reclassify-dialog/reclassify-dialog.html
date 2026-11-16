@@ -1,0 +1,79 @@
+<h2 mat-dialog-title id="reclassify-dialog-title">שינוי סיווג</h2>
+
+<form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+  <mat-dialog-content>
+    @if (alert(); as alert) {
+      <app-form-alert [alert]="alert" />
+    }
+
+    @if (categoriesFailed()) {
+      <app-form-alert [alert]="{ title: 'לא ניתן לטעון את רשימת הקטגוריות', detail: 'יש לסגור את החלון ולנסות שוב.' }" />
+    }
+
+    <mat-form-field appearance="outline" class="field">
+      <mat-label>קטגוריה</mat-label>
+      <mat-select formControlName="category" required cdkFocusInitial>
+        @for (category of categories() ?? []; track category.id) {
+          <mat-option [value]="category.id">{{ category.name }}</mat-option>
+        }
+      </mat-select>
+      @if (categories() === null && !categoriesFailed()) {
+        <mat-hint>טוען קטגוריות...</mat-hint>
+      }
+      @let category = form.controls.category;
+      @if (category.hasError('required')) {
+        <mat-error>יש לבחור קטגוריה</mat-error>
+      } @else if (category.hasError('server')) {
+        <mat-error>{{ category.getError('server') }}</mat-error>
+      }
+    </mat-form-field>
+
+    <mat-form-field appearance="outline" class="field">
+      <mat-label>דחיפות</mat-label>
+      <mat-select formControlName="urgency">
+        @for (urgency of urgencies; track urgency) {
+          <mat-option [value]="urgency">{{ urgency | urgencyLabel }}</mat-option>
+        }
+      </mat-select>
+      <mat-hint>שינוי הדחיפות מחשב מחדש את מועד היעד מרגע פתיחת הפנייה</mat-hint>
+      @let urgency = form.controls.urgency;
+      @if (urgency.hasError('server')) {
+        <mat-error>{{ urgency.getError('server') }}</mat-error>
+      }
+    </mat-form-field>
+
+    <mat-form-field appearance="outline" class="field">
+      <mat-label>נימוק</mat-label>
+      <textarea
+        matInput
+        formControlName="reason"
+        dir="auto"
+        required
+        cdkTextareaAutosize
+        cdkAutosizeMinRows="3"
+        cdkAutosizeMaxRows="8"
+        [attr.maxlength]="reasonLimits.maxLength"
+        aria-describedby="reclassify-reason-hint"
+      ></textarea>
+      <mat-hint id="reclassify-reason-hint">גלוי לצוות בלבד – נשמר בהיסטוריה של הפנייה</mat-hint>
+      @let reason = form.controls.reason;
+      @if (reason.hasError('required')) {
+        <mat-error>יש לכתוב נימוק</mat-error>
+      } @else if (reason.hasError('minlength') || reason.hasError('maxlength')) {
+        <mat-error>נימוק: בין {{ reasonLimits.minLength }} ל-{{ reasonLimits.maxLength }} תווים</mat-error>
+      } @else if (reason.hasError('server')) {
+        <mat-error>{{ reason.getError('server') }}</mat-error>
+      }
+    </mat-form-field>
+  </mat-dialog-content>
+
+  <mat-dialog-actions align="end">
+    <button mat-button type="button" mat-dialog-close>ביטול</button>
+    <button mat-flat-button type="submit" class="btn-primary-gradient" [disabled]="store.busy() || categories() === null">
+      @if (store.busy()) {
+        <mat-spinner diameter="18" aria-hidden="true" />
+      }
+      שמירת הסיווג
+    </button>
+  </mat-dialog-actions>
+</form>

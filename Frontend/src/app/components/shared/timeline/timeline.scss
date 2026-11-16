@@ -153,6 +153,77 @@
   }
 }
 
+// ----- Staff only: internal notes, reasons, reclassifications / transfers (task 3.4). -----
+
+// An internal note: yellowish, with a "פנימי" tag and a lock – never only the colour.
+.internal .bubble {
+  border-color: var(--internal-border);
+  border-inline-start: 3px solid var(--internal-text);
+  background: var(--internal-bg);
+}
+
+.internal .marker {
+  background: var(--internal-bg);
+  color: var(--internal-text);
+}
+
+.internal-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 8px;
+  border-radius: 20px;
+  background: var(--internal-tag-bg);
+  color: var(--internal-text);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 20px;
+
+  mat-icon {
+    width: 14px;
+    height: 14px;
+    font-size: 14px;
+  }
+}
+
+.reason {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.reason-label,
+.change-label {
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.change-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 14px;
+
+  li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .arrow {
+    width: 16px;
+    height: 16px;
+    font-size: 16px;
+    color: var(--text-secondary);
+  }
+}
+
 @media (max-width: 599.98px) {
   // Narrow: every bubble full width; only the colour tells who wrote it.
   .from-me .bubble,

@@ -31,6 +31,30 @@ export const boolParam: ParamCodec<boolean> = {
   format: (value) => String(value),
 };
 
+/** A calendar day, yyyy-MM-dd (e.g. a "from" date). */
+export const dateParam: ParamCodec<string> = {
+  parse: (raw) => (/^\d{4}-\d{2}-\d{2}$/.test(raw) && !Number.isNaN(Date.parse(`${raw}T00:00:00Z`)) ? raw : null),
+  format: (value) => value,
+};
+
+/**
+ * Several values of one codec in one query param, comma separated (?status=New,Assigned). Invalid values are dropped;
+ * none left (or an empty list) → not filtered. The order of the URL is kept.
+ */
+export function listParam<T>(codec: ParamCodec<T>): ParamCodec<T[]> {
+  return {
+    parse: (raw) => {
+      const values = raw
+        .split(',')
+        .map((part) => codec.parse(part.trim()))
+        .filter((value): value is NonNullable<typeof value> => value !== null);
+      const unique = [...new Set(values)] as T[];
+      return unique.length > 0 ? unique : null;
+    },
+    format: (values) => values.map((value) => codec.format(value)).join(','),
+  };
+}
+
 /** One of a closed set of values, e.g. a Role. */
 export function enumParam<T extends string>(values: readonly T[]): ParamCodec<T> {
   return {
@@ -54,6 +78,11 @@ export interface ListStateDef<F extends ListFilters> {
   sortFields: readonly string[];
   /** The server's default order – not written to the URL. */
   defaultSort: ListSort;
+  /**
+   * Columns other than the default one that the server sorts descending when sortDir is not sent
+   * (e.g. the newest first). Default: ascending.
+   */
+  descendingByDefault?: readonly string[];
   defaultPageSize?: number;
 }
 
@@ -98,7 +127,7 @@ export function toQueryParams<F extends ListFilters>(state: ListState<F>, def: L
   const params: Params = {};
   for (const key of filterKeys(def)) {
     const value = state.filters[key];
-    params[key] = value === null || value === undefined ? null : def.filters[key].format(value as NonNullable<F[typeof key]>);
+    params[key] = isEmptyFilter(value) ? null : def.filters[key].format(value as NonNullable<F[typeof key]>);
   }
   params[PAGE] = state.page > 1 ? String(state.page) : null;
   params[PAGE_SIZE] = state.pageSize !== defaultPageSize(def) ? String(state.pageSize) : null;
@@ -139,7 +168,12 @@ export function withoutFilters<F extends ListFilters>(state: ListState<F>): List
 
 /** True when at least one filter (including the search) is set – "no results" rather than "no data". */
 export function hasActiveFilters<F extends ListFilters>(state: ListState<F>): boolean {
-  return Object.values(state.filters).some((value) => value !== null && value !== undefined);
+  return Object.values(state.filters).some((value) => !isEmptyFilter(value));
+}
+
+/** Not filtered: null, undefined, or an empty list. */
+function isEmptyFilter(value: unknown): boolean {
+  return value === null || value === undefined || (Array.isArray(value) && value.length === 0);
 }
 
 /** Same URL ⇔ same state. */
@@ -155,7 +189,10 @@ function defaultPageSize<F extends ListFilters>(def: ListStateDef<F>): number {
   return def.defaultPageSize ?? DEFAULT_PAGE_SIZE;
 }
 
-/** The default column sorts in its default direction; any other column starts ascending. */
-function defaultDir<F extends ListFilters>(by: string, def: ListStateDef<F>): SortDir {
-  return by === def.defaultSort.by ? def.defaultSort.dir : 'asc';
+/** The default column sorts in its default direction; any other column ascending, unless descendingByDefault. */
+export function defaultDir<F extends ListFilters>(by: string, def: ListStateDef<F>): SortDir {
+  if (by === def.defaultSort.by) {
+    return def.defaultSort.dir;
+  }
+  return def.descendingByDefault?.includes(by) ? 'desc' : 'asc';
 }
