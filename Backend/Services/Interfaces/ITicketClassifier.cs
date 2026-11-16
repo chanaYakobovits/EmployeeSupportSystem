@@ -14,6 +14,7 @@ public interface ITicketClassifier
     /// <list type="bullet">
     /// <item>CategoryId, Urgency, ClassificationSource, UpdatedAt.</item>
     /// <item>A new category, or a ticket never routed → routed again: AssignedDepartmentId and AssignedToUserId.
+    /// A new category of the department that already handles the ticket → the assignment stays (task 3.4).
     /// Only the urgency changed → the assignment stays.</item>
     /// <item>DueAt = CreatedAt + the urgency's hours (no urgency → Medium), always recalculated (spec 3.1).</item>
     /// <item>Status New → Assigned, with a system row (ChangedByUserId null) in the status history (spec 3.3).

@@ -40,6 +40,9 @@ public static class AuditActions
 
     // Tickets (task 3.2). EntityId = the attachment id; never the file name or content.
     public const string AttachmentDownloaded = "Attachment.Downloaded";
+
+    // Task 3.4 (spec 6.4: viewing another employee's ticket). EntityId = the ticket id; every staff view is recorded.
+    public const string TicketViewed = "Ticket.Viewed";
 }
 
 /// <summary>Values of <c>AuditLog.EntityType</c>.</summary>
@@ -52,4 +55,6 @@ public static class AuditEntityTypes
     public const string SlaPolicy = "SlaPolicy";
 
     public const string TicketAttachment = "TicketAttachment";
+
+    public const string Ticket = "Ticket";
 }

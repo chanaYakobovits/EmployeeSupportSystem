@@ -11,7 +11,8 @@
   3.1 חלק ב' (מסכי "הפניות שלי", "פנייה חדשה", "צפייה בפנייה" ב-Angular), 3.2 חלק א' (API לקבצים ותגובות),
   3.2 חלק ב' (קבצים ותגובות במסכי העובד ב-Angular), 3.3 ניתוב ו-SLA (כולל איש HR מחלקתי).
 - שינוי מבנה Frontend (לא באפיון): `src/app` עבר ממבנה core/features/shared למבנה לפי סוג קובץ – הושלם.
-- הבא בתור: 3.4 – תור מטפל ומסך טיפול.
+- 3.4 חלק א' (API: תור המטפל, תצוגת צוות של פנייה, סיווג מחדש והעברה) – הושלם.
+- הבא בתור: 3.4 חלק ב' – מסכי התור והטיפול ב-Angular.
 - תוספת שלא באפיון: בדיקת איכות סיווג AI על 30 פניות לדוגמה – אחרי משימה 4.3.
 - תוספת שלא באפיון: הזמנת עובד במייל (האפיון 14 שאלה 3, "בעתיד"). שלב א' (שרת) ושלב ב' (מסך set-password, סטטוס הזמנה
   ברשימה ובעריכה, שליחה מחדש, סינון לפי סטטוס הזמנה) – הושלמו.
@@ -195,7 +196,7 @@
     (סדר ה-enum), שובר שוויון Id יורד. בלי נושא ← 80 התווים הראשונים של התיאור + `isSubjectExcerpt` (ה-"…" בלקוח).
   * `GET /tickets/my/summary`: שאילתה מקובצת אחת. פתוחות = `TicketStatuses.RequesterOpen` (New, Assigned, InProgress, Resolved),
     ממתינות לתגובתי = WaitingForEmployee, נסגרו החודש = Closed עם ClosedAt מתחילת החודש בשעון ישראל (`IsraelTime`). Cancelled – באף כרטיס.
-  * `GET /tickets/{id}`: מ-3.2 דרך `TicketAccess` (כל ההיקפים), אחרת 404. ב-3.4 – DTO נפרד לצוות.
+  * `GET /tickets/{id}`: מ-3.2 דרך `TicketAccess` (כל ההיקפים), אחרת 404. מ-3.4 – DTO נפרד לצוות (ראו 3.4 חלק א').
     ציר הזמן: שינויי סטטוס בלבד, בלי `Reason` (עלול להיות פנימי – להחליט ב-3.5), `changedByName` null = מערכת.
   * DTOs של הפונה (`Common/DTOs/Tickets/RequesterTicketDtos.cs`) – אסור להוסיף Urgency, DueAt, AiStatus, ניתוח AI,
     ClassificationSource, Reason או הערות פנימיות. `RequesterJsonTests` בודק את ה-JSON ואת הטיפוסים.
@@ -243,7 +244,7 @@
     (זמן, סוג, Id). ‏`RequesterTicketDetailsDto.Timeline` מ-3.1 נשאר.
   * הורדה: 404 זהה לקובץ פנימי ולקובץ שלא קיים. `nosniff`, ‏`CSP: sandbox`, ‏`no-store`, ‏`Content-Disposition: attachment`
     עם `filename*` (חשוף ב-CORS). AuditLog `Attachment.Downloaded` (EntityType `TicketAttachment`) – רק אחרי שהקובץ נפתח.
-  * GET /tickets/{id} עובר דרך TicketAccess. גם איש צוות מקבל כרגע את ה-DTO של הפונה (תצוגת צוות – 3.4).
+  * GET /tickets/{id} עובר דרך TicketAccess. מ-3.4 איש צוות מקבל `StaffTicketDetailsDto`.
   * Seeder: מרוקן את תיקיית הקבצים (רק שמות GUID) ומצרף PNG/PDF לכ-10% מהפניות (`SampleAttachments`, בלי ה-Random של
     הפניות). דוגמאות ל-API.http ב-`API/HttpSamples`. פנייה 149 של נועה מטופלת ע"י עדי שמעוני, 49 סגורה.
 
@@ -291,6 +292,55 @@
     של `Ai:Enabled=false`; מדד "סווג אוטומטית" (7.9) לפי ClassificationSource. אין גיבוי פעיל ← נשמרת New בלי ניתוב + LogError.
   * ה-Seeder עדיין יוצר 6 פניות New עם AiStatus Pending/Processing (הדגמה של עולם ה-AI) – אין Worker שיטפל בהן עד 4.3.
 
+- תור מטפל ותצוגת צוות – API (משימה 3.4 חלק א'):
+  * `GET /api/tickets?scope=assigned|queue|handling|department` (`StaffTicketsQuery`). ההיקפים כ-Expression ב-`TicketListScopes`
+    (Services/Implementations/Tickets) – אותם היקפים כמו `TicketAccessPolicy`; `TicketListScopesTests` משווה את שתיהן על כל
+    שילובי התפקידים והניתוב – לשנות יחד. assigned/queue/handling ← Handler (queue = המחלקה של המטפל בלי מטפל אישי);
+    department ← מנכ"ל (כל הארגון) או מנהל מחלקה (מחלקת הפונה או המחלקה המטפלת = המנוהלת). היקף לא מותר ← 403
+    `ticket-scope-not-allowed` (רשימה, לא רשומה – לכן לא 404). scope חסר ← 400. הצופה מה-DB (`TicketAccess.GetListScopeAsync`).
+  * **הפניות שאיש הצוות פתח בעצמו לא מופיעות באף רשימת צוות שלו** (`RequesterId != me` בכל היקף) – עליהן הוא תמיד בתצוגת פונה.
+  * סינון: status (חוזר), ‏categoryId, ‏urgency (חוזר, `UrgencyFilter` עם `NotSet` = "לא נקבעה"), ‏from/to (`DateOnly`, יום הפתיחה
+    בשעון ישראל, שני הימים כלולים – `IsraelTime.StartOfDayUtc`), ‏overdueOnly, ‏search (LIKE על Subject, שם פרטי, משפחה ושם מלא).
+  * `IsOverdue` – הגדרה אחת: `TicketSlaQueries.IsOverdue(now)` (DueAt < now וסטטוס ב-`TicketStatuses.Open`; WaitingForEmployee
+    לא בחריגה). משמש ל-Where ול-Projection (`WithIsOverdue` מרכיב את ה-Expression לתוך ה-Select), ברשימה ובפרטים.
+  * מיון: dueAt (ברירת מחדל עולה; DueAt ריק תמיד אחרון; שוויון ← הדחוף יותר, Id), ‏urgency (ריק = Medium; בלי sortDir ← Critical
+    ראשון, asc = Low ראשון; שוויון ← DueAt, Id), ‏createdAt/updatedAt (בלי sortDir יורד), ‏status (סדר ה-enum). `StaffTicketSortFields`.
+  * שורה `StaffTicketListItemDto`: כולל `RequesterDepartmentName` (תמונת המצב), ‏`AssignedDepartmentName`, ‏`ClassificationSource`,
+    ‏`IsOverdue` ו-`RowVersion` (לפעולה מרובה ב-3.6). לוג: משתמש, scope, totalCount, משך – בלי טקסט החיפוש.
+  * `GET /tickets/{id}` מחזיר `ITicketDetailsDto`: פונה (גם כשהוא איש צוות) ← `RequesterTicketDetailsDto` בלי שינוי; צוות ←
+    `StaffTicketDetailsDto` (פונה עם JobTitle, קטגוריה, דחיפות, מקור סיווג, DueAt, IsOverdue, מטפל, מחלקה מטפלת, RowVersion,
+    `permissions { canReply, canWriteInternal }`). ציר הזמן רק מ-/history. בלי ניתוח AI (4.4).
+  * AuditLog `Ticket.Viewed` (EntityType `Ticket`, IP מה-Controller) בכל צפייה של איש צוות, כולל מנכ"ל, אחרי שהשאילתה הצליחה.
+    לא לפונה ולא ל-404.
+
+- סיווג מחדש והעברה – API (משימה 3.4, סעיפים 3–4):
+  * הנימוק נשמר בטבלה `TicketChanges` (Kind: ‏Reclassified / ‏Transferred / ‏Taken, ‏ChangedBy, ‏Reason, ‏From/To של קטגוריה,
+    דחיפות, מחלקה ומטפל). לא ב-`TicketStatusHistory`: הפונה קורא אותה בשתי שאילתות, ושכחת סינון הייתה מדליפה נימוק.
+    בציר הזמן לצוות בלבד – `StaffTimelineChangeDto`, ‏`kind: "change"`, שמות ולא מזהים. אף שאילתה של פונה לא נוגעת בטבלה.
+  * הרשאות ב-`TicketAccessPolicy` (גם ב-`permissions` של ה-DTO): `CanReclassify` ו-`CanAssign` – מטפל בהיקף, או מנהל המחלקה
+    **המטפלת** (לא מנהל של מחלקת הפונה כשהפנייה מטופלת במקום אחר). `CanTransferToDepartment` – מטפל בלבד. מנכ"ל ופונה – לא.
+  * `ITicketHandlingService` (`TicketHandlingService`). סדר הבדיקות: 400 ← 404 ← 403 ← 409 ← 422. ה-409 לפני ה-422:
+    כללי העסק נבדקים מול מצב שהמשתמש עוד לא ראה. ‏rowVersion נבדק פעמיים: השוואה מוקדמת, ואז `ExpectRowVersion` (‏OriginalValue)
+    כך שה-UPDATE מותנה בו. ב-409 – הנוסח של 9.5 ("הפנייה עודכנה על ידי משתמש אחר"), ו-Warning בלוג.
+  * תשובה: `TicketUpdatedDto { id, rowVersion, canView }`, לא ה-DTO המלא – שינוי יכול להוציא את הפנייה מההיקף של המשתמש.
+  * PATCH /classification: ‏`{ categoryId?, urgency?, reason, rowVersion }`. שדה שלא נשלח נשמר; אין ריקון דחיפות. נימוק 3–500
+    (`TicketFieldLimits.Reason*`). קטגוריה לא פעילה ← 400 על `categoryId`. Resolved/Closed/Cancelled ← 422 `ticket-not-open`.
+    אותם ערכים על סיווג שכבר Manual ← 422 `classification-unchanged`; על סיווג Ai/Fallback זה **אישור** – הופך ל-Manual.
+    מנהל רשאי לסווג לקטגוריה שמנותבת למחלקה אחרת (תיקון סיווג לפי הכללים, לא העברה חופשית).
+  * `ApplyAsync`: קטגוריה חדשה שמנותבת **לאותה מחלקה** ← המטפל (או התור) נשמר (`RoutingReason.SameDepartmentKeptHandler`).
+  * POST /assign: ‏`{ targetUserId? | targetDepartmentId?, reason?, rowVersion }` (בדיוק אחד ← אחרת 400 על `targetUserId`).
+    למטפל: Handler פעיל שהמחלקה שלו היא המחלקה המטפלת, מהמסד (`GetHandlerCandidatesAsync`) ← אחרת 422 `assignee-not-handler`;
+    הפונה ← `assignee-is-requester`; המטפל הנוכחי ← `assignment-unchanged`; פנייה בלי מחלקה ← `ticket-not-routed`.
+    למחלקה (מטפל בלבד; מנהל ← 403 `transfer-not-allowed`): פעילה (400 על `targetDepartmentId`), שונה מהנוכחית, ועם מטפל פעיל
+    אחד לפחות (422 `department-has-no-handlers`). התור שלה – `AssignedToUserId = null`, הקטגוריה לא משתנה.
+    "קח לטיפולי" = `targetUserId` של עצמי על פנייה בתור: `Kind=Taken`, בלי נימוק, בלי שינוי סטטוס. בכל העברה אחרת נימוק חובה.
+  * סטטוס כשהמטפל האישי מתחלף (העברה או סיווג מחדש): InProgress ← Assigned + שורת היסטוריה של מבצע הפעולה (המטפל החדש עוד
+    לא התחיל). WaitingForEmployee נשאר. "התחל טיפול" – 3.5.
+  * לוג: מזהים, סוג הפעולה, מ-/אל – בלי נימוק.
+  * Seeder: ManualClassify כותב שורת Reclassified (במקום הערה פנימית), Start מהתור כותב Taken, ו-`TransferToDepartmentQueues`
+    מעביר 4 פניות גיבוי במצב Assigned מהמרכזי לתורים של 3/4/5/2 (בלי Random – מספרי הפניות המתועדים לא זזו; 152 בתור של אלון).
+    מספר הקבצים לדוגמה ירד מ-33 ל-29 (פחות הערות פנימיות).
+
 ## בהמשך
 - משימה 2.2: לטעון את Shell ב-loadComponent (lazy), מסך ההתחברות מחוצה לו –
   כדי להוריד את ה-bundle הראשוני מתחת ל-500KB. לא להגדיל את ה-budget.
@@ -302,10 +352,12 @@
 - 3.5: העובד לא רואה נימוקים בציר הזמן – רק תגובות שנכתבו אליו.
 - 3.5: נקודת החיבור ב-`TicketConversationService.AddCommentAsync`: תגובת פונה ב-WaitingForEmployee ← InProgress
   (TicketStatusRules + שורת היסטוריה, באותו save). ‏IsResolution נקבע רק משם ("שלח פתרון").
-- 3.4: endpoint הסיווג (PATCH /classification) קורא ל-`ITicketClassifier.ApplyAsync` עם `ClassificationSource.Manual`
-  (+ ולידציה שהקטגוריה פעילה, נימוק בהיסטוריה). 4.3: אותה מתודה עם `Ai`, ו-`RoutingService` עם `job.OrganizationId`.
-- 3.4: אותם היקפים של `TicketAccessPolicy` כ-Expression לרשימות הצוות (עם בדיקה ששתי הגרסאות תואמות). תצוגת צוות
-  ל-GET /tickets/{id}. ‏AuditLog "צפייה בפנייה של עובד אחר" (6.4).
+- 4.3: הסיווג של ה-AI דרך `ITicketClassifier.ApplyAsync` עם `Ai`, ו-`RoutingService` עם `job.OrganizationId`. אם מטפל כבר
+  סיווג ידנית (`ClassificationSource.Manual`) – תוצאת ה-AI נשמרת כהמלצה בלבד (11.2).
+- 3.4 מסכים: תור (3 לשוניות + department למנהל/מנכ"ל) ומסך טיפול. `permissions` של ה-DTO קובע אילו פעולות מוצגות;
+  `canView: false` בתשובת שינוי ← חזרה לרשימה. 409 ← הודעה + טעינה מחדש.
+- ה-Seeder: צעד ManualClassify משאיר את הפנייה בתור המחלקה (כמו לפני 3.4), ואילו ב-API סיווג ידני מנתב למטפל לפי עומס.
+  לא תוקן כדי לא להזיז את מספרי הפניות המתועדים – לתקן אם נוגעים ב-Seeder ממילא.
 - 4.3: ה-AI מקבל רק את התיאור המנוקה – לא קבצים ולא שמות קבצים (הערה ב-`IAiClient` וב-`StageNewTicket`).
 - פתוח (מחוץ ל-3.2): ניקוי קבצים יתומים (כשל במחיקה אחרי כשל במסד – נרשם Warning), סריקת וירוסים, Rate Limit לתגובות.
 

@@ -27,6 +27,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IOrganizationC
     public DbSet<TicketAiAnalysis> TicketAiAnalyses => Set<TicketAiAnalysis>();
     public DbSet<AiAnalysisJob> AiAnalysisJobs => Set<AiAnalysisJob>();
     public DbSet<TicketStatusHistory> TicketStatusHistory => Set<TicketStatusHistory>();
+    public DbSet<TicketChange> TicketChanges => Set<TicketChange>();
     public DbSet<TicketComment> TicketComments => Set<TicketComment>();
     public DbSet<TicketAttachment> TicketAttachments => Set<TicketAttachment>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();

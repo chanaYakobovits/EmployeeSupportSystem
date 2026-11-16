@@ -56,7 +56,7 @@ public sealed class RequesterJsonTests : TicketTestBase
     [Fact]
     public async Task The_details_json_has_no_internal_fields_or_texts()
     {
-        var json = JsonSerializer.Serialize(await ServiceFor(NoaId).GetAsync(_ticketId, CancellationToken.None), ApiJson);
+        var json = JsonSerializer.Serialize<object>(await ServiceFor(NoaId).GetAsync(_ticketId, ClientIp, CancellationToken.None), ApiJson);
 
         AssertNoInternalData(json);
         Assert.Contains("ליאת שחר", StringValues(json));   // not vacuous: the ticket is fully handled

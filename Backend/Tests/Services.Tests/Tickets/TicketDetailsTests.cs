@@ -1,3 +1,4 @@
+using Common.DTOs.Tickets;
 using Common.Enums;
 using Common.Exceptions;
 using Common.Models;
@@ -23,7 +24,8 @@ public sealed class TicketDetailsTests : TicketTestBase
             t.StatusHistory.Add(History(TicketStatus.New, TicketStatus.Assigned, null, created.AddMinutes(1)));
         });
 
-        var ticket = await ServiceFor(NoaId).GetAsync(id, CancellationToken.None);
+        var ticket = Assert.IsType<RequesterTicketDetailsDto>(
+            await ServiceFor(NoaId).GetAsync(id, ClientIp, CancellationToken.None));
 
         Assert.Equal(id, ticket.Id);
         Assert.Equal("תלוש", ticket.Subject);
@@ -47,7 +49,7 @@ public sealed class TicketDetailsTests : TicketTestBase
     {
         var idos = AddTicket(IdoId, TicketStatus.New, Now.AddHours(-1));
 
-        var error = await Assert.ThrowsAsync<NotFoundException>(() => ServiceFor(NoaId).GetAsync(idos, CancellationToken.None));
+        var error = await Assert.ThrowsAsync<NotFoundException>(() => ServiceFor(NoaId).GetAsync(idos, ClientIp, CancellationToken.None));
 
         Assert.Equal(TicketService.TicketNotFoundTitle, error.Title);
     }
@@ -55,12 +57,12 @@ public sealed class TicketDetailsTests : TicketTestBase
     [Fact]
     public async Task A_handler_views_a_ticket_assigned_to_them_through_ticket_access()
     {
-        // Since task 3.2 the details go through TicketAccess (staff scopes), with the requester's DTO for now.
+        // The details go through TicketAccess (staff scopes); staff get the staff DTO since task 3.4.
         var id = AddTicket(NoaId, TicketStatus.Assigned, Now.AddHours(-1), configure: t => t.AssignedToUserId = LiatId);
 
-        var ticket = await ServiceFor(LiatId).GetAsync(id, CancellationToken.None);
+        var ticket = await ServiceFor(LiatId).GetAsync(id, ClientIp, CancellationToken.None);
 
-        Assert.Equal(id, ticket.Id);
+        Assert.Equal(id, Assert.IsType<StaffTicketDetailsDto>(ticket).Id);
     }
 
     [Fact]
@@ -72,7 +74,7 @@ public sealed class TicketDetailsTests : TicketTestBase
             t.AssignedToUserId = LiatId;
         });
 
-        await Assert.ThrowsAsync<NotFoundException>(() => ServiceFor(AlonId).GetAsync(id, CancellationToken.None));
+        await Assert.ThrowsAsync<NotFoundException>(() => ServiceFor(AlonId).GetAsync(id, ClientIp, CancellationToken.None));
     }
 
     [Fact]
@@ -80,17 +82,17 @@ public sealed class TicketDetailsTests : TicketTestBase
     {
         // The executive sees every ticket of organization A – the organization filter still hides B's.
         await Assert.ThrowsAsync<NotFoundException>(() =>
-            ServiceFor(AvnerId, organizationId: OrgA).GetAsync(OrgBTicketId, CancellationToken.None));
+            ServiceFor(AvnerId, organizationId: OrgA).GetAsync(OrgBTicketId, ClientIp, CancellationToken.None));
 
         // Control: its own organization's user does see it.
-        var ticket = await ServiceFor(OrgBUserId, organizationId: OrgB).GetAsync(OrgBTicketId, CancellationToken.None);
+        var ticket = await ServiceFor(OrgBUserId, organizationId: OrgB).GetAsync(OrgBTicketId, ClientIp, CancellationToken.None);
         Assert.Equal(OrgBTicketId, ticket.Id);
     }
 
     [Fact]
     public async Task A_missing_ticket_is_not_found()
     {
-        await Assert.ThrowsAsync<NotFoundException>(() => ServiceFor(NoaId).GetAsync(987654, CancellationToken.None));
+        await Assert.ThrowsAsync<NotFoundException>(() => ServiceFor(NoaId).GetAsync(987654, ClientIp, CancellationToken.None));
     }
 
     private static TicketStatusHistory History(TicketStatus? previous, TicketStatus next, int? by, DateTime at,

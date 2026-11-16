@@ -40,7 +40,7 @@ public sealed class TicketAccessPolicyTests
         var permissions = Evaluate(Viewer(Role.Handler), Ticket(assignedTo: Me, assignedDepartment: OtherDepartment));
 
         Assert.Equal(new TicketPermissions(CanView: true, IsRequesterView: false, CanSeeInternal: true, CanReply: true,
-            CanWriteInternal: true), permissions);
+            CanWriteInternal: true, CanReclassify: true, CanAssign: true, CanTransferToDepartment: true), permissions);
     }
 
     [Fact]
@@ -114,6 +114,26 @@ public sealed class TicketAccessPolicyTests
     {
         Assert.Equal(TicketPermissions.None, Evaluate(Viewer(Role.DepartmentManager, managed: null),
             Ticket(requesterDepartment: MyDepartment)));
+    }
+
+    [Fact]
+    public void A_manager_reclassifies_and_assigns_only_tickets_their_department_handles_and_never_transfers_out()
+    {
+        var handled = Evaluate(Viewer(Role.DepartmentManager, managed: MyDepartment),
+            Ticket(requesterDepartment: OtherDepartment, assignedDepartment: MyDepartment));
+        var ofEmployee = Evaluate(Viewer(Role.DepartmentManager, managed: MyDepartment),
+            Ticket(requesterDepartment: MyDepartment, assignedDepartment: OtherDepartment));
+
+        Assert.True(handled is { CanReclassify: true, CanAssign: true, CanTransferToDepartment: false });
+        Assert.True(ofEmployee is { CanView: true, CanReclassify: false, CanAssign: false, CanTransferToDepartment: false });
+    }
+
+    [Fact]
+    public void A_handler_reclassifies_assigns_and_transfers_their_departments_tickets()
+    {
+        var permissions = Evaluate(Viewer(Role.Handler), Ticket(assignedDepartment: MyDepartment, assignedTo: Someone));
+
+        Assert.True(permissions is { CanReclassify: true, CanAssign: true, CanTransferToDepartment: true });
     }
 
     // ---- executive ----

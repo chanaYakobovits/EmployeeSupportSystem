@@ -1164,3 +1164,238 @@ Content-Type: application/json
 { "critical": 4, "high": 24, "medium": 48, "low": 120 }
 
 ### Reset all of the above: dotnet run --project API -- --seed
+
+### ======================================================================================
+### ============ Handler queue and staff view – task 3.4 (part A). Run --seed first ============
+### ======================================================================================
+### Seed: Alon (14) handles in הנהלת חשבונות (3), Liat (10) in פיתוח (2), Ron (3) manages פיתוח, Avner (1) is the
+### executive. Logins are rate limited (10 per minute per IP).
+
+### Alon – handler
+# @name staffAlon
+POST {{API_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{ "identifier": "EMP-00014", "password": "{{password}}" }
+
+### Ron – department manager
+# @name staffRon
+POST {{API_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{ "identifier": "EMP-00003", "password": "{{password}}" }
+
+### Avner – executive
+# @name staffAvner
+POST {{API_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{ "identifier": "EMP-00001", "password": "{{password}}" }
+
+### ---------- Lists (spec 7.6, 9.4). Default order: the nearest due time first, no due time last ----------
+
+### "משויכות אליי" → 200 (never the user's own tickets – those are in /tickets/my)
+GET {{API_HostAddress}}/api/tickets?scope=assigned
+Authorization: Bearer {{staffAlon.response.body.$.accessToken}}
+
+### "תור המחלקה" – handled by Alon's department, no personal handler
+GET {{API_HostAddress}}/api/tickets?scope=queue&status=New&status=Assigned&status=InProgress&status=WaitingForEmployee
+Authorization: Bearer {{staffAlon.response.body.$.accessToken}}
+
+### "כל פניות המחלקה המטפלת", open only, overdue first in red: isOverdue is computed by the server
+GET {{API_HostAddress}}/api/tickets?scope=handling&status=Assigned&status=InProgress&status=WaitingForEmployee
+Authorization: Bearer {{staffAlon.response.body.$.accessToken}}
+
+### Department manager: tickets of פיתוח's employees + tickets פיתוח handles
+GET {{API_HostAddress}}/api/tickets?scope=department
+Authorization: Bearer {{staffRon.response.body.$.accessToken}}
+
+### Executive: the whole organization – overdue only (DueAt passed while New/Assigned/InProgress; WaitingForEmployee is paused)
+GET {{API_HostAddress}}/api/tickets?scope=department&overdueOnly=true
+Authorization: Bearer {{staffAvner.response.body.$.accessToken}}
+
+### Urgency not set yet (the fallback path) or High, most urgent first (no urgency sorts as Medium)
+GET {{API_HostAddress}}/api/tickets?scope=department&urgency=NotSet&urgency=High&sortBy=urgency
+Authorization: Bearer {{staffAvner.response.body.$.accessToken}}
+
+### Statuses + category + opening days (Israel time, both days included), newest first
+GET {{API_HostAddress}}/api/tickets?scope=department&status=InProgress&status=Assigned&categoryId=1&from=2026-10-01&to=2026-12-31&sortBy=createdAt
+Authorization: Bearer {{staffAvner.response.body.$.accessToken}}
+
+### Search in the subject or the requester's name (LIKE)
+GET {{API_HostAddress}}/api/tickets?scope=department&search=ברקוביץ&pageSize=10
+Authorization: Bearer {{staffAvner.response.body.$.accessToken}}
+
+### ---------- Errors ----------
+
+### Employee → 403 "ticket-scope-not-allowed"
+GET {{API_HostAddress}}/api/tickets?scope=assigned
+Authorization: Bearer {{loginEmployee.response.body.$.accessToken}}
+
+### A handler asking for the department list → 403; a manager asking for the queue → 403
+GET {{API_HostAddress}}/api/tickets?scope=department
+Authorization: Bearer {{staffAlon.response.body.$.accessToken}}
+
+### No scope → 400 errors.scope
+GET {{API_HostAddress}}/api/tickets
+Authorization: Bearer {{staffAlon.response.body.$.accessToken}}
+
+### Unknown scope / urgency → 400 (model binding)
+GET {{API_HostAddress}}/api/tickets?scope=everything
+Authorization: Bearer {{staffAlon.response.body.$.accessToken}}
+
+### to before from, sortBy outside the list, pageSize above 100 → 400 errors.to / sortBy / pageSize
+GET {{API_HostAddress}}/api/tickets?scope=queue&from=2026-11-10&to=2026-11-01&sortBy=subject&pageSize=101
+Authorization: Bearer {{staffAlon.response.body.$.accessToken}}
+
+### ---------- Details: the staff view (spec 7.7) ----------
+
+### Ticket 7 (assigned to Alon) → 200 StaffTicketDetailsDto: requester (name, department, jobTitle), urgency, dueAt,
+### isOverdue, classificationSource, assignedTo, assignedDepartment, rowVersion, permissions { canReply, canWriteInternal }.
+### Recorded in AuditLogs: SELECT TOP 5 * FROM AuditLogs WHERE Action = 'Ticket.Viewed' ORDER BY Id DESC
+GET {{API_HostAddress}}/api/tickets/7
+Authorization: Bearer {{staffAlon.response.body.$.accessToken}}
+
+### The executive views it too → permissions { canReply: false, canWriteInternal: false }, audited
+GET {{API_HostAddress}}/api/tickets/7
+Authorization: Bearer {{staffAvner.response.body.$.accessToken}}
+
+### Noa's own ticket (10) → the requester DTO (no urgency/dueAt/classification), not audited
+GET {{API_HostAddress}}/api/tickets/10
+Authorization: Bearer {{loginEmployee.response.body.$.accessToken}}
+
+### A ticket outside Alon's scopes (12 – handled by פיתוח, assigned to Liat) → 404, not audited
+GET {{API_HostAddress}}/api/tickets/12
+Authorization: Bearer {{staffAlon.response.body.$.accessToken}}
+
+### ======================================================================================
+### ============ Reclassification and transfer – task 3.4. Run --seed, the logins above (Alon, Ron, Avner) and Liat ============
+### ======================================================================================
+### Every change sends the rowVersion the user saw (from GET /api/tickets/{id}); a newer one → 409.
+### The reason appears only in the staff timeline (GET /history, kind "change"), never to the employee.
+### Seed: ticket 152 is in Alon's queue (הנהלת חשבונות, 3) – moved there by central HR, GENERAL, urgency not set.
+
+### Liat – handler in פיתוח (2)
+# @name staffLiat
+POST {{API_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{ "identifier": "liat.shahar@example.com", "password": "{{password}}" }
+
+### Liat's lists: assigned / queue / handling (her department is פיתוח)
+GET {{API_HostAddress}}/api/tickets?scope=handling&status=Assigned&status=InProgress
+Authorization: Bearer {{staffLiat.response.body.$.accessToken}}
+
+### 1. Alon reads ticket 152 → permissions all true, assignedTo null, urgency null
+# @name t152
+GET {{API_HostAddress}}/api/tickets/152
+Authorization: Bearer {{staffAlon.response.body.$.accessToken}}
+
+### 2. "קח לטיפולי": Alon takes it (no reason needed) → 200 { id, rowVersion, canView: true }; status stays Assigned
+# @name t152taken
+POST {{API_HostAddress}}/api/tickets/152/assign
+Authorization: Bearer {{staffAlon.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "targetUserId": 14, "rowVersion": "{{t152.response.body.$.rowVersion}}" }
+
+### 3. The old version again (step 1's) → 409 "הפנייה עודכנה על ידי משתמש אחר"
+PATCH {{API_HostAddress}}/api/tickets/152/classification
+Authorization: Bearer {{staffAlon.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "urgency": "High", "reason": "בדיקת עדכון מתחרה", "rowVersion": "{{t152.response.body.$.rowVersion}}" }
+
+### 4. Urgency → Critical: DueAt = CreatedAt + 4 hours (not now + 4) → already overdue (isOverdue in GET /152)
+# @name t152critical
+PATCH {{API_HostAddress}}/api/tickets/152/classification
+Authorization: Bearer {{staffAlon.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "urgency": "Critical", "reason": "העובד לא קיבל משכורת בכלל", "rowVersion": "{{t152taken.response.body.$.rowVersion}}" }
+
+### 5. Reclassify to ADMIN (5, handled by מזכירות ומנהלה) → routed there to a handler; canView: false for Alon
+PATCH {{API_HostAddress}}/api/tickets/152/classification
+Authorization: Bearer {{staffAlon.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "categoryId": 5, "reason": "בקשה מנהלתית ולא שכר", "rowVersion": "{{t152critical.response.body.$.rowVersion}}" }
+
+### 6. The staff timeline: change items (Transferred by central HR, Taken, Reclassified ×2) with the reasons
+GET {{API_HostAddress}}/api/tickets/152/history
+Authorization: Bearer {{staffAvner.response.body.$.accessToken}}
+
+### ---------- Transfer by a handler and by a manager ----------
+
+### Ticket 176 (handled by פיתוח, Liat) – read it as Liat
+# @name t176
+GET {{API_HostAddress}}/api/tickets/176
+Authorization: Bearer {{staffLiat.response.body.$.accessToken}}
+
+### Liat moves it to הנהלת חשבונות's queue (3) → it appears in Alon's scope=queue; InProgress → Assigned
+POST {{API_HostAddress}}/api/tickets/176/assign
+Authorization: Bearer {{staffLiat.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "targetDepartmentId": 3, "reason": "שייך להנהלת חשבונות", "rowVersion": "{{t176.response.body.$.rowVersion}}" }
+
+### Ticket 170 (פיתוח, Liat) – read as Ron, the manager of פיתוח: canAssign true, canTransferToDepartment false
+# @name t170
+GET {{API_HostAddress}}/api/tickets/170
+Authorization: Bearer {{staffRon.response.body.$.accessToken}}
+
+### Manager to another department → 403 "transfer-not-allowed"
+POST {{API_HostAddress}}/api/tickets/170/assign
+Authorization: Bearer {{staffRon.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "targetDepartmentId": 3, "reason": "בדיקה", "rowVersion": "{{t170.response.body.$.rowVersion}}" }
+
+### Manager to a handler of another department (Alon) → 422 "assignee-not-handler"
+POST {{API_HostAddress}}/api/tickets/170/assign
+Authorization: Bearer {{staffRon.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "targetUserId": 14, "reason": "בדיקה", "rowVersion": "{{t170.response.body.$.rowVersion}}" }
+
+### To the requester → 422 "assignee-is-requester"
+POST {{API_HostAddress}}/api/tickets/170/assign
+Authorization: Bearer {{staffRon.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "targetUserId": {{t170.response.body.$.requester.id}}, "reason": "בדיקה", "rowVersion": "{{t170.response.body.$.rowVersion}}" }
+
+### ---------- Errors ----------
+
+### Executive → 403 "reclassify-not-allowed" (view only)
+PATCH {{API_HostAddress}}/api/tickets/170/classification
+Authorization: Bearer {{staffAvner.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "urgency": "Low", "reason": "בדיקה", "rowVersion": "{{t170.response.body.$.rowVersion}}" }
+
+### Nothing to change, no reason, bad rowVersion → 400 errors.categoryId / reason / rowVersion
+PATCH {{API_HostAddress}}/api/tickets/170/classification
+Authorization: Bearer {{staffLiat.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "reason": "", "rowVersion": "AAA=" }
+
+### Both targets → 400 errors.targetUserId
+POST {{API_HostAddress}}/api/tickets/170/assign
+Authorization: Bearer {{staffLiat.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "targetUserId": 10, "targetDepartmentId": 3, "rowVersion": "{{t170.response.body.$.rowVersion}}" }
+
+### A closed ticket (7, Alon's): read it, then → 422 "ticket-not-open" (with a stale version it would be 409 first)
+# @name t7
+GET {{API_HostAddress}}/api/tickets/7
+Authorization: Bearer {{staffAlon.response.body.$.accessToken}}
+
+###
+PATCH {{API_HostAddress}}/api/tickets/7/classification
+Authorization: Bearer {{staffAlon.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "urgency": "Low", "reason": "בדיקה", "rowVersion": "{{t7.response.body.$.rowVersion}}" }

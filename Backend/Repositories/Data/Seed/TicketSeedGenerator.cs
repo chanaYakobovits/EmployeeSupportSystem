@@ -109,7 +109,50 @@ internal sealed class TicketSeedGenerator(SeedOrganization organization, Random 
         }
 
         // Ticket numbers grow with creation time, as in real life.
-        return tickets.OrderBy(t => t.CreatedAt).ToList();
+        var ordered = tickets.OrderBy(t => t.CreatedAt).ToList();
+        TransferToDepartmentQueues(ordered);
+        return ordered;
+    }
+
+    /// <summary>
+    /// Fills a few department queues (spec 7.6) the way the API does (POST /assign to a department, task 3.4): a central
+    /// HR handler moves a fallback ticket that is still Assigned to the department it belongs to, with a reason. The
+    /// category stays GENERAL and the urgency unset ("לא נקבעה"). No Random: nothing else in the seed changes.
+    /// </summary>
+    private void TransferToDepartmentQueues(List<Ticket> tickets)
+    {
+        DepartmentKey[] targets =
+            [DepartmentKey.Accounting, DepartmentKey.InformationSystems, DepartmentKey.Secretariat, DepartmentKey.Development];
+        var candidates = tickets
+            .Where(t => t.Status == TicketStatus.Assigned
+                        && t.ClassificationSource == ClassificationSource.Fallback
+                        && t.AssignedDepartmentId == HumanResources.Id
+                        && t.AssignedToUserId is not null)
+            .Take(targets.Length)
+            .ToList();
+
+        for (var i = 0; i < candidates.Count; i++)
+        {
+            var ticket = candidates[i];
+            var target = organization.Departments[targets[i]];
+            var at = ticket.UpdatedAt.AddMinutes(20) < now ? ticket.UpdatedAt.AddMinutes(20) : now.AddMinutes(-1);
+            ticket.Changes.Add(new TicketChange
+            {
+                Kind = TicketChangeKind.Transferred,
+                ChangedByUserId = ticket.AssignedToUserId!.Value,
+                ChangedAt = at,
+                Reason = $"הפנייה בטיפול {target.Name} – מועברת לתור שלהם.",
+                FromCategoryId = ticket.CategoryId,
+                ToCategoryId = ticket.CategoryId,
+                FromDepartmentId = ticket.AssignedDepartmentId,
+                ToDepartmentId = target.Id,
+                FromUserId = ticket.AssignedToUserId,
+                ToUserId = null,
+            });
+            ticket.AssignedDepartmentId = target.Id;
+            ticket.AssignedToUserId = null;
+            ticket.UpdatedAt = at;
+        }
     }
 
     private Ticket BuildNew(TicketTemplate template)
@@ -225,6 +268,17 @@ internal sealed class TicketSeedGenerator(SeedOrganization organization, Random 
                     // A central HR handler classifies the fallback ticket and transfers it to the right department queue.
                     var category = organization.Categories[template.CategoryCode];
                     var (department, handler) = Route(category, requester.User);
+                    var change = new TicketChange
+                    {
+                        Kind = TicketChangeKind.Reclassified,
+                        ChangedByUserId = handlerId ?? HumanResources.ManagerUserId ?? requester.User.Id,
+                        ChangedAt = time,
+                        Reason = $"התוכן שייך ל\"{category.Name}\" ולא לתור הכללי – מועבר ל{department.Name}.",
+                        FromCategoryId = ticket.CategoryId,
+                        FromUrgency = ticket.Urgency,
+                        FromDepartmentId = ticket.AssignedDepartmentId,
+                        FromUserId = ticket.AssignedToUserId,
+                    };
                     ticket.CategoryId = category.Id;
                     ticket.Urgency = template.Urgency;
                     ticket.ClassificationSource = ClassificationSource.Manual;
@@ -232,14 +286,33 @@ internal sealed class TicketSeedGenerator(SeedOrganization organization, Random 
                     ticket.AssignedToUserId = null;
                     routedHandler = handler;
 
-                    AddComment(ticket, handlerId ?? requester.User.Id,
-                        $"סיווג ידני: הפנייה סווגה לקטגוריה \"{category.Name}\" והועברה ל{department.Name}.",
-                        time, isInternal: true);
+                    change.ToCategoryId = ticket.CategoryId;
+                    change.ToUrgency = ticket.Urgency;
+                    change.ToDepartmentId = ticket.AssignedDepartmentId;
+                    change.ToUserId = null;
+                    ticket.Changes.Add(change);
                     break;
                 }
 
                 case Step.Start:
-                    // The handler who takes a queued ticket becomes its handler (spec 3.3).
+                    // The handler who takes a queued ticket becomes its handler (spec 3.3) – "קח לטיפולי" (task 3.4).
+                    if (ticket.AssignedToUserId is null && routedHandler is not null)
+                    {
+                        ticket.Changes.Add(new TicketChange
+                        {
+                            Kind = TicketChangeKind.Taken,
+                            ChangedByUserId = routedHandler.Id,
+                            ChangedAt = time,
+                            FromCategoryId = ticket.CategoryId,
+                            ToCategoryId = ticket.CategoryId,
+                            FromUrgency = ticket.Urgency,
+                            ToUrgency = ticket.Urgency,
+                            FromDepartmentId = ticket.AssignedDepartmentId,
+                            ToDepartmentId = ticket.AssignedDepartmentId,
+                            ToUserId = routedHandler.Id,
+                        });
+                    }
+
                     ticket.AssignedToUserId ??= routedHandler?.Id;
                     AddHistory(ticket, current, TicketStatus.InProgress, ticket.AssignedToUserId, time);
                     current = TicketStatus.InProgress;

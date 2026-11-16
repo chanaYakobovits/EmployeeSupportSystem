@@ -41,6 +41,7 @@ public static class DependencyInjection
         services.AddScoped<ITicketService, TicketService>();
         services.AddScoped<ITicketAccess, TicketAccess>();
         services.AddScoped<ITicketConversationService, TicketConversationService>();
+        services.AddScoped<ITicketHandlingService, TicketHandlingService>();
         services.AddScoped<IRoutingService, Services.Implementations.Routing.RoutingService>();
         services.AddScoped<ITicketClassifier, TicketClassifier>();
         services.AddAttachmentStorage(configuration);

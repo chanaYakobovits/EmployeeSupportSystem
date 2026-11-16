@@ -48,6 +48,9 @@ public abstract class TicketTestBase
     /// <summary>The access-token department claim of <see cref="FakeCurrentUser"/> – deliberately not a real department.</summary>
     protected const int ClaimDepartmentId = 1;
 
+    /// <summary>The client's address passed by the controller (audit log).</summary>
+    protected const string ClientIp = "203.0.113.7";
+
     /// <summary>12/11/2026 11:00 Israel time. The month started on 31/10/2026 22:00 UTC.</summary>
     protected static readonly DateTime Now = new(2026, 11, 12, 9, 0, 0, DateTimeKind.Utc);
 
@@ -120,7 +123,8 @@ public abstract class TicketTestBase
         var routing = RoutingFor(db);
         return new TicketService(new TicketRepository(db), new UserRepository(db), UnitOfWorkFor(db),
             AccessFor(db, currentUser), routing, ClassifierFor(db, routing), Files, Clock, currentUser,
-            new CreateTicketRequestValidator(), new AttachmentFilesValidator(), new MyTicketsQueryValidator(), Logger);
+            new CreateTicketRequestValidator(), new AttachmentFilesValidator(), new MyTicketsQueryValidator(),
+            new StaffTicketsQueryValidator(), new AuditLogRepository(db), Logger);
     }
 
     /// <summary>Reference data cache of the test (one per test, like the app's singleton).</summary>
@@ -140,6 +144,20 @@ public abstract class TicketTestBase
         return new TicketConversationService(AccessFor(db, currentUser), new TicketRepository(db),
             new TicketConversationRepository(db), new AuditLogRepository(db), UnitOfWorkFor(db), Files, Clock,
             currentUser, new CreateCommentRequestValidator(), new AttachmentFilesValidator(), ConversationLogger);
+    }
+
+    /// <summary>Reclassification and transfer (task 3.4) as in a request of <paramref name="userId"/>.</summary>
+    protected readonly CapturingLogger<TicketHandlingService> HandlingLogger = new();
+
+    protected TicketHandlingService HandlingFor(int userId, int organizationId = OrgA)
+    {
+        var db = CreateContext(userId, organizationId);
+        var currentUser = new FakeCurrentUser { SignedInUserId = userId, SignedInOrganizationId = organizationId };
+        var routing = RoutingFor(db);
+        return new TicketHandlingService(AccessFor(db, currentUser), new TicketRepository(db), new UserRepository(db),
+            new CategoryRepository(db), new DepartmentRepository(db), ReferenceData, ClassifierFor(db, routing),
+            UnitOfWorkFor(db), Clock, new ReclassifyTicketRequestValidator(), new AssignTicketRequestValidator(),
+            HandlingLogger);
     }
 
     protected TicketAccess AccessFor(int userId, int organizationId = OrgA)
@@ -220,6 +238,35 @@ public abstract class TicketTestBase
         db.Tickets.Add(ticket);
         db.SaveChanges();
         return ticket.Id;
+    }
+
+    /// <summary>Seeds another user of organization A (e.g. a second handler of a department).</summary>
+    protected void AddUser(int id, int departmentId, string firstName, string lastName, Role? extraRole = null,
+        bool isActive = true)
+    {
+        using var db = CreateContext(signedInUserId: null);
+        db.Users.Add(NewUser(id, OrgA, departmentId, firstName, lastName, extraRole, isActive));
+        db.SaveChanges();
+    }
+
+    /// <summary>Seeds a department of organization A. Call before the reference-data cache is first read.</summary>
+    protected void AddDepartment(int id, string name, bool isActive = true)
+    {
+        using var db = CreateContext(signedInUserId: null);
+        db.Departments.Add(new Department { Id = id, OrganizationId = OrgA, Name = name, IsActive = isActive });
+        db.SaveChanges();
+    }
+
+    /// <summary>Seeds a FixedDepartment category of organization A. Call before the reference-data cache is first read.</summary>
+    protected void AddCategory(int id, string code, string name, int handlingDepartmentId, bool isActive = true)
+    {
+        using var db = CreateContext(signedInUserId: null);
+        db.Categories.Add(new Category
+        {
+            Id = id, OrganizationId = OrgA, Code = code, Name = name, IsActive = isActive,
+            RoutingType = RoutingType.FixedDepartment, HandlingDepartmentId = handlingDepartmentId,
+        });
+        db.SaveChanges();
     }
 
     private static Ticket NewTicket(int id, int org, int requesterId, int departmentId, TicketStatus status,

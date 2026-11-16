@@ -566,6 +566,75 @@ namespace Repositories.Data.Migrations
                     b.ToTable("TicketAttachments", (string)null);
                 });
 
+            modelBuilder.Entity("Common.Models.TicketChange", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("ChangedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("ChangedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("FromCategoryId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("FromDepartmentId")
+                        .HasColumnType("int");
+
+                    b.Property<byte?>("FromUrgency")
+                        .HasColumnType("tinyint");
+
+                    b.Property<int?>("FromUserId")
+                        .HasColumnType("int");
+
+                    b.Property<byte>("Kind")
+                        .HasColumnType("tinyint");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("TicketId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ToCategoryId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ToDepartmentId")
+                        .HasColumnType("int");
+
+                    b.Property<byte?>("ToUrgency")
+                        .HasColumnType("tinyint");
+
+                    b.Property<int?>("ToUserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ChangedByUserId");
+
+                    b.HasIndex("FromCategoryId");
+
+                    b.HasIndex("FromDepartmentId");
+
+                    b.HasIndex("FromUserId");
+
+                    b.HasIndex("ToCategoryId");
+
+                    b.HasIndex("ToDepartmentId");
+
+                    b.HasIndex("ToUserId");
+
+                    b.HasIndex("TicketId", "ChangedAt");
+
+                    b.ToTable("TicketChanges", (string)null);
+                });
+
             modelBuilder.Entity("Common.Models.TicketComment", b =>
                 {
                     b.Property<int>("Id")
@@ -979,6 +1048,67 @@ namespace Repositories.Data.Migrations
                     b.Navigation("UploadedByUser");
                 });
 
+            modelBuilder.Entity("Common.Models.TicketChange", b =>
+                {
+                    b.HasOne("Common.Models.User", "ChangedByUser")
+                        .WithMany()
+                        .HasForeignKey("ChangedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Common.Models.Category", "FromCategory")
+                        .WithMany()
+                        .HasForeignKey("FromCategoryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Common.Models.Department", "FromDepartment")
+                        .WithMany()
+                        .HasForeignKey("FromDepartmentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Common.Models.User", "FromUser")
+                        .WithMany()
+                        .HasForeignKey("FromUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Common.Models.Ticket", "Ticket")
+                        .WithMany("Changes")
+                        .HasForeignKey("TicketId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Common.Models.Category", "ToCategory")
+                        .WithMany()
+                        .HasForeignKey("ToCategoryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Common.Models.Department", "ToDepartment")
+                        .WithMany()
+                        .HasForeignKey("ToDepartmentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Common.Models.User", "ToUser")
+                        .WithMany()
+                        .HasForeignKey("ToUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("ChangedByUser");
+
+                    b.Navigation("FromCategory");
+
+                    b.Navigation("FromDepartment");
+
+                    b.Navigation("FromUser");
+
+                    b.Navigation("Ticket");
+
+                    b.Navigation("ToCategory");
+
+                    b.Navigation("ToDepartment");
+
+                    b.Navigation("ToUser");
+                });
+
             modelBuilder.Entity("Common.Models.TicketComment", b =>
                 {
                     b.HasOne("Common.Models.User", "AuthorUser")
@@ -1076,6 +1206,8 @@ namespace Repositories.Data.Migrations
                     b.Navigation("AiAnalysisJobs");
 
                     b.Navigation("Attachments");
+
+                    b.Navigation("Changes");
 
                     b.Navigation("Comments");
 

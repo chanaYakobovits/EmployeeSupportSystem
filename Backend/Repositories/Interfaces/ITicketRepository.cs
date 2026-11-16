@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using Common.DTOs.Paging;
 using Common.DTOs.Tickets;
 using Common.Models;
@@ -40,6 +41,31 @@ public interface ITicketRepository
 
     /// <summary>Tracked ticket (no navigations), to update it with SaveChanges – RowVersion is its concurrency token.</summary>
     Task<Ticket?> FindForUpdateAsync(int ticketId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Saves the tracked <paramref name="ticket"/> only if the database still has <paramref name="rowVersion"/> – the
+    /// version the client saw (spec 11.2). Otherwise SaveChanges throws ConflictException (409).
+    /// </summary>
+    void ExpectRowVersion(Ticket ticket, byte[] rowVersion);
+
+    // ---- the staff lists and view (task 3.4) ----
+
+    /// <summary>
+    /// A staff list: the tickets matching <paramref name="scope"/> (built by the service from the permission matrix),
+    /// filtered, sorted and paged in SQL. The query must already be validated.
+    /// </summary>
+    /// <param name="fromUtc">Opened at or after (inclusive).</param>
+    /// <param name="toUtc">Opened before (exclusive).</param>
+    /// <param name="now">For the overdue filter and column.</param>
+    Task<PagedResult<StaffTicketListItemDto>> GetStaffPageAsync(Expression<Func<Ticket, bool>> scope,
+        StaffTicketsQuery query, DateTime? fromUtc, DateTime? toUtc, DateTime now, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The staff view of the ticket, or null. Does not check the viewing scope: call it only after TicketAccess allowed
+    /// the ticket, with the permissions it returned.
+    /// </summary>
+    Task<StaffTicketDetailsDto?> GetStaffDetailsAsync(int ticketId, StaffTicketPermissionsDto permissions, DateTime now,
+        CancellationToken cancellationToken);
 
     // ---- user administration (task 2.3) ----
 

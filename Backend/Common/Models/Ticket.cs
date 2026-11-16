@@ -42,5 +42,8 @@ public class Ticket
     public ICollection<AiAnalysisJob> AiAnalysisJobs { get; set; } = [];
     public ICollection<TicketStatusHistory> StatusHistory { get; set; } = [];
     public ICollection<TicketComment> Comments { get; set; } = [];
+
+    /// <summary>Reclassifications and transfers with their reasons – staff only (task 3.4).</summary>
+    public ICollection<TicketChange> Changes { get; set; } = [];
     public ICollection<TicketAttachment> Attachments { get; set; } = [];
 }

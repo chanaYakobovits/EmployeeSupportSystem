@@ -19,8 +19,10 @@ namespace API.Controllers;
 [Route("api/tickets")]
 [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
 [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
-public class TicketsController(ITicketService ticketService, ITicketConversationService conversationService)
-    : ControllerBase
+public class TicketsController(
+    ITicketService ticketService,
+    ITicketConversationService conversationService,
+    ITicketHandlingService handlingService) : ControllerBase
 {
     /// <summary>
     /// Opens a ticket for the signed-in user (multipart: subject, description, up to 3 files). Saved immediately with
@@ -56,12 +58,62 @@ public class TicketsController(ITicketService ticketService, ITicketConversation
     public async Task<ActionResult<RequesterTicketsSummaryDto>> GetMySummary(CancellationToken cancellationToken) =>
         Ok(await ticketService.GetMySummaryAsync(cancellationToken));
 
-    /// <summary>A ticket with its status timeline, within the user's scope (spec 2.4). The staff view comes in task 3.4.</summary>
+    /// <summary>
+    /// The staff lists (spec 7.6, 9.4): scope=assigned|queue|handling (handler) or department (department manager,
+    /// executive). Filters: status (several), categoryId, urgency (several, NotSet = not set yet), from/to (opening day,
+    /// Israel time), overdueOnly, search (subject or requester's name). Default order: the nearest due time first.
+    /// A scope that is not the user's → 403.
+    /// </summary>
+    [HttpGet]
+    [ProducesResponseType<PagedResult<StaffTicketListItemDto>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<PagedResult<StaffTicketListItemDto>>> GetStaffPage(
+        [FromQuery] StaffTicketsQuery query, CancellationToken cancellationToken) =>
+        Ok(await ticketService.GetStaffPageAsync(query, cancellationToken));
+
+    /// <summary>
+    /// A ticket within the user's scope (spec 2.4): <see cref="RequesterTicketDetailsDto"/> for its requester,
+    /// <see cref="StaffTicketDetailsDto"/> for staff (recorded in the audit log, spec 6.4).
+    /// </summary>
     [HttpGet("{id:int}")]
     [ProducesResponseType<RequesterTicketDetailsDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType<StaffTicketDetailsDto>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<RequesterTicketDetailsDto>> Get(int id, CancellationToken cancellationToken) =>
-        Ok(await ticketService.GetAsync(id, cancellationToken));
+    public async Task<IActionResult> Get(int id, CancellationToken cancellationToken) =>
+        // Serialized as its runtime type (requester or staff DTO).
+        Ok(await ticketService.GetAsync(id, HttpContext.ClientIp(), cancellationToken));
+
+    /// <summary>
+    /// Reclassification (spec 4.4): category and/or urgency + a reason (staff timeline only) + the version the user saw.
+    /// A new category routes the ticket again; the due time is recalculated from the opening.
+    /// 403 for staff who may not reclassify; 409 when the ticket changed meanwhile; 422 when resolved, closed or
+    /// cancelled, or when nothing changes.
+    /// </summary>
+    [HttpPatch("{id:int}/classification")]
+    [Consumes("application/json")]
+    [ProducesResponseType<TicketUpdatedDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<ActionResult<TicketUpdatedDto>> Reclassify(int id, ReclassifyTicketRequest request,
+        CancellationToken cancellationToken) =>
+        Ok(await handlingService.ReclassifyAsync(id, request, cancellationToken));
+
+    /// <summary>
+    /// Transfer (spec 4.4): to a handler of the handling department (the user themselves = "קח לטיפולי"), or to another
+    /// department's queue (handlers only), with a reason and the version the user saw.
+    /// </summary>
+    [HttpPost("{id:int}/assign")]
+    [Consumes("application/json")]
+    [ProducesResponseType<TicketUpdatedDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<ActionResult<TicketUpdatedDto>> Assign(int id, AssignTicketRequest request,
+        CancellationToken cancellationToken) =>
+        Ok(await handlingService.AssignAsync(id, request, cancellationToken));
 
     /// <summary>
     /// The timeline: status changes, comments and files in order. The requester gets

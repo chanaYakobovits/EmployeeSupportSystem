@@ -27,7 +27,12 @@ public enum RoutingReason
     DepartmentHrUnavailable,
 
     /// <summary>FixedDepartment, but the handling department has no available handler → central HR.</summary>
-    NoHandlerInDepartment
+    NoHandlerInDepartment,
+
+    /// <summary>
+    /// Reclassified to a category of the department that already handles the ticket: its handler keeps it (task 3.4).
+    /// </summary>
+    SameDepartmentKeptHandler
 }
 
 /// <summary>

@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using Common.Constants;
 using Common.DTOs.Paging;
 using Common.DTOs.Routing;
 using Common.DTOs.Tickets;
@@ -34,6 +36,8 @@ public sealed class TicketService(
     IValidator<CreateTicketRequest> createValidator,
     IValidator<IReadOnlyList<IncomingFile>> filesValidator,
     IValidator<MyTicketsQuery> listValidator,
+    IValidator<StaffTicketsQuery> staffListValidator,
+    IAuditLogRepository auditLogs,
     ILogger<TicketService> logger) : ITicketService
 {
     public const string TicketNotFoundTitle = TicketAccess.TicketNotFoundTitle;
@@ -135,12 +139,51 @@ public sealed class TicketService(
     public Task<RequesterTicketsSummaryDto> GetMySummaryAsync(CancellationToken cancellationToken) =>
         tickets.GetRequesterSummaryAsync(currentUser.UserId, IsraelTime.StartOfMonthUtc(clock.UtcNow), cancellationToken);
 
-    public async Task<RequesterTicketDetailsDto> GetAsync(int ticketId, CancellationToken cancellationToken)
+    public async Task<ITicketDetailsDto> GetAsync(int ticketId, string ipAddress, CancellationToken cancellationToken)
     {
-        // Any viewing scope (spec 2.4). Staff get the requester's DTO for now – it holds less, nothing internal;
-        // task 3.4 adds the staff view (AI analysis, urgency, SLA).
-        await ticketAccess.GetAsync(ticketId, cancellationToken);
-        return await tickets.GetDetailsAsync(ticketId, cancellationToken)
-               ?? throw new NotFoundException(TicketNotFoundTitle);
+        // Any viewing scope (spec 2.4). The requester – even one who is staff too – gets the requester's DTO.
+        var access = await ticketAccess.GetAsync(ticketId, cancellationToken);
+        if (access.Permissions.IsRequesterView)
+        {
+            return await tickets.GetDetailsAsync(ticketId, cancellationToken)
+                   ?? throw new NotFoundException(TicketNotFoundTitle);
+        }
+
+        var now = clock.UtcNow;
+        var p = access.Permissions;
+        var permissions = new StaffTicketPermissionsDto(p.CanReply, p.CanWriteInternal, p.CanReclassify, p.CanAssign,
+            p.CanTransferToDepartment);
+        var details = await tickets.GetStaffDetailsAsync(ticketId, permissions, now, cancellationToken)
+                      ?? throw new NotFoundException(TicketNotFoundTitle);
+
+        // Spec 6.4: viewing another employee's ticket – every staff view, after the ticket was actually read.
+        auditLogs.Add(AuditEntries.ForEntity(AuditActions.TicketViewed, AuditEntityTypes.Ticket, ticketId,
+            currentUser.OrganizationId, access.UserId, ipAddress, now));
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return details;
+    }
+
+    // ===================== The staff lists (task 3.4, spec 7.6) =====================
+
+    public async Task<PagedResult<StaffTicketListItemDto>> GetStaffPageAsync(StaffTicketsQuery query,
+        CancellationToken cancellationToken)
+    {
+        await staffListValidator.EnsureValidAsync(query, cancellationToken);
+        var scope = query.Scope!.Value;
+        var predicate = await ticketAccess.GetListScopeAsync(scope, cancellationToken);
+
+        // Calendar days of Israel (spec 11.6); "to" includes its whole day.
+        var fromUtc = query.From is { } from ? IsraelTime.StartOfDayUtc(from) : (DateTime?)null;
+        var toUtc = query.To is { } to ? IsraelTime.StartOfDayUtc(to.AddDays(1)) : (DateTime?)null;
+
+        var started = Stopwatch.GetTimestamp();
+        var page = await tickets.GetStaffPageAsync(predicate, query, fromUtc, toUtc, clock.UtcNow, cancellationToken);
+
+        // Ids, the scope and the result only – never the search text (it may hold a name or a subject).
+        logger.LogInformation(
+            "Staff ticket list {Scope} for user {UserId}: {TotalCount} tickets, page {Page} in {ElapsedMs:0} ms",
+            scope, currentUser.UserId, page.TotalCount, page.Page, Stopwatch.GetElapsedTime(started).TotalMilliseconds);
+        return page;
     }
 }

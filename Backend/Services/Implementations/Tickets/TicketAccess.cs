@@ -1,4 +1,7 @@
+using System.Linq.Expressions;
 using Common.DTOs.Tickets;
+using Common.Enums;
+using Common.Models;
 using Common.Exceptions;
 using Common.Interfaces;
 using Repositories.Interfaces;
@@ -14,12 +17,11 @@ public sealed class TicketAccess(ITicketRepository tickets, IUserRepository user
 {
     public const string TicketNotFoundTitle = "הפנייה לא נמצאה";
 
+    public const string ScopeNotAllowedTitle = "אין לך הרשאה לצפות ברשימה זו";
+
     public async Task<TicketAccessResult> GetAsync(int ticketId, CancellationToken cancellationToken)
     {
-        // From the database, like the department of a new ticket: the token may be up to 15 minutes old.
-        var viewer = await users.GetTicketViewerAsync(currentUser.UserId, cancellationToken)
-                     ?? throw new AuthenticationFailedException(AuthenticationFailedException.NotSignedInTitle,
-                         errorType: "unauthorized");
+        var viewer = await GetViewerAsync(cancellationToken);
 
         // The organization query filter applies: another organization's ticket is not found either.
         var facts = await tickets.GetAccessFactsAsync(ticketId, cancellationToken)
@@ -32,6 +34,26 @@ public sealed class TicketAccess(ITicketRepository tickets, IUserRepository user
             throw new NotFoundException(TicketNotFoundTitle);
         }
 
-        return new TicketAccessResult(facts, permissions, viewer.UserId);
+        return new TicketAccessResult(facts, permissions, viewer.UserId, viewer);
     }
+
+    public async Task<Expression<Func<Ticket, bool>>> GetListScopeAsync(TicketListScope scope,
+        CancellationToken cancellationToken)
+    {
+        var viewer = await GetViewerAsync(cancellationToken);
+
+        // A list is not a single record: asking for one outside the user's roles is 403, not 404 (spec 9.5).
+        if (!TicketListScopes.IsAllowed(viewer, scope))
+        {
+            throw new ForbiddenException(ScopeNotAllowedTitle, errorType: "ticket-scope-not-allowed");
+        }
+
+        return TicketListScopes.Predicate(viewer, scope);
+    }
+
+    // From the database, like the department of a new ticket: the token may be up to 15 minutes old.
+    private async Task<TicketViewer> GetViewerAsync(CancellationToken cancellationToken) =>
+        await users.GetTicketViewerAsync(currentUser.UserId, cancellationToken)
+        ?? throw new AuthenticationFailedException(AuthenticationFailedException.NotSignedInTitle,
+            errorType: "unauthorized");
 }

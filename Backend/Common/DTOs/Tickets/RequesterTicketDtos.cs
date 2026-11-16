@@ -43,7 +43,16 @@ public sealed record RequesterTicketDetailsDto(
     DateTime UpdatedAt,
     DateTime? ResolvedAt,
     DateTime? ClosedAt,
-    IReadOnlyList<RequesterTicketHistoryItemDto> Timeline);
+    IReadOnlyList<RequesterTicketHistoryItemDto> Timeline) : ITicketDetailsDto;
+
+/// <summary>
+/// GET /api/tickets/{id}: <see cref="RequesterTicketDetailsDto"/> for the ticket's requester (even when they are staff
+/// too), <see cref="StaffTicketDetailsDto"/> for staff in scope.
+/// </summary>
+public interface ITicketDetailsDto
+{
+    int Id { get; }
+}
 
 /// <summary>A status change in the requester's timeline. The reason is not included (it may be internal).</summary>
 /// <param name="PreviousStatus">Null for the opening entry.</param>

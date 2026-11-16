@@ -97,6 +97,15 @@ public sealed class FakeTicketRepository : ITicketRepository
     public Task<Ticket?> FindForUpdateAsync(int ticketId, CancellationToken cancellationToken) =>
         throw new NotSupportedException();
 
+    public void ExpectRowVersion(Ticket ticket, byte[] rowVersion) => throw new NotSupportedException();
+
+    public Task<PagedResult<StaffTicketListItemDto>> GetStaffPageAsync(
+        System.Linq.Expressions.Expression<Func<Ticket, bool>> scope, StaffTicketsQuery query, DateTime? fromUtc,
+        DateTime? toUtc, DateTime now, CancellationToken cancellationToken) => throw new NotSupportedException();
+
+    public Task<StaffTicketDetailsDto?> GetStaffDetailsAsync(int ticketId, StaffTicketPermissionsDto permissions,
+        DateTime now, CancellationToken cancellationToken) => throw new NotSupportedException();
+
     public Task<int> UnassignUnresolvedTicketsAsync(int handlerUserId, DateTime now, CancellationToken cancellationToken)
     {
         UnassignedHandlers.Add(handlerUserId);

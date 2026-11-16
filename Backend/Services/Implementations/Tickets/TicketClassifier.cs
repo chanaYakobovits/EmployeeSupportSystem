@@ -22,6 +22,14 @@ public sealed class TicketClassifier(
         {
             decision = await routing.RouteAsync(ticket.OrganizationId, classification.CategoryId, ticket.RequesterId,
                 ticket.RequesterDepartmentId, cancellationToken);
+            if (ticket.AssignedDepartmentId == decision.DepartmentId)
+            {
+                // The new category is handled by the same department: the ticket stays with whoever has it (its handler,
+                // or the queue) rather than moving to the least loaded colleague.
+                decision = new RoutingDecision(decision.DepartmentId, ticket.AssignedToUserId,
+                    RoutingReason.SameDepartmentKeptHandler);
+            }
+
             ticket.AssignedDepartmentId = decision.DepartmentId;
             ticket.AssignedToUserId = decision.HandlerUserId;
         }

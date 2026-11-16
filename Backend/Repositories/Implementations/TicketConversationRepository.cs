@@ -12,6 +12,7 @@ public sealed class TicketConversationRepository(AppDbContext db) : ITicketConve
     private const int StatusOrder = 0;
     private const int CommentOrder = 1;
     private const int AttachmentOrder = 2;
+    private const int ChangeOrder = 3;
 
     public void AddComment(TicketComment comment) => db.TicketComments.Add(comment);
 
@@ -117,11 +118,32 @@ public sealed class TicketConversationRepository(AppDbContext db) : ITicketConve
 
         var files = await AttachmentsWithoutComment(ticketId).ToListAsync(cancellationToken);
 
+        // Reclassifications and transfers with their reasons (task 3.4) – a table no requester query reads.
+        var changes = await Ticket(ticketId)
+            .SelectMany(t => t.Changes)
+            .Select(c => new
+            {
+                c.Id,
+                Item = new StaffTimelineChangeDto(c.ChangedAt, c.Kind,
+                    c.ChangedByUser.FirstName + " " + c.ChangedByUser.LastName,
+                    c.Reason,
+                    c.FromCategory != null ? c.FromCategory.Name : null,
+                    c.ToCategory != null ? c.ToCategory.Name : null,
+                    c.FromUrgency,
+                    c.ToUrgency,
+                    c.FromDepartment != null ? c.FromDepartment.Name : null,
+                    c.ToDepartment != null ? c.ToDepartment.Name : null,
+                    c.FromUser != null ? c.FromUser.FirstName + " " + c.FromUser.LastName : null,
+                    c.ToUser != null ? c.ToUser.FirstName + " " + c.ToUser.LastName : null),
+            })
+            .ToListAsync(cancellationToken);
+
         return Merge(
             statuses.Select(s => (s.Item.At, StatusOrder, s.Id, (StaffTimelineItemDto)s.Item)),
             comments.Select(c => (c.Item.At, CommentOrder, c.Id, (StaffTimelineItemDto)c.Item)),
             files.Select(f => (f.CreatedAt, AttachmentOrder, f.Id,
-                (StaffTimelineItemDto)new StaffTimelineAttachmentDto(f.CreatedAt, f))));
+                (StaffTimelineItemDto)new StaffTimelineAttachmentDto(f.CreatedAt, f))),
+            changes.Select(c => (c.Item.At, ChangeOrder, c.Id, (StaffTimelineItemDto)c.Item)));
     }
 
     /// <summary>The ticket through the organization query filter: its children are always reached from it.</summary>
@@ -136,7 +158,7 @@ public sealed class TicketConversationRepository(AppDbContext db) : ITicketConve
                 a.UploadedByUser.FirstName + " " + a.UploadedByUser.LastName, a.CreatedAt));
 
     /// <summary>
-    /// One ordered timeline out of the three lists of a single ticket. Only ordering happens here – every visibility rule
+    /// One ordered timeline out of the lists of a single ticket. Only ordering happens here – every visibility rule
     /// was applied in the queries.
     /// </summary>
     private static IReadOnlyList<T> Merge<T>(params IEnumerable<(DateTime At, int Order, int Id, T Item)>[] parts) =>

@@ -22,9 +22,18 @@ public interface ITicketService
     Task<RequesterTicketsSummaryDto> GetMySummaryAsync(CancellationToken cancellationToken);
 
     /// <summary>
-    /// A ticket within any of the user's viewing scopes (<see cref="ITicketAccess"/>). For now everyone gets the
-    /// requester's DTO; task 3.4 adds the staff view.
+    /// A ticket within any of the user's viewing scopes (<see cref="ITicketAccess"/>): its requester gets
+    /// <see cref="RequesterTicketDetailsDto"/> (even when they are staff too), staff get <see cref="StaffTicketDetailsDto"/>
+    /// and the view is recorded in the audit log (spec 6.4).
     /// </summary>
+    /// <param name="ipAddress">The client's address, for the audit log.</param>
     /// <exception cref="Common.Exceptions.NotFoundException">Missing or outside the user's scope (spec 2.4: 404, not 403).</exception>
-    Task<RequesterTicketDetailsDto> GetAsync(int ticketId, CancellationToken cancellationToken);
+    Task<ITicketDetailsDto> GetAsync(int ticketId, string ipAddress, CancellationToken cancellationToken);
+
+    /// <summary>A staff list (spec 7.6): the scope's tickets, filtered, sorted and paged in SQL.</summary>
+    /// <exception cref="Common.Exceptions.ValidationException">Missing scope, invalid paging, sorting or filter values.</exception>
+    /// <exception cref="Common.Exceptions.ForbiddenException">The scope is not one of the user's.</exception>
+    /// <exception cref="Common.Exceptions.AuthenticationFailedException">The user is no longer active.</exception>
+    Task<PagedResult<StaffTicketListItemDto>> GetStaffPageAsync(StaffTicketsQuery query,
+        CancellationToken cancellationToken);
 }
