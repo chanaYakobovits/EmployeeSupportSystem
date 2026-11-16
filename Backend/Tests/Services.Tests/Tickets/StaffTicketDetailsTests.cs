@@ -47,8 +47,9 @@ public sealed class StaffTicketDetailsTests : TicketTestBase
         Assert.Equal(Now.AddDays(-1), ticket.CreatedAt);
         Assert.Equal(Now.AddHours(-1), ticket.UpdatedAt);
         Assert.Equal([1, 2, 3], ticket.RowVersion);
+        // Alon is its personal handler, in progress: the status actions too (task 3.5).
         Assert.Equal([TicketActions.Reply, TicketActions.InternalNote, TicketActions.Reclassify, TicketActions.Assign,
-            TicketActions.TransferToDepartment], ticket.AllowedActions);
+            TicketActions.TransferToDepartment, TicketActions.RequestInfo, TicketActions.Resolve], ticket.AllowedActions);
     }
 
     [Fact]

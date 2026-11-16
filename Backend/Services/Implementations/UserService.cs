@@ -10,6 +10,7 @@ using ValidationException = Common.Exceptions.ValidationException;
 using Microsoft.Extensions.Logging;
 using Repositories.Interfaces;
 using Services.Implementations.Invitations;
+using Services.Implementations.Tickets;
 using Services.Interfaces;
 using Services.Mapping;
 using Services.Validators;
@@ -349,8 +350,10 @@ public sealed class UserService : IUserService
 
             user.IsActive = false;
             await RevokeAllRefreshTokensAsync(user.Id, now, ct);
-            // Decision in CLAUDE.md: no ticket stays with a handler who can no longer sign in.
-            var count = await _tickets.UnassignUnresolvedTicketsAsync(user.Id, now, ct);
+            // Decision in CLAUDE.md: no ticket stays with a handler who can no longer sign in; the ones in progress are
+            // back to Assigned – nobody is handling them now (a system transition of TicketStatusRules, task 3.5).
+            var demote = TicketStatusRules.HandlerRemoved;
+            var count = await _tickets.UnassignUnresolvedTicketsAsync(user.Id, demote.From, demote.To, now, ct);
             Audit(AuditActions.UserDeactivated, user.Id, ipAddress, now);
             await _unitOfWork.SaveChangesAsync(ct);
             return count;

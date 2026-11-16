@@ -22,7 +22,7 @@ public sealed class TicketAllowedActionsTests
         var actions = For(Viewer(Role.Handler), Ticket(assignedTo: Me));
 
         Assert.Equal([TicketActions.Reply, TicketActions.InternalNote, TicketActions.Reclassify, TicketActions.Assign,
-            TicketActions.TransferToDepartment], actions);
+            TicketActions.TransferToDepartment, TicketActions.RequestInfo, TicketActions.Resolve], actions);
     }
 
     [Fact]
@@ -60,7 +60,8 @@ public sealed class TicketAllowedActionsTests
     [Fact]
     public void The_requester_view_has_no_staff_actions()
     {
-        Assert.Empty(For(Viewer(Role.Handler), Ticket(requester: Me, assignedTo: null)));
+        // Their own ticket in progress: only a reply (task 3.5 – the requester's actions, none of the staff's).
+        Assert.Equal([TicketActions.Reply], For(Viewer(Role.Handler), Ticket(requester: Me, assignedTo: null)));
     }
 
     [Theory]
@@ -93,7 +94,7 @@ public sealed class TicketAllowedActionsTests
     }
 
     private static IReadOnlyList<string> For(TicketViewer viewer, TicketAccessFacts ticket) =>
-        TicketAllowedActions.For(TicketAccessPolicy.Evaluate(viewer, ticket), ticket, viewer);
+        TicketAllowedActions.For(TicketAccessPolicy.Evaluate(viewer, ticket), ticket, viewer, DateTime.UtcNow);
 
     private static TicketViewer Viewer(Role role, int? managed = null) =>
         new(Me, MyDepartment, managed, [Role.Employee, role]);

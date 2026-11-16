@@ -17,8 +17,8 @@ namespace Services.Implementations.Tickets;
 /// Reclassification and transfer (task 3.4). Logs carry ids, the action and its result – never the reason (spec 6.4).
 /// <para>
 /// When the personal handler changes, an InProgress ticket goes back to Assigned: the new handler has not started yet
-/// (decision in CLAUDE.md). WaitingForEmployee stays – it waits for the employee whoever handles it. Taking a ticket
-/// from the queue keeps the status ("התחל טיפול" is task 3.5).
+/// (<see cref="TicketStatusRules.HandlerRemoved"/>). WaitingForEmployee stays – it waits for the employee whoever
+/// handles it. Taking a ticket from the queue keeps the status ("התחל טיפול" is PATCH /status, task 3.5).
 /// </para>
 /// </summary>
 public sealed class TicketHandlingService(
@@ -36,8 +36,10 @@ public sealed class TicketHandlingService(
     IValidator<AssignTicketRequest> assignValidator,
     ILogger<TicketHandlingService> logger) : ITicketHandlingService
 {
-    public const string ConflictTitle = "הפנייה עודכנה על ידי משתמש אחר";
-    public const string ConflictDetail = "יש לרענן את הפנייה ולנסות שוב.";
+    public const string ConflictTitle = TicketUpdateSteps.ConflictTitle;
+    public const string ConflictDetail = TicketUpdateSteps.ConflictDetail;
+
+    private readonly TicketUpdateSteps _steps = new(tickets, unitOfWork, logger);
     public const string ReclassifyNotAllowedTitle = "אין לך הרשאה לשנות את הסיווג של פנייה זו";
     public const string AssignNotAllowedTitle = "אין לך הרשאה להעביר פנייה זו";
     public const string TransferNotAllowedTitle = "מנהל מחלקה יכול להעביר רק בין מטפלי המחלקה";
@@ -224,19 +226,7 @@ public sealed class TicketHandlingService(
         CancellationToken cancellationToken)
     {
         var access = await ticketAccess.GetAsync(ticketId, cancellationToken);
-        var ticket = await tickets.FindForUpdateAsync(ticketId, cancellationToken)
-                     ?? throw new NotFoundException(TicketAccess.TicketNotFoundTitle);
-
-        // Checked now, before the rules run against a state the user has not seen; and again by the UPDATE itself.
-        if (!ticket.RowVersion.AsSpan().SequenceEqual(rowVersion))
-        {
-            logger.LogWarning("Concurrency conflict on ticket {TicketId} by user {UserId} (stale version)",
-                ticketId, access.UserId);
-            throw Conflict();
-        }
-
-        tickets.ExpectRowVersion(ticket, rowVersion);
-        return (access, ticket);
+        return (access, await _steps.LoadAsync(access, rowVersion, cancellationToken));
     }
 
     private static void EnsureOpen(Ticket ticket)
@@ -305,19 +295,14 @@ public sealed class TicketHandlingService(
     private static void OnHandlerChanged(Ticket ticket, int? previousHandlerId, int actorUserId, DateTime now,
         bool keepStatus)
     {
-        if (keepStatus || ticket.AssignedToUserId == previousHandlerId || ticket.Status != TicketStatus.InProgress)
+        var rule = TicketStatusRules.HandlerRemoved;
+        if (keepStatus || ticket.AssignedToUserId == previousHandlerId || ticket.Status != rule.From)
         {
             return;
         }
 
-        ticket.StatusHistory.Add(new TicketStatusHistory
-        {
-            PreviousStatus = TicketStatus.InProgress,
-            NewStatus = TicketStatus.Assigned,
-            ChangedByUserId = actorUserId,
-            ChangedAt = now,
-        });
-        ticket.Status = TicketStatus.Assigned;
+        // A system transition, recorded with the user whose change caused it.
+        TicketStatusTransitions.Apply(ticket, rule.To, rule.Actor, actorUserId, null, now);
     }
 
     /// <summary>The change row with the "from" side, taken before anything changes.</summary>
@@ -348,30 +333,9 @@ public sealed class TicketHandlingService(
         ticket.Changes.Add(change);
     }
 
-    private async Task SaveAsync(Ticket ticket, string action, int userId, CancellationToken cancellationToken)
-    {
-        try
-        {
-            // The ticket, its status history and the change row – one transaction.
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-        }
-        catch (ConflictException exception) when (exception.ErrorType == "concurrency")
-        {
-            logger.LogWarning("Concurrency conflict on ticket {TicketId} ({Action}) by user {UserId}",
-                ticket.Id, action, userId);
-            throw Conflict();
-        }
-    }
+    private Task SaveAsync(Ticket ticket, string action, int userId, CancellationToken cancellationToken) =>
+        _steps.SaveAsync(ticket, action, userId, cancellationToken);
 
-    /// <summary>The new version, and whether the user still has the ticket in scope after the change.</summary>
-    private static TicketUpdatedDto Result(Ticket ticket, TicketAccessResult access)
-    {
-        var facts = new TicketAccessFacts(ticket.Id, ticket.RequesterId, ticket.RequesterDepartmentId,
-            ticket.AssignedDepartmentId, ticket.AssignedToUserId, ticket.Status);
-        return new TicketUpdatedDto(ticket.Id, ticket.RowVersion,
-            TicketAccessPolicy.Evaluate(access.Viewer, facts).CanView);
-    }
-
-    // Spec 9.5: the ticket's own wording, so the screen can show it as is.
-    private static ConflictException Conflict() => new(ConflictTitle, ConflictDetail, "concurrency");
+    private static TicketUpdatedDto Result(Ticket ticket, TicketAccessResult access) =>
+        TicketUpdateSteps.Result(ticket, access);
 }

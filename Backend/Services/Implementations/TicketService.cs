@@ -143,14 +143,15 @@ public sealed class TicketService(
     {
         // Any viewing scope (spec 2.4). The requester – even one who is staff too – gets the requester's DTO.
         var access = await ticketAccess.GetAsync(ticketId, cancellationToken);
+        var now = clock.UtcNow;
+        var allowedActions = TicketAllowedActions.For(access.Permissions, access.Ticket, access.Viewer, now);
         if (access.Permissions.IsRequesterView)
         {
-            return await tickets.GetDetailsAsync(ticketId, cancellationToken)
-                   ?? throw new NotFoundException(TicketNotFoundTitle);
+            var own = await tickets.GetDetailsAsync(ticketId, cancellationToken)
+                      ?? throw new NotFoundException(TicketNotFoundTitle);
+            return own with { AllowedActions = allowedActions };
         }
 
-        var now = clock.UtcNow;
-        var allowedActions = TicketAllowedActions.For(access.Permissions, access.Ticket, access.Viewer);
         var details = await tickets.GetStaffDetailsAsync(ticketId, allowedActions, now, cancellationToken)
                       ?? throw new NotFoundException(TicketNotFoundTitle);
 

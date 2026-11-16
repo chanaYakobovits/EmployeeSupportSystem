@@ -40,21 +40,14 @@ public sealed class TicketClassifier(
         ticket.Urgency = classification.Urgency;
         ticket.ClassificationSource = classification.Source;
 
-        // From the opening (spec 3.4). Task 3.5 adds the time spent waiting for the employee.
+        // From the opening or the last reopening, plus the time spent waiting for the employee (spec 3.4, task 3.5).
         var hours = await SlaCalculator.GetHoursAsync(cache, slaPolicies, ticket.OrganizationId, cancellationToken);
-        ticket.DueAt = SlaCalculator.DueAt(ticket.CreatedAt, ticket.Urgency, hours);
+        ticket.DueAt = SlaCalculator.DueAt(ticket, hours);
 
         if (ticket.Status == TicketStatus.New)
         {
             // Spec 3.3: New → Assigned is automatic, by the system, after the analysis or the fallback.
-            ticket.StatusHistory.Add(new TicketStatusHistory
-            {
-                PreviousStatus = TicketStatus.New,
-                NewStatus = TicketStatus.Assigned,
-                ChangedByUserId = null,
-                ChangedAt = now,
-            });
-            ticket.Status = TicketStatus.Assigned;
+            TicketStatusTransitions.Apply(ticket, TicketStatus.Assigned, StatusActor.System, null, null, now);
         }
 
         ticket.UpdatedAt = now;

@@ -42,6 +42,8 @@ public static class DependencyInjection
         services.AddScoped<ITicketAccess, TicketAccess>();
         services.AddScoped<ITicketConversationService, TicketConversationService>();
         services.AddScoped<ITicketHandlingService, TicketHandlingService>();
+        services.AddScoped<ITicketStatusService, TicketStatusService>();
+        services.AddScoped<IAutoCloseService, AutoCloseService>();
         services.AddScoped<IRoutingService, Services.Implementations.Routing.RoutingService>();
         services.AddScoped<ITicketClassifier, TicketClassifier>();
         services.AddAttachmentStorage(configuration);
@@ -106,6 +108,12 @@ public static class DependencyInjection
             // The .eml files contain the invitation links in clear text.
             .Validate<IHostEnvironment>((o, environment) => o.Provider != EmailProvider.File || environment.IsDevelopment(),
                 "Email:Provider 'File' is allowed only in Development. Configure Email:Provider 'Smtp'.")
+            .ValidateOnStart();
+
+        services.AddOptions<AutoCloseOptions>()
+            .Bind(configuration.GetSection(AutoCloseOptions.SectionName))
+            .Validate(o => o.IntervalMinutes is >= 1 and <= 1440 && o.BatchSize is >= 1 and <= 5000,
+                "AutoClose:IntervalMinutes must be 1-1440 and AutoClose:BatchSize 1-5000.")
             .ValidateOnStart();
 
         services.AddOptions<InvitationOptions>()

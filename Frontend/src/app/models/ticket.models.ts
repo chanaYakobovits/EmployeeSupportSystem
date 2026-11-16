@@ -287,8 +287,12 @@ export interface StaffTicketDetails {
 /** GET /api/tickets/{id}: the requester's view (also for staff who opened the ticket) or the staff view. */
 export type TicketDetails = RequesterTicketDetails | StaffTicketDetails;
 
+/**
+ * By the requester object, which only the staff view has. Not by allowedActions: since task 3.5 the requester's view
+ * carries its own actions (cancel, confirm, reopen) and rowVersion too.
+ */
 export function isStaffTicketDetails(ticket: TicketDetails): ticket is StaffTicketDetails {
-  return 'allowedActions' in ticket;
+  return 'requester' in ticket;
 }
 
 /** A status change in the staff timeline, with its reason. */

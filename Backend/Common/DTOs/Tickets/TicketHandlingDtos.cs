@@ -20,6 +20,19 @@ public sealed record ReclassifyTicketRequest(int? CategoryId, Urgency? Urgency, 
 /// <param name="RowVersion">The version the user saw (base64). A newer version → 409.</param>
 public sealed record AssignTicketRequest(int? TargetUserId, int? TargetDepartmentId, string? Reason, byte[]? RowVersion);
 
+/// <summary>
+/// PATCH /api/tickets/{id}/status (spec 3.3, 9.2, task 3.5). The action is the pair (current status, new status) and the
+/// user's role on the ticket – see TicketStatusRules. JSON only: files go through POST /attachments.
+/// </summary>
+/// <param name="RowVersion">The version the user saw (base64). A newer version → 409.</param>
+/// <param name="Reason">An internal reason (staff timeline only, never the requester). Handlers only.</param>
+/// <param name="Message">
+/// A message the requester sees, saved as a visible comment with the change: required for WaitingForEmployee (what is
+/// missing) and Resolved (the resolution); optional otherwise (e.g. why the requester reopens).
+/// </param>
+public sealed record ChangeTicketStatusRequest(TicketStatus? NewStatus, byte[]? RowVersion, string? Reason = null,
+    string? Message = null);
+
 /// <summary>Response of a change: the new version, and whether the user still has the ticket in scope.</summary>
 /// <param name="CanView">False when the change moved the ticket out of the user's scopes (e.g. to another department):
 /// the screen goes back to the list instead of reloading the ticket.</param>

@@ -252,6 +252,8 @@ internal sealed class TicketSeedGenerator(SeedOrganization organization, Random 
 
         var current = TicketStatus.Assigned;
         var pausedTotal = TimeSpan.Zero;
+        DateTime? pausedAt = null;     // the wait in progress (the SLA clock is paused)
+        DateTime? restartedAt = null;  // the clock restarted on the last reopening
         DateTime? resolvedAt = null;
         DateTime? closedAt = null;
         User? routedHandler = initialHandler;
@@ -327,11 +329,13 @@ internal sealed class TicketSeedGenerator(SeedOrganization organization, Random 
                         template.MissingInfo.Length > 0 ? template.MissingInfo[0] : TicketTemplates.DefaultInfoRequest, time);
                     AddHistory(ticket, current, TicketStatus.WaitingForEmployee, ticket.AssignedToUserId, time);
                     current = TicketStatus.WaitingForEmployee;
+                    pausedAt = time;
                     break;
 
                 case Step.Resume:
                     // The employee's reply automatically resumes handling; the SLA clock was paused meanwhile.
                     pausedTotal += gaps[i];
+                    pausedAt = null;
                     AddComment(ticket, requester.User.Id, Pick(TicketTemplates.EmployeeReplies), time);
                     AddHistory(ticket, current, TicketStatus.InProgress, null, time);
                     current = TicketStatus.InProgress;
@@ -348,28 +352,31 @@ internal sealed class TicketSeedGenerator(SeedOrganization organization, Random 
 
                 case Step.Reopen:
                 {
-                    var reason = Pick(TicketTemplates.ReopenReasons);
-                    AddComment(ticket, requester.User.Id, reason, time);
-                    AddHistory(ticket, current, TicketStatus.InProgress, requester.User.Id, time, "פתיחה מחדש");
+                    // The employee's words are a visible comment; the requester gives no (internal) reason (task 3.5).
+                    AddComment(ticket, requester.User.Id, Pick(TicketTemplates.ReopenReasons), time);
+                    AddHistory(ticket, current, TicketStatus.InProgress, requester.User.Id, time);
                     current = TicketStatus.InProgress;
                     resolvedAt = null;
+                    // A new SLA clock from the reopening (TicketStatusTransitions).
+                    restartedAt = time;
+                    pausedTotal = TimeSpan.Zero;
                     break;
                 }
 
                 case Step.CloseByEmployee:
-                    AddHistory(ticket, current, TicketStatus.Closed, requester.User.Id, time, "העובד אישר את הפתרון");
+                    AddHistory(ticket, current, TicketStatus.Closed, requester.User.Id, time);
                     current = TicketStatus.Closed;
                     closedAt = time;
                     break;
 
                 case Step.CloseBySystem:
-                    AddHistory(ticket, current, TicketStatus.Closed, null, time, "סגירה אוטומטית 7 ימים אחרי הפתרון");
+                    AddHistory(ticket, current, TicketStatus.Closed, null, time);
                     current = TicketStatus.Closed;
                     closedAt = time;
                     break;
 
                 case Step.Cancel:
-                    AddHistory(ticket, current, TicketStatus.Cancelled, requester.User.Id, time, "בוטלה על ידי העובד");
+                    AddHistory(ticket, current, TicketStatus.Cancelled, requester.User.Id, time);
                     current = TicketStatus.Cancelled;
                     break;
             }
@@ -379,7 +386,12 @@ internal sealed class TicketSeedGenerator(SeedOrganization organization, Random 
         ticket.ResolvedAt = resolvedAt;
         ticket.ClosedAt = closedAt;
         ticket.UpdatedAt = time;
-        ticket.DueAt = created + TimeSpan.FromHours(SlaDefaults.Hours[ticket.Urgency ?? Urgency.Medium]) + pausedTotal;
+        // As SlaCalculator.DueAt(ticket): from the opening or the last reopening, plus the time waited (task 3.5).
+        ticket.SlaRestartedAt = restartedAt;
+        ticket.SlaPausedSeconds = (int)pausedTotal.TotalSeconds;
+        ticket.SlaPausedAt = current == TicketStatus.WaitingForEmployee ? pausedAt : null;
+        ticket.DueAt = (restartedAt ?? created).AddSeconds(ticket.SlaPausedSeconds)
+                       + TimeSpan.FromHours(SlaDefaults.Hours[ticket.Urgency ?? Urgency.Medium]);
 
         if (ticket.AssignedToUserId is int assignee)
         {

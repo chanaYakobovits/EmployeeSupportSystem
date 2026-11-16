@@ -1,8 +1,9 @@
 namespace Common.Constants;
 
 /// <summary>
-/// The actions staff may take on one ticket – the values of <c>StaffTicketDetailsDto.AllowedActions</c> (task 3.4).
-/// Computed by the server from the permission matrix, the status and the assignment; the screen shows only these.
+/// The actions the user may take on one ticket now – the values of <c>AllowedActions</c> of the staff (task 3.4) and the
+/// requester's (task 3.5) details. Computed by the server from the permission matrix, the status rules and the
+/// assignment; the screen shows only these.
 /// </summary>
 public static class TicketActions
 {
@@ -23,4 +24,24 @@ public static class TicketActions
 
     /// <summary>"קח לטיפולי": a ticket in the queue of the user's own department (POST /assign with the user's id).</summary>
     public const string TakeFromQueue = "takeFromQueue";
+
+    // ===================== Status changes (task 3.5, PATCH /status) =====================
+
+    /// <summary>"התחל טיפול": Assigned → InProgress (from the queue it also assigns the user).</summary>
+    public const string Start = "start";
+
+    /// <summary>"בקש מידע": InProgress → WaitingForEmployee, with a message to the employee.</summary>
+    public const string RequestInfo = "requestInfo";
+
+    /// <summary>"שלח פתרון": InProgress → Resolved, with the resolution reply.</summary>
+    public const string Resolve = "resolve";
+
+    /// <summary>The requester cancels: New / Assigned → Cancelled.</summary>
+    public const string Cancel = "cancel";
+
+    /// <summary>The requester confirms ("הבעיה נפתרה"): Resolved → Closed.</summary>
+    public const string ConfirmResolved = "confirmResolved";
+
+    /// <summary>The requester reopens ("פתיחה מחדש"): Resolved → InProgress, within 7 days of the resolution.</summary>
+    public const string Reopen = "reopen";
 }

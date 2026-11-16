@@ -21,6 +21,10 @@ try
     builder.Services.AddServices(builder.Configuration);
     // Background queue workers. Not started by the --seed command (it never runs the host).
     builder.Services.AddHostedService<API.BackgroundJobs.InvitationEmailWorker>();
+    if (builder.Configuration.GetValue("AutoClose:Enabled", defaultValue: true))
+    {
+        builder.Services.AddHostedService<API.BackgroundJobs.AutoCloseResolvedWorker>();
+    }
 
     var app = builder.Build();
 

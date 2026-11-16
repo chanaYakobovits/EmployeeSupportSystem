@@ -1404,3 +1404,183 @@ Content-Type: application/json
 ### – the other active handlers of פיתוח, and other departments with an active handler. Executive → 403.
 GET {{API_HostAddress}}/api/tickets/152/assign-options
 Authorization: Bearer {{staffAlon.response.body.$.accessToken}}
+
+### ======================================================================================
+### ============ Status changes – task 3.5. Run --seed first; logins: Noa, Yael (24, Admin + Handler, central HR), Ron ============
+### ======================================================================================
+### PATCH /status { newStatus, rowVersion, reason?, message? }. message = a comment the employee sees (required for
+### WaitingForEmployee and Resolved); reason = internal (staff timeline only), handlers only. Every change sends the
+### rowVersion the user saw (from GET /api/tickets/{id}); a newer one → 409. The ticket ids below are the first new ones
+### after --seed (201, 202, 203) – adjust if you opened other tickets before.
+
+### Noa
+# @name s35Noa
+POST {{API_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{ "identifier": "noa.berkovich@example.com", "password": "{{password}}" }
+
+### Yael – handler in central HR (the fallback category's department)
+# @name s35Yael
+POST {{API_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{ "identifier": "yael.harpaz@example.com", "password": "{{password}}" }
+
+### ---------- Full cycle: start → request info → the employee replies → resolve → confirm ----------
+
+### 1. Noa opens a ticket (→ GENERAL, central HR, Assigned) → 201 { id: 201 }
+POST {{API_HostAddress}}/api/tickets
+Authorization: Bearer {{s35Noa.response.body.$.accessToken}}
+Content-Type: multipart/form-data; boundary=b35
+
+--b35
+Content-Disposition: form-data; name="subject"
+
+בדיקת מחזור סטטוסים
+--b35
+Content-Disposition: form-data; name="description"
+
+לא קיבלתי את תלוש השכר של החודש
+--b35--
+
+### 2. Yael reads it → allowedActions incl. "start" (in her department's queue, or hers)
+# @name c1
+GET {{API_HostAddress}}/api/tickets/201
+Authorization: Bearer {{s35Yael.response.body.$.accessToken}}
+
+### 2a. If assignedTo is another handler: Yael takes it (POST /assign with a reason) and reads it again (step 2)
+POST {{API_HostAddress}}/api/tickets/201/assign
+Authorization: Bearer {{s35Yael.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "targetUserId": 24, "reason": "לוקחת לטיפולי", "rowVersion": "{{c1.response.body.$.rowVersion}}" }
+
+### 3. "התחל טיפול": Assigned → InProgress (from the queue it also assigns Yael – a "Taken" change row)
+# @name c2
+PATCH {{API_HostAddress}}/api/tickets/201/status
+Authorization: Bearer {{s35Yael.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "newStatus": "InProgress", "rowVersion": "{{c1.response.body.$.rowVersion}}" }
+
+### 4. The old version again → 409 "הפנייה עודכנה על ידי משתמש אחר"
+PATCH {{API_HostAddress}}/api/tickets/201/status
+Authorization: Bearer {{s35Yael.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "newStatus": "WaitingForEmployee", "message": "x", "rowVersion": "{{c1.response.body.$.rowVersion}}" }
+
+### 5. "בקש מידע" without a message → 400 errors.message
+PATCH {{API_HostAddress}}/api/tickets/201/status
+Authorization: Bearer {{s35Yael.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "newStatus": "WaitingForEmployee", "rowVersion": "{{c2.response.body.$.rowVersion}}" }
+
+### 6. "בקש מידע": InProgress → WaitingForEmployee; the message is a visible comment, the reason staff-only.
+### The SLA clock pauses (SlaPausedAt) – the ticket is not overdue while waiting.
+# @name c3
+PATCH {{API_HostAddress}}/api/tickets/201/status
+Authorization: Bearer {{s35Yael.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "newStatus": "WaitingForEmployee", "message": "נא לצרף את פרטי חשבון הבנק", "reason": "חסר מסמך", "rowVersion": "{{c2.response.body.$.rowVersion}}" }
+
+### 7. Noa replies → 201; the ticket is back InProgress automatically (history: changedByName null = "מערכת"),
+### and DueAt moved by the time waited (compare dueAt in GET /201 before and after)
+POST {{API_HostAddress}}/api/tickets/201/comments
+Authorization: Bearer {{s35Noa.response.body.$.accessToken}}
+Content-Type: multipart/form-data; boundary=b35
+
+--b35
+Content-Disposition: form-data; name="body"
+
+מצרפת את הפרטים: בנק לאומי, סניף 800
+--b35--
+
+### 8. Yael reads the new version
+# @name c4
+GET {{API_HostAddress}}/api/tickets/201
+Authorization: Bearer {{s35Yael.response.body.$.accessToken}}
+
+### 9. "שלח פתרון": InProgress → Resolved; the message is saved as the resolution reply (isResolution), ResolvedAt set
+PATCH {{API_HostAddress}}/api/tickets/201/status
+Authorization: Bearer {{s35Yael.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "newStatus": "Resolved", "message": "התלוש נשלח שוב לכתובת המייל שלך.", "rowVersion": "{{c4.response.body.$.rowVersion}}" }
+
+### 10. Noa reads it → allowedActions ["reply", "confirmResolved", "reopen"] and rowVersion
+# @name c5
+GET {{API_HostAddress}}/api/tickets/201
+Authorization: Bearer {{s35Noa.response.body.$.accessToken}}
+
+### 11. A reason from the requester → 400 errors.reason
+PATCH {{API_HostAddress}}/api/tickets/201/status
+Authorization: Bearer {{s35Noa.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "newStatus": "Closed", "reason": "פנימי", "rowVersion": "{{c5.response.body.$.rowVersion}}" }
+
+### 12. "הבעיה נפתרה": Resolved → Closed (ClosedAt). The employee's history has no reasons; the staff history (below) does.
+PATCH {{API_HostAddress}}/api/tickets/201/status
+Authorization: Bearer {{s35Noa.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "newStatus": "Closed", "rowVersion": "{{c5.response.body.$.rowVersion}}" }
+
+###
+GET {{API_HostAddress}}/api/tickets/201/history
+Authorization: Bearer {{s35Yael.response.body.$.accessToken}}
+
+### ---------- Reopening (within 7 days of the resolution) ----------
+### Open ticket 202 as in step 1, start it (step 3) and resolve it (step 9) with its own versions, then:
+
+### Noa reads it
+# @name r1
+GET {{API_HostAddress}}/api/tickets/202
+Authorization: Bearer {{s35Noa.response.body.$.accessToken}}
+
+### "פתיחה מחדש": Resolved → InProgress with an optional message; a new DueAt from now by the urgency (none → Medium),
+### ResolvedAt cleared (the previous one stays in the history). After 7 days → 422 "reopen-window-expired".
+PATCH {{API_HostAddress}}/api/tickets/202/status
+Authorization: Bearer {{s35Noa.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "newStatus": "InProgress", "message": "הבעיה חזרה אחרי יומיים", "rowVersion": "{{r1.response.body.$.rowVersion}}" }
+
+### ---------- Cancelling ----------
+### Open ticket 203 as in step 1, then:
+
+# @name x1
+GET {{API_HostAddress}}/api/tickets/203
+Authorization: Bearer {{s35Noa.response.body.$.accessToken}}
+
+### Noa cancels (New / Assigned only) → 200; comments afterwards → 422 "ticket-closed"
+PATCH {{API_HostAddress}}/api/tickets/203/status
+Authorization: Bearer {{s35Noa.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "newStatus": "Cancelled", "rowVersion": "{{x1.response.body.$.rowVersion}}" }
+
+### ---------- Errors ----------
+
+### Ron (department manager) → 403 "status-change-not-allowed" (spec 14, question 8); the executive likewise
+PATCH {{API_HostAddress}}/api/tickets/201/status
+Authorization: Bearer {{staffRon.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "newStatus": "Resolved", "message": "x", "rowVersion": "AAAAAAAAAAA=" }
+
+### The requester tries a handler's transition (Assigned → InProgress) → 422 "invalid-status-transition";
+### a colleague on another handler's ticket → 422 "ticket-assigned-to-other"
+PATCH {{API_HostAddress}}/api/tickets/203/status
+Authorization: Bearer {{s35Noa.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "newStatus": "InProgress", "rowVersion": "{{x1.response.body.$.rowVersion}}" }
+
+### Auto-close (AutoCloseResolvedWorker, every AutoClose:IntervalMinutes): Resolved for 7 days → Closed by "מערכת".
+### To see it locally: resolve a ticket, then UPDATE Tickets SET ResolvedAt = DATEADD(day, -8, SYSUTCDATETIME()) WHERE Id = ...,
+### set AutoClose:IntervalMinutes to 1 and restart the API.

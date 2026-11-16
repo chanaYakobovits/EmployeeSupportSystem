@@ -16,6 +16,11 @@ namespace Services.Implementations.Tickets;
 /// </param>
 /// <param name="CanAssign">Assign to a handler of the handling department (incl. "קח לטיפולי"): as <paramref name="CanReclassify"/>.</param>
 /// <param name="CanTransferToDepartment">Move to another department's queue: a handler in scope only (spec 2.4, task 3.4).</param>
+/// <param name="CanChangeStatus">
+/// The handler's status transitions (spec 2.4: "שינוי סטטוס" – handlers only; not a department manager or the executive,
+/// spec 14 question 8). Which ones, and only for the personal handler, is decided with the status rules. The requester's
+/// own transitions go by <paramref name="IsRequesterView"/>.
+/// </param>
 public sealed record TicketPermissions(
     bool CanView,
     bool IsRequesterView,
@@ -24,7 +29,8 @@ public sealed record TicketPermissions(
     bool CanWriteInternal,
     bool CanReclassify = false,
     bool CanAssign = false,
-    bool CanTransferToDepartment = false)
+    bool CanTransferToDepartment = false,
+    bool CanChangeStatus = false)
 {
     public static readonly TicketPermissions None = new(false, false, false, false, false);
 }
@@ -78,27 +84,49 @@ public static class TicketAccessPolicy
             CanWriteInternal: asStaff && (asHandler || asManager),
             CanReclassify: asStaff && (asHandler || managesHandling),
             CanAssign: asStaff && (asHandler || managesHandling),
-            CanTransferToDepartment: asStaff && asHandler);
+            CanTransferToDepartment: asStaff && asHandler,
+            CanChangeStatus: asStaff && asHandler);
     }
 }
 
 /// <summary>
-/// The actions of <see cref="TicketActions"/> the user may take now (task 3.4): the permission matrix narrowed by the
-/// ticket's status and assignment, with the same rules the endpoints enforce (422 ticket-closed / ticket-not-open,
-/// ticket-not-routed). Pure. The screen shows only these – it does not compute permissions itself.
+/// The actions of <see cref="TicketActions"/> the user may take now: the permission matrix narrowed by the ticket's
+/// status and assignment, with the same rules the endpoints enforce (422 ticket-closed / ticket-not-open,
+/// ticket-not-routed, the status rules of 3.3, the personal handler and the reopen window). Pure. The screen shows only
+/// these – it does not compute permissions itself.
 /// </summary>
 public static class TicketAllowedActions
 {
-    public static IReadOnlyList<string> For(TicketPermissions permissions, TicketAccessFacts ticket, TicketViewer viewer)
+    public static IReadOnlyList<string> For(TicketPermissions permissions, TicketAccessFacts ticket, TicketViewer viewer,
+        DateTime now)
     {
         var actions = new List<string>();
-        if (!permissions.CanView || permissions.IsRequesterView)
+        if (!permissions.CanView)
         {
             return actions;
         }
 
         // Comments: anything but closed / cancelled (TicketConversationService → 422 ticket-closed).
         var acceptsComments = ticket.Status is not (TicketStatus.Closed or TicketStatus.Cancelled);
+
+        if (permissions.IsRequesterView)
+        {
+            if (permissions.CanReply && acceptsComments)
+            {
+                actions.Add(TicketActions.Reply);
+            }
+
+            foreach (var transition in TicketStatusRules.From(ticket.Status, StatusActor.Requester))
+            {
+                if (transition.Action != TicketActions.Reopen || TicketStatusRules.CanReopen(ticket.ResolvedAt, now))
+                {
+                    actions.Add(transition.Action!);
+                }
+            }
+
+            return actions;
+        }
+
         // Classification and assignment: not once resolved (TicketHandlingService.EnsureOpen → 422 ticket-not-open).
         var isOpen = ticket.Status is not (TicketStatus.Resolved or TicketStatus.Closed or TicketStatus.Cancelled);
         var isRouted = ticket.AssignedDepartmentId is not null;
@@ -129,10 +157,24 @@ public static class TicketAllowedActions
         }
 
         // In the queue of the user's own department: an active handler there may take it (EnsureAssigneeAsync).
-        if (permissions.CanAssign && isOpen && ticket.AssignedToUserId is null
-            && viewer.Roles.Contains(Role.Handler) && ticket.AssignedDepartmentId == viewer.DepartmentId)
+        var inMyQueue = ticket.AssignedToUserId is null && viewer.Roles.Contains(Role.Handler)
+                        && ticket.AssignedDepartmentId is not null && ticket.AssignedDepartmentId == viewer.DepartmentId;
+        if (permissions.CanAssign && isOpen && inMyQueue)
         {
             actions.Add(TicketActions.TakeFromQueue);
+        }
+
+        if (permissions.CanChangeStatus)
+        {
+            foreach (var transition in TicketStatusRules.From(ticket.Status, StatusActor.Handler))
+            {
+                // The personal handler only (TicketStatusService); "התחל טיפול" also from the queue (and assigns).
+                if (ticket.AssignedToUserId == viewer.UserId
+                    || (transition.Action == TicketActions.Start && inMyQueue))
+                {
+                    actions.Add(transition.Action!);
+                }
+            }
         }
 
         return actions;

@@ -15,13 +15,15 @@ public sealed record TicketViewer(
     IReadOnlyCollection<Role> Roles);
 
 /// <summary>The columns of a ticket that decide who may see and act on it.</summary>
+/// <param name="ResolvedAt">For the reopen window (task 3.5).</param>
 public sealed record TicketAccessFacts(
     int TicketId,
     int RequesterId,
     int RequesterDepartmentId,
     int? AssignedDepartmentId,
     int? AssignedToUserId,
-    TicketStatus Status);
+    TicketStatus Status,
+    DateTime? ResolvedAt = null);
 
 /// <summary>A file to download: its content and how to describe it to the browser.</summary>
 public sealed record AttachmentDownload(Stream Content, string FileName, string ContentType, long SizeBytes);
@@ -29,3 +31,6 @@ public sealed record AttachmentDownload(Stream Content, string FileName, string 
 /// <summary>Where an attachment's content is stored and how it was described on upload.</summary>
 public sealed record StoredAttachmentInfo(int Id, string StoredFileName, string OriginalFileName, string ContentType,
     int SizeBytes);
+
+/// <summary>A ticket and its organization – what a cross-organization background query returns (ids only).</summary>
+public sealed record TicketRef(int TicketId, int OrganizationId);

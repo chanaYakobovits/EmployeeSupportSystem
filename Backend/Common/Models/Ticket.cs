@@ -29,6 +29,18 @@ public class Ticket
     public DateTime? ResolvedAt { get; set; }
     public DateTime? ClosedAt { get; set; }
 
+    // The SLA clock (task 3.5). DueAt = (SlaRestartedAt ?? CreatedAt) + SlaPausedSeconds + the urgency's hours – kept as
+    // columns so that a recalculation (a new urgency) keeps the time spent waiting, and DueAt stays one SQL column.
+
+    /// <summary>When the clock restarted on a reopening; null = it runs from <see cref="CreatedAt"/>.</summary>
+    public DateTime? SlaRestartedAt { get; set; }
+
+    /// <summary>Total time spent in WaitingForEmployee (seconds) since the clock started – added to the due time.</summary>
+    public int SlaPausedSeconds { get; set; }
+
+    /// <summary>When the current wait for the employee began; null when the ticket is not waiting.</summary>
+    public DateTime? SlaPausedAt { get; set; }
+
     /// <summary>SQL Server rowversion, used for optimistic concurrency (spec 11.2).</summary>
     public byte[] RowVersion { get; set; } = [];
 

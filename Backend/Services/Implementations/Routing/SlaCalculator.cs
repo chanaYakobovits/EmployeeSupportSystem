@@ -1,5 +1,6 @@
 using Common.Constants;
 using Common.Enums;
+using Common.Models;
 using Repositories.Interfaces;
 using Services.Interfaces;
 
@@ -17,6 +18,13 @@ public static class SlaCalculator
 
     public static DateTime DueAt(DateTime start, Urgency? urgency, IReadOnlyDictionary<Urgency, int> hours) =>
         start.AddHours(HoursOf(urgency ?? DefaultUrgency, hours));
+
+    /// <summary>
+    /// The ticket's due time on its own clock (task 3.5): from the opening – or the last reopening – plus the time spent
+    /// waiting for the employee, plus the hours of its urgency. A wait still in progress is added when it ends.
+    /// </summary>
+    public static DateTime DueAt(Ticket ticket, IReadOnlyDictionary<Urgency, int> hours) =>
+        DueAt((ticket.SlaRestartedAt ?? ticket.CreatedAt).AddSeconds(ticket.SlaPausedSeconds), ticket.Urgency, hours);
 
     public static int HoursOf(Urgency urgency, IReadOnlyDictionary<Urgency, int> hours) =>
         hours.TryGetValue(urgency, out var value) ? value : SlaDefaults.Hours[urgency];

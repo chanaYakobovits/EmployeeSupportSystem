@@ -399,6 +399,15 @@ namespace Repositories.Data.Migrations
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("rowversion");
 
+                    b.Property<DateTime?>("SlaPausedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("SlaPausedSeconds")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("SlaRestartedAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<byte>("Status")
                         .HasColumnType("tinyint");
 
@@ -419,6 +428,10 @@ namespace Repositories.Data.Migrations
                     b.HasIndex("DueAt")
                         .HasDatabaseName("IX_Tickets_DueAt_Open")
                         .HasFilter("[Status] IN (1, 2, 3)");
+
+                    b.HasIndex("ResolvedAt")
+                        .HasDatabaseName("IX_Tickets_ResolvedAt_Resolved")
+                        .HasFilter("[Status] = 5");
 
                     b.HasIndex("AssignedToUserId", "Status");
 

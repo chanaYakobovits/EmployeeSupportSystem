@@ -68,5 +68,10 @@ public class TicketConfiguration : IEntityTypeConfiguration<Ticket>
         builder.HasIndex(t => t.DueAt)
             .HasDatabaseName("IX_Tickets_DueAt_Open")
             .HasFilter(OpenStatusFilter);
+
+        // The auto-close job (task 3.5): resolved tickets by their resolution time, across organizations.
+        builder.HasIndex(t => t.ResolvedAt)
+            .HasDatabaseName("IX_Tickets_ResolvedAt_Resolved")
+            .HasFilter($"[Status] = {(byte)TicketStatus.Resolved}");
     }
 }

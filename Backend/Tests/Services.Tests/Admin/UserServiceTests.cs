@@ -387,6 +387,8 @@ public sealed class UserServiceTests : AdminTestBase
         Assert.False(UserById(LiatId).IsActive);
         Assert.Equal(3, response.UnassignedTicketCount);
         Assert.Equal([LiatId], Tickets.UnassignedHandlers);
+        // Task 3.5: the ones in progress are back to Assigned (a system transition of TicketStatusRules).
+        Assert.Equal([(TicketStatus.InProgress, TicketStatus.Assigned)], Tickets.Demotions);
         Assert.Empty(RefreshTokens.ActiveFor(LiatId, Now));
         Assert.Equal(AuditActions.UserDeactivated, Assert.Single(AuditLog.Entries).Action);
         Assert.Equal(1, UnitOfWork.TransactionCount);

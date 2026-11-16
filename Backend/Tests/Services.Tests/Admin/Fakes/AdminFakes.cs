@@ -79,6 +79,9 @@ public sealed class FakeTicketRepository : ITicketRepository
 
     public List<int> UnassignedHandlers { get; } = [];
 
+    /// <summary>The (from, to) status change asked for with each unassignment.</summary>
+    public List<(TicketStatus From, TicketStatus To)> Demotions { get; } = [];
+
     // The requester's view is tested against EF Core InMemory (Tickets/*), not with this fake.
     public void Add(Ticket ticket) => throw new NotSupportedException();
 
@@ -106,13 +109,18 @@ public sealed class FakeTicketRepository : ITicketRepository
     public Task<StaffTicketDetailsDto?> GetStaffDetailsAsync(int ticketId, IReadOnlyList<string> allowedActions,
         DateTime now, CancellationToken cancellationToken) => throw new NotSupportedException();
 
-    public Task<int> UnassignUnresolvedTicketsAsync(int handlerUserId, DateTime now, CancellationToken cancellationToken)
+    public Task<int> UnassignUnresolvedTicketsAsync(int handlerUserId, TicketStatus demoteFrom, TicketStatus demoteTo,
+        DateTime now, CancellationToken cancellationToken)
     {
         UnassignedHandlers.Add(handlerUserId);
+        Demotions.Add((demoteFrom, demoteTo));
         var count = UnresolvedByHandler.GetValueOrDefault(handlerUserId);
         UnresolvedByHandler.Remove(handlerUserId);
         return Task.FromResult(count);
     }
+
+    public Task<IReadOnlyList<TicketRef>> GetResolvedDueAsync(DateTime resolvedAtOrBefore, int take,
+        CancellationToken cancellationToken) => throw new NotSupportedException();
 }
 
 /// <summary>In-memory categories; the handling department's name comes from <see cref="FakeDepartmentRepository"/>.</summary>

@@ -160,6 +160,34 @@ public abstract class TicketTestBase
             HandlingLogger);
     }
 
+    /// <summary>Status changes (task 3.5) as in a request of <paramref name="userId"/>.</summary>
+    protected readonly CapturingLogger<TicketStatusService> StatusLogger = new();
+
+    protected TicketStatusService StatusFor(int userId, int organizationId = OrgA)
+    {
+        var db = CreateContext(userId, organizationId);
+        var currentUser = new FakeCurrentUser { SignedInUserId = userId, SignedInOrganizationId = organizationId };
+        return new TicketStatusService(AccessFor(db, currentUser), new TicketRepository(db), new UserRepository(db),
+            ReferenceData, new SlaPolicyRepository(db), UnitOfWorkFor(db), Clock, new ChangeTicketStatusRequestValidator(),
+            StatusLogger);
+    }
+
+    /// <summary>The auto-close job: listing without an organization, closing in a scope entered for the organization.</summary>
+    protected readonly CapturingLogger<AutoCloseService> AutoCloseLogger = new();
+
+    protected AutoCloseService AutoCloseFor(int? organizationId)
+    {
+        var context = new OrganizationContext(new FakeCurrentUser { SignedInUserId = null });
+        if (organizationId is { } org)
+        {
+            context.Enter(org);
+        }
+
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(_databaseName).Options;
+        var db = new AppDbContext(options, context);
+        return new AutoCloseService(new TicketRepository(db), UnitOfWorkFor(db), Clock, AutoCloseLogger);
+    }
+
     protected TicketAccess AccessFor(int userId, int organizationId = OrgA)
     {
         var db = CreateContext(userId, organizationId);

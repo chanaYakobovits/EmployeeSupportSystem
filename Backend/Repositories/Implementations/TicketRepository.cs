@@ -81,7 +81,7 @@ public sealed class TicketRepository(AppDbContext db) : ITicketRepository
             .AsNoTracking()
             .Where(t => t.Id == ticketId)
             .Select(t => new TicketAccessFacts(t.Id, t.RequesterId, t.RequesterDepartmentId, t.AssignedDepartmentId,
-                t.AssignedToUserId, t.Status))
+                t.AssignedToUserId, t.Status, t.ResolvedAt))
             .SingleOrDefaultAsync(cancellationToken);
 
     public Task<Ticket?> FindForUpdateAsync(int ticketId, CancellationToken cancellationToken) =>
@@ -115,7 +115,10 @@ public sealed class TicketRepository(AppDbContext db) : ITicketRepository
                         h.NewStatus,
                         h.ChangedAt,
                         h.ChangedByUser != null ? h.ChangedByUser.FirstName + " " + h.ChangedByUser.LastName : null))
-                    .ToList()))
+                    .ToList(),
+                t.RowVersion,
+                // Added by the service (not SQL), from the status rules.
+                Array.Empty<string>()))
             .SingleOrDefaultAsync(cancellationToken);
 
     // ===================== The staff lists and view (task 3.4) =====================
@@ -276,11 +279,46 @@ public sealed class TicketRepository(AppDbContext db) : ITicketRepository
 
     // The organization query filter applies to ExecuteUpdate too. RowVersion changes automatically (rowversion column),
     // so a handler who still has one of these tickets open gets 409 on the next update.
-    public Task<int> UnassignUnresolvedTicketsAsync(int handlerUserId, DateTime now, CancellationToken cancellationToken) =>
-        db.Tickets
+    public async Task<int> UnassignUnresolvedTicketsAsync(int handlerUserId, TicketStatus demoteFrom,
+        TicketStatus demoteTo, DateTime now, CancellationToken cancellationToken)
+    {
+        // Within the caller's transaction: the history rows (saved by its SaveChanges) match exactly the tickets whose
+        // status the UPDATE changes – it changes only these ids.
+        var demoted = await db.Tickets
+            .Where(t => t.AssignedToUserId == handlerUserId && t.Status == demoteFrom)
+            .Select(t => t.Id)
+            .ToListAsync(cancellationToken);
+        db.TicketStatusHistory.AddRange(demoted.Select(id => new TicketStatusHistory
+        {
+            TicketId = id,
+            PreviousStatus = demoteFrom,
+            NewStatus = demoteTo,
+            ChangedByUserId = null,
+            ChangedAt = now,
+        }));
+
+        return await db.Tickets
             .Where(t => t.AssignedToUserId == handlerUserId && TicketStatuses.Unresolved.Contains(t.Status))
             .ExecuteUpdateAsync(setters => setters
                     .SetProperty(t => t.AssignedToUserId, (int?)null)
+                    .SetProperty(t => t.Status, t => demoted.Contains(t.Id) ? demoteTo : t.Status)
                     .SetProperty(t => t.UpdatedAt, now),
                 cancellationToken);
+    }
+
+    // ===================== Auto-close (task 3.5) =====================
+
+    public async Task<IReadOnlyList<TicketRef>> GetResolvedDueAsync(DateTime resolvedAtOrBefore, int take,
+        CancellationToken cancellationToken) =>
+        // The one cross-organization ticket query, like the invitation claim: the job has no organization of its own.
+        // Ids only; each ticket is closed in a scope of its organization (with the filter).
+        // Filtered index IX_Tickets_ResolvedAt_Resolved.
+        await db.Tickets
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .Where(t => t.Status == TicketStatus.Resolved && t.ResolvedAt != null && t.ResolvedAt <= resolvedAtOrBefore)
+            .OrderBy(t => t.ResolvedAt).ThenBy(t => t.Id)
+            .Take(take)
+            .Select(t => new TicketRef(t.Id, t.OrganizationId))
+            .ToListAsync(cancellationToken);
 }

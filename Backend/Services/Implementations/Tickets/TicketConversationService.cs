@@ -64,7 +64,8 @@ public sealed class TicketConversationService(
         {
             // A visible comment is an update the requester sees ("עדכון אחרון"). An internal note is not: touching the
             // ticket would show the requester an update with nothing visible in it.
-            await TouchAsync(ticketId, now, cancellationToken);
+            var ticket = await TouchAsync(ticketId, now, cancellationToken);
+            ResumeOnRequesterReply(ticket, access, now);
         }
 
         var comment = request.ToNewComment(ticketId, access.UserId, now);
@@ -80,9 +81,7 @@ public sealed class TicketConversationService(
 
         conversation.AddComment(comment);
 
-        // Task 3.5: a requester reply while WaitingForEmployee moves the ticket to InProgress (TicketStatusRules),
-        // in this same save, with a history entry.
-
+        // The comment, the files and (on a reply to a request for information) the status – one save.
         await unitOfWork.SaveChangesAsync(cancellationToken);
         staged.Commit();
 
@@ -113,7 +112,9 @@ public sealed class TicketConversationService(
         EnsureNotFinal(access.Ticket.Status);
 
         var now = clock.UtcNow;
-        await TouchAsync(ticketId, now, cancellationToken);
+        var ticket = await TouchAsync(ticketId, now, cancellationToken);
+        // The employee may answer a request for information with the file alone (e.g. the payslip that was asked for).
+        ResumeOnRequesterReply(ticket, access, now);
 
         var attachments = new List<TicketAttachment>(files.Count);
         await using var staged = new StagedFiles(storage, logger);
@@ -191,12 +192,30 @@ public sealed class TicketConversationService(
     /// old version gets 409 on the next update and sees the new comment; a status change in between → 409 here.
     /// The state is checked again on the tracked row, the one the save is conditioned on.
     /// </summary>
-    private async Task TouchAsync(int ticketId, DateTime now, CancellationToken cancellationToken)
+    private async Task<Ticket> TouchAsync(int ticketId, DateTime now, CancellationToken cancellationToken)
     {
         var ticket = await tickets.FindForUpdateAsync(ticketId, cancellationToken)
                      ?? throw new NotFoundException(TicketAccess.TicketNotFoundTitle);
         EnsureNotFinal(ticket.Status);
         ticket.UpdatedAt = now;
+        return ticket;
+    }
+
+    /// <summary>
+    /// Spec 3.3: WaitingForEmployee → InProgress is automatic when the employee replies – a system transition (the SLA
+    /// clock resumes and the due time moves by the wait). Only the requester's visible reply; not a handler's reply and
+    /// not an internal note (the callers pass only visible ones).
+    /// </summary>
+    private void ResumeOnRequesterReply(Ticket ticket, TicketAccessResult access, DateTime now)
+    {
+        if (!access.Permissions.IsRequesterView || ticket.Status != TicketStatus.WaitingForEmployee)
+        {
+            return;
+        }
+
+        TicketStatusTransitions.Apply(ticket, TicketStatus.InProgress, StatusActor.System, null, null, now);
+        logger.LogInformation("Ticket {TicketId} resumed by the requester's reply: {FromStatus} -> {ToStatus}",
+            ticket.Id, TicketStatus.WaitingForEmployee, TicketStatus.InProgress);
     }
 
     private static void EnsureNotFinal(TicketStatus status)

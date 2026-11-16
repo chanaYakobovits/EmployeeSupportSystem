@@ -1,6 +1,7 @@
 using System.Globalization;
 using Common.Constants;
 using Common.DTOs.Tickets;
+using Common.Enums;
 using FluentValidation;
 
 namespace Services.Validators;
@@ -144,5 +145,44 @@ public sealed class StaffTicketsQueryValidator : PageQueryValidator<StaffTickets
         RuleFor(q => q.Search)
             .Must(search => search is null || search.Trim().Length <= MaxSearchLength)
             .WithMessage($"טקסט החיפוש: עד {MaxSearchLength} תווים");
+    }
+}
+
+/// <summary>
+/// PATCH /api/tickets/{id}/status (spec 3.3, 9.2, task 3.5). Whether the transition is allowed, and whether a reason is
+/// allowed at all (handlers only), depends on the ticket and the user – checked by the service.
+/// </summary>
+public sealed class ChangeTicketStatusRequestValidator : AbstractValidator<ChangeTicketStatusRequest>
+{
+    public const string StatusRequiredMessage = "יש לבחור את הסטטוס החדש";
+    public const string InfoRequestRequiredMessage = "יש לכתוב לעובד איזה מידע חסר";
+    public const string ResolutionRequiredMessage = "יש לכתוב לעובד את הפתרון";
+
+    public static readonly string MessageLengthMessage =
+        $"ההודעה: עד {CommentFieldLimits.BodyMaxLength.ToString("N0", CultureInfo.InvariantCulture)} תווים";
+
+    public ChangeTicketStatusRequestValidator()
+    {
+        RuleFor(r => r.NewStatus)
+            .Cascade(CascadeMode.Stop)
+            .NotNull().WithMessage(StatusRequiredMessage)
+            .IsInEnum().WithMessage("הסטטוס אינו קיים");
+
+        // Spec 3.3: "נפתרה" requires the reply to the employee; asking for information requires saying what is missing.
+        RuleFor(r => r.Message)
+            .Cascade(CascadeMode.Stop)
+            .Must((r, message) => !string.IsNullOrWhiteSpace(message)
+                                  || r.NewStatus is not (TicketStatus.WaitingForEmployee or TicketStatus.Resolved))
+            .WithMessage(r => r.NewStatus is TicketStatus.Resolved
+                ? ResolutionRequiredMessage
+                : InfoRequestRequiredMessage)
+            .Must(message => message is null || message.Trim().Length <= CommentFieldLimits.BodyMaxLength)
+            .WithMessage(MessageLengthMessage);
+
+        RuleFor(r => r.Reason!)
+            .Must(HandlingRules.HasValidLength).When(r => !string.IsNullOrWhiteSpace(r.Reason))
+            .WithMessage(HandlingRules.ReasonLengthMessage);
+
+        RuleFor(r => r.RowVersion).Must(HandlingRules.IsRowVersion).WithMessage(HandlingRules.RowVersionMessage);
     }
 }

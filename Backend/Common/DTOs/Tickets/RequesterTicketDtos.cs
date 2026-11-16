@@ -32,6 +32,11 @@ public sealed record RequesterTicketListItemDto(
 public sealed record RequesterTicketsSummaryDto(int Open, int WaitingForMe, int ClosedThisMonth);
 
 /// <summary>GET /api/tickets/{id} for the requester.</summary>
+/// <param name="RowVersion">The version for the requester's status changes (cancel, confirm, reopen – task 3.5).</param>
+/// <param name="AllowedActions">
+/// What the requester may do now (values of <see cref="Constants.TicketActions"/>: reply, cancel, confirmResolved,
+/// reopen), computed by the server from the status rules.
+/// </param>
 public sealed record RequesterTicketDetailsDto(
     int Id,
     string? Subject,
@@ -43,7 +48,9 @@ public sealed record RequesterTicketDetailsDto(
     DateTime UpdatedAt,
     DateTime? ResolvedAt,
     DateTime? ClosedAt,
-    IReadOnlyList<RequesterTicketHistoryItemDto> Timeline) : ITicketDetailsDto;
+    IReadOnlyList<RequesterTicketHistoryItemDto> Timeline,
+    byte[] RowVersion,
+    IReadOnlyList<string> AllowedActions) : ITicketDetailsDto;
 
 /// <summary>
 /// GET /api/tickets/{id}: <see cref="RequesterTicketDetailsDto"/> for the ticket's requester (even when they are staff

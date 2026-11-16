@@ -22,7 +22,8 @@ namespace API.Controllers;
 public class TicketsController(
     ITicketService ticketService,
     ITicketConversationService conversationService,
-    ITicketHandlingService handlingService) : ControllerBase
+    ITicketHandlingService handlingService,
+    ITicketStatusService statusService) : ControllerBase
 {
     /// <summary>
     /// Opens a ticket for the signed-in user (multipart: subject, description, up to 3 files). Saved immediately with
@@ -82,6 +83,24 @@ public class TicketsController(
     public async Task<IActionResult> Get(int id, CancellationToken cancellationToken) =>
         // Serialized as its runtime type (requester or staff DTO).
         Ok(await ticketService.GetAsync(id, HttpContext.ClientIp(), cancellationToken));
+
+    /// <summary>
+    /// A status change (spec 3.3, 9.2): the handler's start / request info / resolve, the requester's cancel / confirm /
+    /// reopen, with the version the user saw. <c>message</c> – a comment the employee sees (required for
+    /// WaitingForEmployee and Resolved); <c>reason</c> – internal, handlers only. 403 for staff who may not change the
+    /// status (a department manager, the executive); 409 when the ticket changed meanwhile; 422 for a transition that is
+    /// not allowed, another handler's ticket, or a reopening after 7 days.
+    /// </summary>
+    [HttpPatch("{id:int}/status")]
+    [Consumes("application/json")]
+    [ProducesResponseType<TicketUpdatedDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<ActionResult<TicketUpdatedDto>> ChangeStatus(int id, ChangeTicketStatusRequest request,
+        CancellationToken cancellationToken) =>
+        Ok(await statusService.ChangeStatusAsync(id, request, cancellationToken));
 
     /// <summary>
     /// Reclassification (spec 4.4): category and/or urgency + a reason (staff timeline only) + the version the user saw.

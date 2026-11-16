@@ -1,6 +1,7 @@
 using System.Linq.Expressions;
 using Common.DTOs.Paging;
 using Common.DTOs.Tickets;
+using Common.Enums;
 using Common.Models;
 
 namespace Repositories.Interfaces;
@@ -71,10 +72,23 @@ public interface ITicketRepository
 
     /// <summary>
     /// Returns the handler's unresolved tickets (<see cref="Common.Constants.TicketStatuses.Unresolved"/>) to the queue of
-    /// their handling department: AssignedToUserId = null, UpdatedAt = now. Status unchanged.
-    /// Executes immediately (bulk UPDATE, not SaveChanges): call it inside
-    /// <see cref="IUnitOfWork.ExecuteInTransactionAsync{T}"/> together with the deactivation.
+    /// their handling department: AssignedToUserId = null, UpdatedAt = now. Those in <paramref name="demoteFrom"/> move to
+    /// <paramref name="demoteTo"/> (InProgress → Assigned: nobody is handling them now – task 3.5), each with a system
+    /// history row staged for the caller's SaveChanges; any other status is unchanged.
+    /// The UPDATE executes immediately (bulk, not SaveChanges): call it inside
+    /// <see cref="IUnitOfWork.ExecuteInTransactionAsync{T}"/> together with the deactivation and its SaveChanges.
     /// </summary>
     /// <returns>Number of tickets returned to the queue.</returns>
-    Task<int> UnassignUnresolvedTicketsAsync(int handlerUserId, DateTime now, CancellationToken cancellationToken);
+    Task<int> UnassignUnresolvedTicketsAsync(int handlerUserId, TicketStatus demoteFrom, TicketStatus demoteTo,
+        DateTime now, CancellationToken cancellationToken);
+
+    // ---- auto-close (task 3.5, spec 10.2) ----
+
+    /// <summary>
+    /// Resolved tickets with ResolvedAt at or before <paramref name="resolvedAtOrBefore"/>, of <b>every</b> organization
+    /// (the background job has no organization; ids only – each ticket is then closed in a scope of its own
+    /// organization). The oldest first, at most <paramref name="take"/>.
+    /// </summary>
+    Task<IReadOnlyList<TicketRef>> GetResolvedDueAsync(DateTime resolvedAtOrBefore, int take,
+        CancellationToken cancellationToken);
 }
