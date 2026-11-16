@@ -3,10 +3,12 @@ using System.Text.Json.Serialization;
 using Common.Enums;
 using Common.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Repositories.Data;
 using Repositories.Implementations;
 using Repositories.Interfaces;
 using Services.Implementations;
+using Services.Implementations.Routing;
 using Services.Implementations.Tickets;
 using Services.Tests.Auth.Fakes;
 using Services.Tests.Fakes;
@@ -40,6 +42,7 @@ public abstract class TicketTestBase
     protected const int OrgBUserId = 200;
 
     protected const int PayrollId = 1;
+    protected const int GeneralId = 2;   // the fallback category → HR
     protected const int OrgBTicketId = 9000;
 
     /// <summary>The access-token department claim of <see cref="FakeCurrentUser"/> – deliberately not a real department.</summary>
@@ -85,10 +88,18 @@ public abstract class TicketTestBase
             NewUser(AvnerId, OrgA, HrId, "אבנר", "גולדמן", Role.Executive),
             NewUser(AlonId, OrgA, DevId, "אלון", "ביטון", Role.Handler),
             NewUser(OrgBUserId, OrgB, OrgBDeptId, "משתמש", "בארגון ב"));
-        db.Categories.Add(new Category
-        {
-            Id = PayrollId, OrganizationId = OrgA, Code = "PAYROLL", Name = "שכר ותלושים", IsActive = true,
-        });
+        db.Categories.AddRange(
+            new Category
+            {
+                Id = PayrollId, OrganizationId = OrgA, Code = "PAYROLL", Name = "שכר ותלושים", IsActive = true,
+                RoutingType = RoutingType.FixedDepartment, HandlingDepartmentId = DevId,
+            },
+            // The fallback routes to HR: "central HR" of these tests (task 3.3).
+            new Category
+            {
+                Id = GeneralId, OrganizationId = OrgA, Code = "GENERAL", Name = "כללי", IsActive = true, IsFallback = true,
+                RoutingType = RoutingType.FixedDepartment, HandlingDepartmentId = HrId,
+            });
         db.Tickets.Add(NewTicket(OrgBTicketId, OrgB, OrgBUserId, OrgBDeptId, TicketStatus.New, Now.AddDays(-1)));
         db.SaveChanges();
     }
@@ -106,10 +117,20 @@ public abstract class TicketTestBase
     {
         var db = CreateContext(userId, organizationId);
         var currentUser = new FakeCurrentUser { SignedInUserId = userId, SignedInOrganizationId = organizationId };
+        var routing = RoutingFor(db);
         return new TicketService(new TicketRepository(db), new UserRepository(db), UnitOfWorkFor(db),
-            AccessFor(db, currentUser), Files, Clock, currentUser, new CreateTicketRequestValidator(),
-            new AttachmentFilesValidator(), new MyTicketsQueryValidator(), Logger);
+            AccessFor(db, currentUser), routing, ClassifierFor(db, routing), Files, Clock, currentUser,
+            new CreateTicketRequestValidator(), new AttachmentFilesValidator(), new MyTicketsQueryValidator(), Logger);
     }
+
+    /// <summary>Reference data cache of the test (one per test, like the app's singleton).</summary>
+    protected readonly MemoryReferenceDataCache ReferenceData = new(new MemoryCache(new MemoryCacheOptions()));
+
+    protected RoutingService RoutingFor(AppDbContext db) =>
+        new(ReferenceData, new CategoryRepository(db), new DepartmentRepository(db), new UserRepository(db));
+
+    protected TicketClassifier ClassifierFor(AppDbContext db, RoutingService routing) =>
+        new(routing, ReferenceData, new SlaPolicyRepository(db));
 
     /// <summary>The conversation service (comments, attachments, history) as in a request of <paramref name="userId"/>.</summary>
     protected TicketConversationService ConversationFor(int userId, int organizationId = OrgA)

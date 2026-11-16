@@ -19,6 +19,70 @@ public sealed class DepartmentServiceTests : AdminTestBase
             Ip, CancellationToken.None);
     }
 
+    // ===================== Departmental HR (task 3.3) =====================
+
+    private Task<DepartmentDto> SetHr(int departmentId, int? hrUserId)
+    {
+        var department = Departments.Departments[departmentId];
+        return DepartmentService.UpdateAsync(departmentId,
+            new UpdateDepartmentRequest(department.Name, department.ManagerUserId, department.IsActive, hrUserId),
+            Ip, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task An_active_handler_becomes_the_departmental_hr_and_is_returned_in_the_dto()
+    {
+        var result = await SetHr(DevelopmentId, LiatId);
+
+        Assert.Equal(LiatId, result.HrUser?.Id);
+        Assert.Equal(LiatId, Departments.Departments[DevelopmentId].HrUserId);
+    }
+
+    [Fact]
+    public async Task The_departmental_hr_may_belong_to_another_department_and_serve_several()
+    {
+        await SetHr(DevelopmentId, YaelId);
+        var result = await SetHr(ManagementId, YaelId); // Yael is in HR
+
+        Assert.Equal(YaelId, result.HrUser?.Id);
+        Assert.Equal(YaelId, Departments.Departments[DevelopmentId].HrUserId);
+    }
+
+    [Theory]
+    [InlineData(NoaId)]     // active, but not a handler
+    [InlineData(OritId)]    // inactive
+    [InlineData(12345)]     // not in the organization
+    public async Task The_departmental_hr_must_be_an_active_handler(int userId)
+    {
+        var exception = await Assert.ThrowsAsync<ValidationException>(() => SetHr(DevelopmentId, userId));
+
+        Assert.Equal([DepartmentService.InvalidHrUserMessage], exception.Errors["hrUserId"]);
+        Assert.Null(Departments.Departments[DevelopmentId].HrUserId);
+    }
+
+    [Fact]
+    public async Task Clearing_the_departmental_hr_and_creating_with_one()
+    {
+        await SetHr(DevelopmentId, LiatId);
+        var cleared = await SetHr(DevelopmentId, null);
+        Assert.Null(cleared.HrUser);
+
+        var created = await DepartmentService.CreateAsync(new CreateDepartmentRequest("שיווק", null, LiatId), Ip,
+            CancellationToken.None);
+        Assert.Equal(LiatId, created.HrUser?.Id);
+    }
+
+    [Fact]
+    public async Task Changing_the_departmental_hr_evicts_the_cached_departments()
+    {
+        await DepartmentService.GetAllAsync(includeInactive: false, CancellationToken.None);
+
+        await SetHr(DevelopmentId, LiatId);
+
+        var all = await DepartmentService.GetAllAsync(includeInactive: false, CancellationToken.None);
+        Assert.Equal(LiatId, all.Single(d => d.Id == DevelopmentId).HrUser?.Id);
+    }
+
     // ===================== Name =====================
 
     [Theory]

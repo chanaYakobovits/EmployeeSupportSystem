@@ -31,6 +31,16 @@ public interface IUserRepository
     /// </summary>
     Task<Common.DTOs.Tickets.TicketViewer?> GetTicketViewerAsync(int userId, CancellationToken cancellationToken);
 
+    // ---- routing (task 3.3) ----
+
+    /// <summary>
+    /// Active users with the Handler role who belong to one of <paramref name="departmentIds"/>, or whose id is
+    /// <paramref name="userId"/> (a departmental HR handler, possibly of another department) – one query, each with
+    /// their count of assigned unresolved tickets. Read fresh from the database (not cached): activity and load change often.
+    /// </summary>
+    Task<IReadOnlyList<Common.DTOs.Routing.HandlerCandidate>> GetHandlerCandidatesAsync(
+        IReadOnlyCollection<int> departmentIds, int? userId, CancellationToken cancellationToken);
+
     // ---- user administration (task 2.3); all within the signed-in user's organization unless stated ----
 
     /// <summary>Filtered, sorted and paged in SQL. The query must already be validated (page, pageSize, sortBy).</summary>

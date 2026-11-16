@@ -26,6 +26,7 @@ public sealed class CategoryService : ICategoryService
     public const string DuplicateCodeMessage = "כבר קיימת קטגוריה עם קוד זה";
     public const string InactiveDepartmentMessage = "יש לבחור מחלקה פעילה";
     public const string FallbackDeactivationTitle = "לא ניתן להשבית את קטגוריית הגיבוי";
+    public const string FallbackRoutingTitle = "קטגוריית הגיבוי חייבת להיות מנותבת למחלקה מטפלת קבועה";
 
     private readonly ICategoryRepository _categories;
     private readonly IDepartmentRepository _departments;
@@ -71,8 +72,8 @@ public sealed class CategoryService : ICategoryService
         includeInactive &= _currentUser.IsInRole(Role.Admin);
 
         // One cache entry per organization (spec 11.3) holding every category; a handful of rows.
-        var all = await _cache.GetOrCreateAsync(ReferenceData.Categories, _currentUser.OrganizationId,
-            _categories.GetAllAsync, cancellationToken);
+        var all = await ReferenceDataLookups.CategoriesAsync(_cache, _categories, _currentUser.OrganizationId,
+            cancellationToken);
         return includeInactive ? all : all.Where(c => c.IsActive).ToList();
     }
 
@@ -133,6 +134,15 @@ public sealed class CategoryService : ICategoryService
         }
 
         var routingType = request.RoutingType!.Value;
+        // Central HR is the fallback's handling department (task 3.3): without one, tickets with no available handler
+        // would have nowhere to go.
+        if (category.IsFallback && routingType != RoutingType.FixedDepartment)
+        {
+            throw new BusinessRuleException(FallbackRoutingTitle,
+                "המחלקה המטפלת שלה היא משאבי אנוש מרכזי – לשם מגיעות פניות שאין להן מטפל זמין.",
+                "fallback-category-routing");
+        }
+
         // An inactive category may keep pointing at a department closed since; it is checked again on reactivation.
         IReadOnlyList<string> warnings = isActive
             ? await CheckHandlingDepartmentAsync(routingType, request.HandlingDepartmentId, cancellationToken)

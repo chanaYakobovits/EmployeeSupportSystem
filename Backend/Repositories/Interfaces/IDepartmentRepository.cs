@@ -23,6 +23,12 @@ public interface IDepartmentRepository
     /// <summary>The department managed by this user (a user manages at most one), tracked. Null if none.</summary>
     Task<Department?> FindManagedByAsync(int userId, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Names of the departments whose departmental HR handler (HrUserId) is this user, ordered. Unlike a manager, one
+    /// HR handler may serve several departments.
+    /// </summary>
+    Task<IReadOnlyList<string>> GetNamesServedByHrAsync(int userId, CancellationToken cancellationToken);
+
     Task<int> CountActiveUsersAsync(int departmentId, CancellationToken cancellationToken);
 
     /// <summary>Whether an active category routes tickets to this department (HandlingDepartmentId).</summary>

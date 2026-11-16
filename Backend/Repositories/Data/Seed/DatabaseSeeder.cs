@@ -101,6 +101,13 @@ internal sealed class DatabaseSeeder(AppDbContext db, IPasswordHasher passwordHa
             departments[manager.Person.Department].ManagerUserId = manager.User.Id;
         }
 
+        // Departmental HR (task 3.3): the person marked IsDepartmentHr is the HR handler of their own department
+        // (Development). The other departments have none – their HR tickets go to central HR.
+        foreach (var hr in users.Where(u => u.Person.IsDepartmentHr))
+        {
+            departments[hr.Person.Department].HrUserId = hr.User.Id;
+        }
+
         // Categories and routing (spec 3.5), SLA policies (spec 3.4).
         var categories = ReferenceSeedData.Categories.ToDictionary(
             c => c.Code,

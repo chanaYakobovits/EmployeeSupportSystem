@@ -49,7 +49,13 @@ export class DepartmentsStore {
   setActive(department: Department, isActive: boolean): Observable<Department> {
     this.changingId.set(department.id);
     return this.api
-      .update(department.id, { name: department.name, managerUserId: department.manager?.id ?? null, isActive })
+      // A full PUT: the manager and the departmental HR are sent as they are, or they would be cleared.
+      .update(department.id, {
+        name: department.name,
+        managerUserId: department.manager?.id ?? null,
+        isActive,
+        hrUserId: department.hrUser?.id ?? null,
+      })
       .pipe(
         tap((updated) => this.upsert(updated)),
         finalize(() => this.changingId.set(null)),

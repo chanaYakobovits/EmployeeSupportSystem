@@ -16,7 +16,8 @@ namespace Services.Implementations;
 /// <summary>
 /// Departments (spec 7.8): unique name per organization, a manager chosen from the organization's active users,
 /// deactivation only when no active user belongs to it. Changing the manager moves the DepartmentManager role
-/// (<see cref="DepartmentManagerRules"/>). The list is cached per organization for 10 minutes (spec 11.3)
+/// (<see cref="DepartmentManagerRules"/>). An optional departmental HR handler (task 3.3) receives the department's
+/// RequesterDepartmentHr tickets; it must be an active handler, of any department. The list is cached per organization for 10 minutes (spec 11.3)
 /// and evicted on every change.
 /// </summary>
 public sealed class DepartmentService : IDepartmentService
@@ -24,6 +25,7 @@ public sealed class DepartmentService : IDepartmentService
     public const string NotFoundTitle = "המחלקה לא נמצאה";
     public const string DuplicateNameMessage = "כבר קיימת מחלקה בשם זה";
     public const string InvalidManagerMessage = "יש לבחור עובד פעיל בארגון";
+    public const string InvalidHrUserMessage = "יש לבחור גורם מטפל פעיל בארגון";
 
     private readonly IDepartmentRepository _departments;
     private readonly IUserRepository _users;
@@ -66,8 +68,8 @@ public sealed class DepartmentService : IDepartmentService
         includeInactive &= _currentUser.IsInRole(Role.Admin);
 
         // One cache entry per organization (spec 11.3) holding every department; a handful of rows.
-        var all = await _cache.GetOrCreateAsync(ReferenceData.Departments, _currentUser.OrganizationId,
-            ct => _departments.GetAllAsync(includeInactive: true, ct), cancellationToken);
+        var all = await ReferenceDataLookups.DepartmentsAsync(_cache, _departments, _currentUser.OrganizationId,
+            cancellationToken);
         return includeInactive ? all : all.Where(d => d.IsActive).ToList();
     }
 
@@ -85,6 +87,7 @@ public sealed class DepartmentService : IDepartmentService
             Name = name,
             IsActive = true,
         };
+        await SetHrUserAsync(department, request.HrUserId, cancellationToken);
 
         await _unitOfWork.ExecuteInTransactionAsync(async ct =>
         {
@@ -120,6 +123,8 @@ public sealed class DepartmentService : IDepartmentService
         {
             await EnsureCanDeactivateAsync(department, cancellationToken);
         }
+
+        await SetHrUserAsync(department, request.HrUserId, cancellationToken);
 
         await _unitOfWork.ExecuteInTransactionAsync(async ct =>
         {
@@ -183,6 +188,29 @@ public sealed class DepartmentService : IDepartmentService
         }
 
         department.ManagerUserId = newManagerId;
+    }
+
+    /// <summary>
+    /// The departmental HR handler (task 3.3): an active user of the organization with the Handler role, of any
+    /// department (one HR handler may serve several). Otherwise 400 on hrUserId. Null = none (central HR handles them).
+    /// </summary>
+    private async Task SetHrUserAsync(Department department, int? hrUserId, CancellationToken cancellationToken)
+    {
+        if (hrUserId == department.HrUserId)
+        {
+            return;
+        }
+
+        if (hrUserId is { } id)
+        {
+            var user = await _users.FindForUpdateAsync(id, cancellationToken);
+            if (user is not { IsActive: true } || user.Roles.All(r => r.Role != Role.Handler))
+            {
+                throw ValidationException.ForField("hrUserId", InvalidHrUserMessage);
+            }
+        }
+
+        department.HrUserId = hrUserId;
     }
 
     private async Task EnsureCanDeactivateAsync(Department department, CancellationToken cancellationToken)

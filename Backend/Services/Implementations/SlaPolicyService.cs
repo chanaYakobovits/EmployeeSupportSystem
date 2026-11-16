@@ -6,6 +6,7 @@ using Common.Models;
 using FluentValidation;
 using Microsoft.Extensions.Logging;
 using Repositories.Interfaces;
+using Services.Implementations.Routing;
 using Services.Interfaces;
 using Services.Validators;
 
@@ -22,6 +23,7 @@ public sealed class SlaPolicyService : ISlaPolicyService
     private readonly IUnitOfWork _unitOfWork;
     private readonly IDateTimeProvider _clock;
     private readonly ICurrentUser _currentUser;
+    private readonly IReferenceDataCache _cache;
     private readonly IValidator<UpdateSlaPoliciesRequest> _validator;
     private readonly ILogger<SlaPolicyService> _logger;
 
@@ -31,10 +33,12 @@ public sealed class SlaPolicyService : ISlaPolicyService
         IUnitOfWork unitOfWork,
         IDateTimeProvider clock,
         ICurrentUser currentUser,
+        IReferenceDataCache cache,
         IValidator<UpdateSlaPoliciesRequest> validator,
         ILogger<SlaPolicyService> logger)
     {
         _policies = policies;
+        _cache = cache;
         _auditLogs = auditLogs;
         _unitOfWork = unitOfWork;
         _clock = clock;
@@ -45,8 +49,8 @@ public sealed class SlaPolicyService : ISlaPolicyService
 
     public async Task<SlaPoliciesDto> GetAsync(CancellationToken cancellationToken)
     {
-        var hours = await _policies.GetHoursAsync(cancellationToken);
-        int Of(Urgency urgency) => hours.TryGetValue(urgency, out var value) ? value : SlaDefaults.Hours[urgency];
+        var hours = await SlaCalculator.GetHoursAsync(_cache, _policies, _currentUser.OrganizationId, cancellationToken);
+        int Of(Urgency urgency) => SlaCalculator.HoursOf(urgency, hours);
         return new SlaPoliciesDto(Of(Urgency.Critical), Of(Urgency.High), Of(Urgency.Medium), Of(Urgency.Low));
     }
 
@@ -84,6 +88,7 @@ public sealed class SlaPolicyService : ISlaPolicyService
         _auditLogs.Add(AuditEntries.ForEntity(AuditActions.SlaPoliciesUpdated, AuditEntityTypes.SlaPolicy, entityId: null,
             _currentUser.OrganizationId, _currentUser.UserId, ipAddress, _clock.UtcNow));
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+        _cache.Invalidate(ReferenceData.SlaPolicies, _currentUser.OrganizationId);
 
         _logger.LogInformation("SLA policies updated by admin {AdminUserId}", _currentUser.UserId);
         return new SlaPoliciesDto(target[Urgency.Critical], target[Urgency.High], target[Urgency.Medium], target[Urgency.Low]);

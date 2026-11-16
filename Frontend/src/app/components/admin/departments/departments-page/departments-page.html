@@ -28,6 +28,15 @@
     }
   </ng-template>
 
+  <ng-template appCell="hrUser" let-department>
+    @if (department.hrUser; as hrUser) {
+      <a class="manager-link" [routerLink]="[usersUrl, hrUser.id]">{{ fullName(hrUser) }}</a>
+      <span class="manager-code" dir="ltr">{{ hrUser.employeeCode }}</span>
+    } @else {
+      <span class="muted" title="פניות HR של עובדי המחלקה מגיעות למשאבי אנוש מרכזי">משאבי אנוש מרכזי</span>
+    }
+  </ng-template>
+
   <ng-template appCell="activeUserCount" let-department>
     <a
       class="count-link"

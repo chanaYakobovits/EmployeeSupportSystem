@@ -5,6 +5,7 @@ import { Observable, map } from 'rxjs';
 import { environment } from '../../environments/environment';
 import { skipErrorToast } from './http-context';
 import { toHttpParams } from './query-params';
+import { Role } from '../models/auth.models';
 import { PagedResult } from '../models/paging.models';
 import {
   CreateUserRequest,
@@ -33,9 +34,12 @@ export class UsersApiService {
     });
   }
 
-  /** Active users matching the search, e.g. to choose a department manager. */
-  lookupActive(search: string, pageSize = 20): Observable<UserSummary[]> {
-    return this.list({ search, isActive: true, page: 1, pageSize, sortBy: 'name', sortDir: 'asc' }).pipe(
+  /**
+   * Active users matching the search, e.g. to choose a department manager; with a role, only users holding it
+   * (e.g. Handler for the departmental HR).
+   */
+  lookupActive(search: string, role: Role | null = null, pageSize = 20): Observable<UserSummary[]> {
+    return this.list({ search, role, isActive: true, page: 1, pageSize, sortBy: 'name', sortDir: 'asc' }).pipe(
       map((page) =>
         page.items.map(({ id, employeeCode, firstName, lastName }) => ({ id, employeeCode, firstName, lastName })),
       ),

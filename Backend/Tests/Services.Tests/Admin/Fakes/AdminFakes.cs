@@ -43,6 +43,10 @@ public sealed class FakeDepartmentRepository(FakeUserRepository users) : IDepart
     public Task<Department?> FindManagedByAsync(int userId, CancellationToken cancellationToken) =>
         Task.FromResult(Departments.Values.FirstOrDefault(d => d.ManagerUserId == userId));
 
+    public Task<IReadOnlyList<string>> GetNamesServedByHrAsync(int userId, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<string>>(Departments.Values
+            .Where(d => d.HrUserId == userId).Select(d => d.Name).Order().ToList());
+
     public Task<int> CountActiveUsersAsync(int departmentId, CancellationToken cancellationToken) =>
         Task.FromResult(users.Users.Count(u => u.DepartmentId == departmentId && u.IsActive));
 
@@ -58,9 +62,11 @@ public sealed class FakeDepartmentRepository(FakeUserRepository users) : IDepart
     private DepartmentDto ToDto(Department d)
     {
         var manager = users.Users.SingleOrDefault(u => u.Id == d.ManagerUserId);
+        var hr = users.Users.SingleOrDefault(u => u.Id == d.HrUserId);
         var members = users.Users.Where(u => u.DepartmentId == d.Id && u.IsActive).ToList();
         return new DepartmentDto(d.Id, d.Name, d.IsActive,
             manager is null ? null : new UserSummaryDto(manager.Id, manager.EmployeeCode, manager.FirstName, manager.LastName),
+            hr is null ? null : new UserSummaryDto(hr.Id, hr.EmployeeCode, hr.FirstName, hr.LastName),
             members.Count, members.Count(u => u.Roles.Any(r => r.Role == Role.Handler)));
     }
 }

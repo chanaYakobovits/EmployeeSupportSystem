@@ -171,6 +171,9 @@ namespace Repositories.Data.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<int?>("HrUserId")
+                        .HasColumnType("int");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
@@ -186,6 +189,8 @@ namespace Repositories.Data.Migrations
                         .HasColumnType("int");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("HrUserId");
 
                     b.HasIndex("ManagerUserId");
 
@@ -813,6 +818,11 @@ namespace Repositories.Data.Migrations
 
             modelBuilder.Entity("Common.Models.Department", b =>
                 {
+                    b.HasOne("Common.Models.User", "HrUser")
+                        .WithMany()
+                        .HasForeignKey("HrUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("Common.Models.User", "Manager")
                         .WithMany()
                         .HasForeignKey("ManagerUserId")
@@ -823,6 +833,8 @@ namespace Repositories.Data.Migrations
                         .HasForeignKey("OrganizationId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.Navigation("HrUser");
 
                     b.Navigation("Manager");
 

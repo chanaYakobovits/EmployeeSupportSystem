@@ -1080,3 +1080,87 @@ Authorization: Bearer {{noa.response.body.$.accessToken}}
 ### Take its id from Adi's history above (the attachment inside the comment with "isInternal": true).
 GET {{API_HostAddress}}/api/tickets/{{handledTicket}}/attachments/37
 Authorization: Bearer {{noa.response.body.$.accessToken}}
+
+### ======================================================================================
+### ============ Routing and SLA – task 3.3. Run --seed, then the Admin login (Yael) and the Noa login above ============
+### ======================================================================================
+### Seed: פיתוח (2) has a departmental HR – Liat Shahar (10). The other departments have none → central HR (6).
+### Until the AI (task 4.3), every new ticket goes to GENERAL right away: Status Assigned, ClassificationSource
+### Fallback, Urgency null, AiStatus Skipped, DueAt = now + 72 hours (Medium), history New → Assigned by the system.
+
+### Departments → פיתוח: "hrUser": { "id": 10, ... Liat }; the others "hrUser": null
+GET {{API_HostAddress}}/api/departments
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+
+### New ticket of Noa → 201. GENERAL routes to central HR: the handler with the fewest unresolved tickets
+### (Yael or Adi, a tie → the lower id). The log has: "Ticket {id} routed to department 6, handler ..
+### (reason FixedDepartment, source Fallback)" – ids only.
+# @name routedTicket
+POST {{API_HostAddress}}/api/tickets
+Authorization: Bearer {{noa.response.body.$.accessToken}}
+Content-Type: multipart/form-data; boundary=EssBoundary
+
+--EssBoundary
+Content-Disposition: form-data; name="description"
+
+שכחתי להחתים כרטיס ביום שלישי, אשמח לתיקון הדיווח.
+--EssBoundary--
+
+### Noa sees it at once as "Assigned", category GENERAL and the handler's name; the timeline shows New → Assigned
+### (changedByName null = the system). No dueAt or urgency in the requester's DTO.
+GET {{API_HostAddress}}/api/tickets/{{routedTicket.response.body.$.id}}
+Authorization: Bearer {{noa.response.body.$.accessToken}}
+
+### Departmental HR must be an active handler: Noa (no Handler role) → 400, errors.hrUserId
+### (Note: hrUserId is part of PUT like managerUserId – leaving it out clears the departmental HR.)
+PUT {{API_HostAddress}}/api/departments/2
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "name": "פיתוח", "managerUserId": 3, "isActive": true, "hrUserId": 4 }
+
+### A handler of another department may serve פיתוח: Adi (central HR, 25) → 200, "hrUser": Adi
+PUT {{API_HostAddress}}/api/departments/2
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "name": "פיתוח", "managerUserId": 3, "isActive": true, "hrUserId": 25 }
+
+### Back to Liat → 200
+PUT {{API_HostAddress}}/api/departments/2
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "name": "פיתוח", "managerUserId": 3, "isActive": true, "hrUserId": 10 }
+
+### Deactivating a departmental HR handler (Liat) → 422 "department-hr-deactivation" ("העובד מוגדר כאיש HR מחלקתי של מחלקת פיתוח")
+PATCH {{API_HostAddress}}/api/users/10/active
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "isActive": false }
+
+### Removing Handler from her → 422 "department-hr-role"
+PUT {{API_HostAddress}}/api/users/10
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "firstName": "ליאת", "lastName": "שחר", "email": "liat.shahar@example.com", "departmentId": 2,
+  "jobTitle": "רכזת משאבי אנוש מחלקתית", "roles": ["Employee"] }
+
+### The fallback (GENERAL, 8) must keep a fixed department – it defines central HR → 422 "fallback-category-routing"
+PUT {{API_HostAddress}}/api/categories/8
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "name": "כללי", "description": "תור גיבוי", "routingType": "RequesterDepartmentHr", "handlingDepartmentId": null, "isActive": true }
+
+### SLA change → new tickets use it at once (the SLA cache is evicted): set medium to 48 and open another ticket;
+### its DueAt (staff view, task 3.4 – for now in the database) is now + 48 hours.
+PUT {{API_HostAddress}}/api/sla-policies
+Authorization: Bearer {{admin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "critical": 4, "high": 24, "medium": 48, "low": 120 }
+
+### Reset all of the above: dotnet run --project API -- --seed

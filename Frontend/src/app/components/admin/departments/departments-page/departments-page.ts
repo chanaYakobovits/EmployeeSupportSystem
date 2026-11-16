@@ -39,6 +39,7 @@ export class DepartmentsPage {
   protected readonly columns: readonly DataTableColumn[] = [
     { key: 'name', header: 'שם המחלקה' },
     { key: 'manager', header: 'מנהל/ת' },
+    { key: 'hrUser', header: 'איש HR מחלקתי' },
     { key: 'activeUserCount', header: 'עובדים פעילים', align: 'center' },
     { key: 'handlerCount', header: 'גורמים מטפלים', align: 'center' },
     { key: 'isActive', header: 'סטטוס' },

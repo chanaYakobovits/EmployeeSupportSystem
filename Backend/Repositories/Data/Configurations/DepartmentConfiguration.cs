@@ -24,6 +24,14 @@ public class DepartmentConfiguration : IEntityTypeConfiguration<Department>
             .HasForeignKey(d => d.ManagerUserId)
             .IsRequired(false);
 
+        // The departmental HR handler (task 3.3) – a user, possibly of another department. Users are never deleted
+        // (deactivated instead), and an HR handler cannot be deactivated, so no cascade.
+        builder.HasOne(d => d.HrUser)
+            .WithMany()
+            .HasForeignKey(d => d.HrUserId)
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.Restrict);
+
         // Department names are unique within an organization (task 2.3).
         builder.HasIndex(d => new { d.OrganizationId, d.Name }).IsUnique().HasDatabaseName(UniqueIndexes.DepartmentName);
     }

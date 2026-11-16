@@ -28,6 +28,7 @@ public sealed class MemoryReferenceDataCache(IMemoryCache cache) : IReferenceDat
     {
         ReferenceData.Departments => $"departments:{organizationId}",
         ReferenceData.Categories => $"categories:{organizationId}",
+        ReferenceData.SlaPolicies => $"sla:{organizationId}",
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
     };
 }

@@ -96,7 +96,7 @@ public abstract class AdminTestBase
             ReferenceData, new CreateCategoryRequestValidator(), new UpdateCategoryRequestValidator(),
             new CapturingLogger<CategoryService>());
 
-        SlaPolicyService = new SlaPolicyService(SlaPolicies, AuditLog, UnitOfWork, Clock, CurrentUser,
+        SlaPolicyService = new SlaPolicyService(SlaPolicies, AuditLog, UnitOfWork, Clock, CurrentUser, ReferenceData,
             new UpdateSlaPoliciesRequestValidator(), new CapturingLogger<SlaPolicyService>());
     }
 

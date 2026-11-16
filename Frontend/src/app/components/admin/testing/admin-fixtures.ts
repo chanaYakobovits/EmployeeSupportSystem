@@ -32,6 +32,7 @@ export function fakeDepartment(overrides: Partial<Department> = {}): Department 
     name: 'כספים',
     isActive: true,
     manager: null,
+    hrUser: null,
     activeUserCount: 4,
     handlerCount: 1,
     ...overrides,

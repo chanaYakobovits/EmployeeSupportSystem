@@ -1,4 +1,4 @@
-import { Injectable, inject, signal } from '@angular/core';
+import { Injectable, Signal, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Observable, Subject, catchError, debounceTime, distinctUntilChanged, finalize, map, of, switchMap, tap } from 'rxjs';
 
@@ -8,38 +8,29 @@ import { CreateDepartmentRequest, Department, UpdateDepartmentRequest } from '..
 import { UserSummary } from '../models/user.models';
 import { SEARCH_DEBOUNCE_MS } from '../components/shared/search-field/search-field';
 
-/** State of the department dialog: manager candidates (server search) and saving. Provided by DepartmentDialog. */
+/** Server search of users for an autocomplete field: the candidates for the typed text. */
+export interface UserSearch {
+  readonly candidates: Signal<UserSummary[]>;
+  readonly searching: Signal<boolean>;
+  search(term: string): void;
+}
+
+/**
+ * State of the department dialog: manager candidates (active employees), departmental HR candidates (active handlers,
+ * of any department – task 3.3) and saving. Provided by DepartmentDialog.
+ */
 @Injectable()
 export class DepartmentDialogStore {
   private readonly usersApi = inject(UsersApiService);
   private readonly departmentsApi = inject(DepartmentsApiService);
-  private readonly terms = new Subject<string>();
 
-  /** Active users matching the typed text – a manager is chosen among active employees. */
-  readonly candidates = signal<UserSummary[]>([]);
-  readonly searching = signal(false);
+  /** A manager is chosen among the active employees. */
+  readonly managers = this.userSearch((term) => this.usersApi.lookupActive(term));
+
+  /** The departmental HR is chosen among the active handlers. */
+  readonly hrUsers = this.userSearch((term) => this.usersApi.lookupActive(term, 'Handler'));
+
   readonly saving = signal(false);
-
-  constructor() {
-    // Same pattern as list search (spec 10.4): wait for a pause, skip repeats, cancel the previous request.
-    this.terms
-      .pipe(
-        map((term) => term.trim()),
-        debounceTime(SEARCH_DEBOUNCE_MS),
-        distinctUntilChanged(),
-        tap(() => this.searching.set(true)),
-        switchMap((term) => this.usersApi.lookupActive(term).pipe(catchError(() => of<UserSummary[]>([])))),
-        takeUntilDestroyed(),
-      )
-      .subscribe((candidates) => {
-        this.candidates.set(candidates);
-        this.searching.set(false);
-      });
-  }
-
-  search(term: string): void {
-    this.terms.next(term);
-  }
 
   create(request: CreateDepartmentRequest): Observable<Department> {
     this.saving.set(true);
@@ -49,5 +40,32 @@ export class DepartmentDialogStore {
   update(id: number, request: UpdateDepartmentRequest): Observable<Department> {
     this.saving.set(true);
     return this.departmentsApi.update(id, request).pipe(finalize(() => this.saving.set(false)));
+  }
+
+  /** Same pattern as list search (spec 10.4): wait for a pause, skip repeats, cancel the previous request. */
+  private userSearch(lookup: (term: string) => Observable<UserSummary[]>): UserSearch {
+    const terms = new Subject<string>();
+    const candidates = signal<UserSummary[]>([]);
+    const searching = signal(false);
+
+    terms
+      .pipe(
+        map((term) => term.trim()),
+        debounceTime(SEARCH_DEBOUNCE_MS),
+        distinctUntilChanged(),
+        tap(() => searching.set(true)),
+        switchMap((term) => lookup(term).pipe(catchError(() => of<UserSummary[]>([])))),
+        takeUntilDestroyed(),
+      )
+      .subscribe((found) => {
+        candidates.set(found);
+        searching.set(false);
+      });
+
+    return {
+      candidates: candidates.asReadonly(),
+      searching: searching.asReadonly(),
+      search: (term) => terms.next(term),
+    };
   }
 }

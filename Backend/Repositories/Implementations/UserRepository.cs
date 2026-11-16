@@ -2,7 +2,9 @@
 using System.Linq.Expressions;
 using Common.DTOs.Auth;
 using Common.DTOs.Invitations;
+using Common.Constants;
 using Common.DTOs.Paging;
+using Common.DTOs.Routing;
 using Common.DTOs.Users;
 using Common.Enums;
 using Common.Exceptions;
@@ -103,6 +105,26 @@ public sealed class UserRepository(AppDbContext db) : IUserRepository
         return viewer is null
             ? null
             : new Common.DTOs.Tickets.TicketViewer(viewer.Id, viewer.DepartmentId, viewer.ManagedDepartmentId, viewer.Roles);
+    }
+
+    // ===================== Routing (task 3.3) =====================
+
+    public async Task<IReadOnlyList<HandlerCandidate>> GetHandlerCandidatesAsync(IReadOnlyCollection<int> departmentIds,
+        int? userId, CancellationToken cancellationToken)
+    {
+        var ids = departmentIds.ToList();
+        return await db.Users
+            .AsNoTracking()
+            .Where(u => u.IsActive
+                        && u.Roles.Any(r => r.Role == Role.Handler)
+                        && (ids.Contains(u.DepartmentId) || u.Id == userId))
+            .OrderBy(u => u.Id)
+            .Select(u => new HandlerCandidate(
+                u.Id,
+                u.DepartmentId,
+                // Load = the handler's assigned tickets that are not resolved yet, in any department.
+                db.Tickets.Count(t => t.AssignedToUserId == u.Id && TicketStatuses.Unresolved.Contains(t.Status))))
+            .ToListAsync(cancellationToken);
     }
 
     // ===================== User administration (task 2.3) =====================

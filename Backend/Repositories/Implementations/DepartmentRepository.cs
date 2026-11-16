@@ -35,6 +35,14 @@ public sealed class DepartmentRepository(AppDbContext db) : IDepartmentRepositor
     public Task<Department?> FindManagedByAsync(int userId, CancellationToken cancellationToken) =>
         db.Departments.FirstOrDefaultAsync(d => d.ManagerUserId == userId, cancellationToken);
 
+    public async Task<IReadOnlyList<string>> GetNamesServedByHrAsync(int userId, CancellationToken cancellationToken) =>
+        await db.Departments
+            .AsNoTracking()
+            .Where(d => d.HrUserId == userId)
+            .OrderBy(d => d.Name)
+            .Select(d => d.Name)
+            .ToListAsync(cancellationToken);
+
     public Task<int> CountActiveUsersAsync(int departmentId, CancellationToken cancellationToken) =>
         db.Users.CountAsync(u => u.DepartmentId == departmentId && u.IsActive, cancellationToken);
 
@@ -51,6 +59,9 @@ public sealed class DepartmentRepository(AppDbContext db) : IDepartmentRepositor
             d.Manager == null
                 ? null
                 : new UserSummaryDto(d.Manager.Id, d.Manager.EmployeeCode, d.Manager.FirstName, d.Manager.LastName),
+            d.HrUser == null
+                ? null
+                : new UserSummaryDto(d.HrUser.Id, d.HrUser.EmployeeCode, d.HrUser.FirstName, d.HrUser.LastName),
             d.Users.Count(u => u.IsActive),
             d.Users.Count(u => u.IsActive && u.Roles.Any(r => r.Role == Role.Handler))));
 }

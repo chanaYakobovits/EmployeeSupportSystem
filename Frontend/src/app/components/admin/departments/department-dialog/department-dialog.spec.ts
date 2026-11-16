@@ -1,5 +1,5 @@
 import { ANIMATION_MODULE_TYPE } from '@angular/core';
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { provideRouter } from '@angular/router';
 import { of, throwError } from 'rxjs';
@@ -15,11 +15,12 @@ describe('DepartmentDialog', () => {
   let element: HTMLElement;
   let departmentsApi: jasmine.SpyObj<DepartmentsApiService>;
   let dialogRef: jasmine.SpyObj<MatDialogRef<DepartmentDialog, Department>>;
+  let usersApi: jasmine.SpyObj<UsersApiService>;
 
   function render(department: Department | null): void {
     departmentsApi = jasmine.createSpyObj<DepartmentsApiService>('DepartmentsApiService', ['create', 'update']);
     dialogRef = jasmine.createSpyObj<MatDialogRef<DepartmentDialog, Department>>('MatDialogRef', ['close']);
-    const usersApi = jasmine.createSpyObj<UsersApiService>('UsersApiService', ['lookupActive']);
+    usersApi = jasmine.createSpyObj<UsersApiService>('UsersApiService', ['lookupActive']);
     usersApi.lookupActive.and.returnValue(of([]));
     TestBed.configureTestingModule({
       imports: [DepartmentDialog],
@@ -56,8 +57,46 @@ describe('DepartmentDialog', () => {
     input.dispatchEvent(new Event('input'));
     submit();
 
-    expect(departmentsApi.create).toHaveBeenCalledOnceWith({ name: 'רכש', managerUserId: null });
+    expect(departmentsApi.create).toHaveBeenCalledOnceWith({ name: 'רכש', managerUserId: null, hrUserId: null });
     expect(dialogRef.close).toHaveBeenCalledOnceWith(created);
+  });
+
+  it('searches the departmental HR among active handlers only, and managers among all active employees', fakeAsync(() => {
+    render(null);
+    // The first (empty) searches start on render, after the debounce.
+    tick(1000);
+
+    expect(usersApi.lookupActive).toHaveBeenCalledWith('');
+    expect(usersApi.lookupActive).toHaveBeenCalledWith('', 'Handler');
+  }));
+
+  it('keeps the departmental HR on save and can clear it', () => {
+    const hrUser = { id: 10, employeeCode: 'EMP-00010', firstName: 'ליאת', lastName: 'שחר' };
+    render(fakeDepartment({ hrUser }));
+    departmentsApi.update.and.returnValue(of(fakeDepartment()));
+
+    submit();
+    expect(departmentsApi.update).toHaveBeenCalledWith(2, jasmine.objectContaining({ hrUserId: 10 }));
+
+    (element.querySelector('button[aria-label="ללא איש HR מחלקתי"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    submit();
+    expect(departmentsApi.update).toHaveBeenCalledWith(2, jasmine.objectContaining({ hrUserId: null }));
+  });
+
+  it('400 on hrUserId: the message is shown next to the departmental HR field', () => {
+    render(fakeDepartment());
+    departmentsApi.update.and.returnValue(
+      throwError(() =>
+        problemResponse(400, 'validation', 'הנתונים שנשלחו אינם תקינים', {
+          errors: { hrUserId: ['יש לבחור גורם מטפל פעיל בארגון'] },
+        }),
+      ),
+    );
+    submit();
+
+    expect(fieldError('hrUser')).toContain('יש לבחור גורם מטפל פעיל בארגון');
+    expect(dialogRef.close).not.toHaveBeenCalled();
   });
 
   it('409: a taken name is shown next to the name field', () => {

@@ -41,9 +41,11 @@ public static class DependencyInjection
         services.AddScoped<ITicketService, TicketService>();
         services.AddScoped<ITicketAccess, TicketAccess>();
         services.AddScoped<ITicketConversationService, TicketConversationService>();
+        services.AddScoped<IRoutingService, Services.Implementations.Routing.RoutingService>();
+        services.AddScoped<ITicketClassifier, TicketClassifier>();
         services.AddAttachmentStorage(configuration);
 
-        // Departments and categories per organization, 10 minutes (spec 11.3).
+        // Departments, categories and SLA hours per organization, 10 minutes (spec 11.3).
         services.AddSingleton<IReferenceDataCache, MemoryReferenceDataCache>();
 
         // Request validators (spec 11.4), run by the services. Stateless, so one instance each.

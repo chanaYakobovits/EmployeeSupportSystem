@@ -106,6 +106,26 @@ public sealed class CategoryServiceTests : AdminTestBase
     }
 
     [Fact]
+    public async Task The_fallback_category_cannot_be_routed_to_departmental_hr()
+    {
+        // Its handling department is central HR (task 3.3): it must keep one.
+        var exception = await Assert.ThrowsAsync<BusinessRuleException>(() =>
+            Update(GeneralId, routingType: RoutingType.RequesterDepartmentHr, handlingDepartmentId: null));
+
+        Assert.Equal("fallback-category-routing", exception.ErrorType);
+        Assert.Equal(RoutingType.FixedDepartment, Categories.Categories[GeneralId].RoutingType);
+        Assert.Equal(HrId, Categories.Categories[GeneralId].HandlingDepartmentId);
+    }
+
+    [Fact]
+    public async Task The_fallback_category_may_move_to_another_department()
+    {
+        var result = await Update(GeneralId, handlingDepartmentId: DevelopmentId);
+
+        Assert.Equal(DevelopmentId, result.Category.HandlingDepartment?.Id);
+    }
+
+    [Fact]
     public async Task The_fallback_category_can_be_renamed_and_stays_the_fallback()
     {
         var result = await Update(GeneralId, name: "כללי – תור גיבוי");

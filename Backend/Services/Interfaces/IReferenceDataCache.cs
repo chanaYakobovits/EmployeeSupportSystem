@@ -4,7 +4,10 @@ namespace Services.Interfaces;
 public enum ReferenceData
 {
     Departments,
-    Categories
+    Categories,
+
+    /// <summary>Resolution hours by urgency (task 3.3: read on every new ticket).</summary>
+    SlaPolicies
 }
 
 /// <summary>

@@ -187,6 +187,18 @@ public sealed class UserService : IUserService
         var managed = await _departments.FindManagedByAsync(user.Id, cancellationToken);
         DepartmentManagerRules.EnsureConsistent(roles, managed?.Name);
 
+        // A departmental HR handler must stay a handler (task 3.3) – replaced first on the departments screen.
+        if (user.Roles.Any(r => r.Role == Role.Handler) && !roles.Contains(Role.Handler))
+        {
+            var served = await _departments.GetNamesServedByHrAsync(user.Id, cancellationToken);
+            if (served.Count > 0)
+            {
+                throw new BusinessRuleException(
+                    $"העובד מוגדר כאיש HR מחלקתי של {DepartmentList(served)} ולכן חייב להחזיק בתפקיד 'גורם מטפל'",
+                    "כדי להסיר את התפקיד יש להחליף קודם את איש ה-HR במסך המחלקות.", "department-hr-role");
+            }
+        }
+
         var removesAdmin = user.Roles.Any(r => r.Role == Role.Admin) && !roles.Contains(Role.Admin);
         if (removesAdmin && user.Id == _currentUser.UserId)
         {
@@ -319,6 +331,14 @@ public sealed class UserService : IUserService
                 "יש להחליף קודם את מנהל המחלקה במסך המחלקות, ואז להשבית.", "department-manager-deactivation");
         }
 
+        // Same for a departmental HR handler (task 3.3): the department's HR tickets never lose their handler silently.
+        var served = await _departments.GetNamesServedByHrAsync(user.Id, cancellationToken);
+        if (served.Count > 0)
+        {
+            throw new BusinessRuleException($"העובד מוגדר כאיש HR מחלקתי של {DepartmentList(served)}",
+                "יש להחליף קודם את איש ה-HR במסך המחלקות, ואז להשבית.", "department-hr-deactivation");
+        }
+
         var now = _clock.UtcNow;
         var unassigned = await _unitOfWork.ExecuteInTransactionAsync(async ct =>
         {
@@ -343,6 +363,10 @@ public sealed class UserService : IUserService
     }
 
     // ===================== Helpers =====================
+
+    /// <summary>"מחלקת פיתוח" / "המחלקות פיתוח, מזכירות".</summary>
+    private static string DepartmentList(IReadOnlyList<string> names) =>
+        names.Count == 1 ? $"מחלקת {names[0]}" : $"המחלקות {string.Join(", ", names)}";
 
     /// <summary>
     /// The organization must keep at least one active Admin besides <paramref name="userId"/>.

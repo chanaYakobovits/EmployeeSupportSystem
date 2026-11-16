@@ -391,23 +391,27 @@ internal sealed class TicketSeedGenerator(SeedOrganization organization, Random 
         _ => throw new ArgumentOutOfRangeException(nameof(step))
     };
 
-    /// <summary>Routing rules of spec 3.5, with simple load balancing between the department's handlers.</summary>
+    /// <summary>
+    /// Routing rules of spec 3.5, with simple load balancing between the department's handlers – the same rules as
+    /// Services' RoutingRules (this layer cannot reference Services). The departmental HR is Department.HrUserId, and the
+    /// ticket goes to the HR handler's own department.
+    /// </summary>
     private (Department Department, User? Handler) Route(Category category, User requester)
     {
         if (category.RoutingType == RoutingType.RequesterDepartmentHr)
         {
+            var hrUserId = organization.Departments.Values.Single(d => d.Id == requester.DepartmentId).HrUserId;
             var departmentHr = organization.Users
-                .Where(u => u.Person.IsDepartmentHr && u.IsActiveHandler
-                            && u.User.DepartmentId == requester.DepartmentId && u.User.Id != requester.Id)
+                .Where(u => u.User.Id == hrUserId && u.IsActiveHandler && u.User.Id != requester.Id)
                 .Select(u => u.User)
                 .FirstOrDefault();
 
             if (departmentHr is not null)
             {
-                return (organization.Departments.Values.Single(d => d.Id == requester.DepartmentId), departmentHr);
+                return (organization.Departments.Values.Single(d => d.Id == departmentHr.DepartmentId), departmentHr);
             }
 
-            // No departmental HR -> the central HR queue.
+            // No departmental HR (or it is the requester) -> central HR.
             return (HumanResources, PickHandler(HumanResources.Id, requester));
         }
 
@@ -418,8 +422,7 @@ internal sealed class TicketSeedGenerator(SeedOrganization organization, Random 
 
     private User? PickHandler(int departmentId, User requester) =>
         organization.Users
-            .Where(u => u.IsActiveHandler && !u.Person.IsDepartmentHr
-                        && u.User.DepartmentId == departmentId && u.User.Id != requester.Id)
+            .Where(u => u.IsActiveHandler && u.User.DepartmentId == departmentId && u.User.Id != requester.Id)
             .Select(u => u.User)
             .OrderBy(u => _handlerLoad.GetValueOrDefault(u.Id))
             .ThenBy(u => u.Id)

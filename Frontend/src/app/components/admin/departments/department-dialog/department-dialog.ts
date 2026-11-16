@@ -30,13 +30,17 @@ export interface DepartmentDialogData {
   department: Department | null;
 }
 
-/** The manager field holds the chosen user, or the text being typed until one is chosen. */
-type ManagerValue = UserSummary | string | null;
+/** A user field (manager, departmental HR) holds the chosen user, or the text being typed until one is chosen. */
+type UserValue = UserSummary | string | null;
 
-/** Text that was typed but not chosen from the list. Empty text = no manager. */
-function managerChosen(control: AbstractControl<ManagerValue>): ValidationErrors | null {
+/** Text that was typed but not chosen from the list. Empty text = nobody. */
+function userChosen(control: AbstractControl<UserValue>): ValidationErrors | null {
   const value = control.value;
   return typeof value === 'string' && value.trim() !== '' ? { notChosen: true } : null;
+}
+
+function chosenId(value: UserValue): number | null {
+  return value && typeof value === 'object' ? value.id : null;
 }
 
 export function managerLabel(user: UserSummary): string {
@@ -46,6 +50,7 @@ export function managerLabel(user: UserSummary): string {
 /**
  * Create / edit a department (spec 7.8): name + manager among the active employees, or no manager.
  * Appointing a manager gives them the DepartmentManager role; the previous manager loses it (CLAUDE.md).
+ * Optional departmental HR (task 3.3) among the active handlers of any department.
  * Closes with the saved department.
  */
 @Component({
@@ -83,25 +88,22 @@ export class DepartmentDialog {
       nonNullable: true,
       validators: [Validators.required, Validators.maxLength(100), (c: AbstractControl<string>) => (c.value.trim() ? null : { required: true })],
     }),
-    manager: new FormControl<ManagerValue>(this.department?.manager ?? null, { validators: [managerChosen] }),
+    manager: new FormControl<UserValue>(this.department?.manager ?? null, { validators: [userChosen] }),
+    hrUser: new FormControl<UserValue>(this.department?.hrUser ?? null, { validators: [userChosen] }),
   });
 
-  protected readonly displayManager = (value: ManagerValue): string =>
+  protected readonly displayUser = (value: UserValue): string =>
     typeof value === 'string' ? value : value ? managerLabel(value) : '';
 
   protected readonly managerLabel = managerLabel;
 
   constructor() {
-    this.form.controls.manager.valueChanges.pipe(takeUntilDestroyed()).subscribe((value) => {
-      if (typeof value === 'string') {
-        this.store.search(value);
-      }
-    });
-    this.store.search('');
+    this.searchWhileTyping(this.form.controls.manager, this.store.managers.search);
+    this.searchWhileTyping(this.form.controls.hrUser, this.store.hrUsers.search);
   }
 
-  protected clearManager(): void {
-    this.form.controls.manager.setValue(null);
+  protected clear(control: 'manager' | 'hrUser'): void {
+    this.form.controls[control].setValue(null);
   }
 
   protected submit(): void {
@@ -111,15 +113,22 @@ export class DepartmentDialog {
     this.alert.set(null);
     if (this.form.invalid) {
       this.form.markAllAsTouched();
-      this.focus(this.form.controls.name.invalid ? 'name' : 'manager');
+      const controls = this.form.controls;
+      this.focus(controls.name.invalid ? 'name' : controls.manager.invalid ? 'manager' : 'hrUser');
       return;
     }
 
-    const { name, manager } = this.form.getRawValue();
-    const managerUserId = manager && typeof manager === 'object' ? manager.id : null;
+    const { name, manager, hrUser } = this.form.getRawValue();
+    const managerUserId = chosenId(manager);
+    const hrUserId = chosenId(hrUser);
     const request$ = this.department
-      ? this.store.update(this.department.id, { name: name.trim(), managerUserId, isActive: this.department.isActive })
-      : this.store.create({ name: name.trim(), managerUserId });
+      ? this.store.update(this.department.id, {
+          name: name.trim(),
+          managerUserId,
+          isActive: this.department.isActive,
+          hrUserId,
+        })
+      : this.store.create({ name: name.trim(), managerUserId, hrUserId });
 
     request$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (saved) => this.dialogRef.close(saved),
@@ -127,13 +136,23 @@ export class DepartmentDialog {
     });
   }
 
+  /** Each text typed in a user field searches the server (debounced in the store); the empty field lists the first ones. */
+  private searchWhileTyping(control: FormControl<UserValue>, search: (term: string) => void): void {
+    control.valueChanges.pipe(takeUntilDestroyed()).subscribe((value) => {
+      if (typeof value === 'string') {
+        search(value);
+      }
+    });
+    search('');
+  }
+
   /**
    * Name taken (409) → next to the name. Manager inactive (400) or already managing another department (422) →
-   * next to the manager field.
+   * next to the manager field. Departmental HR not an active handler (400) → next to its field.
    */
   private showError(error: unknown): void {
     const applied = applyServerErrors(this.form, error, {
-      fieldAliases: { managerUserId: 'manager' },
+      fieldAliases: { managerUserId: 'manager', hrUserId: 'hrUser' },
       typeFields: { 'manages-other-department': 'manager' },
     });
     if (applied.fields.length > 0 && applied.unmatched.length === 0) {

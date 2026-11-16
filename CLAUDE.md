@@ -9,9 +9,9 @@
   2.1 אימות, 2.2 מסכי התחברות, 2.3א API לניהול עובדים ומחלקות, 2.3ב מסכי ניהול עובדים ומחלקות,
   2.4 ניהול קטגוריות ו-SLA (API + מסכים), 3.1 חלק א' (API ליצירת פנייה וצפייה של עובד),
   3.1 חלק ב' (מסכי "הפניות שלי", "פנייה חדשה", "צפייה בפנייה" ב-Angular), 3.2 חלק א' (API לקבצים ותגובות),
-  3.2 חלק ב' (קבצים ותגובות במסכי העובד ב-Angular).
+  3.2 חלק ב' (קבצים ותגובות במסכי העובד ב-Angular), 3.3 ניתוב ו-SLA (כולל איש HR מחלקתי).
 - שינוי מבנה Frontend (לא באפיון): `src/app` עבר ממבנה core/features/shared למבנה לפי סוג קובץ – הושלם.
-- הבא בתור: 3.3 – ניתוב ו-SLA.
+- הבא בתור: 3.4 – תור מטפל ומסך טיפול.
 - תוספת שלא באפיון: בדיקת איכות סיווג AI על 30 פניות לדוגמה – אחרי משימה 4.3.
 - תוספת שלא באפיון: הזמנת עובד במייל (האפיון 14 שאלה 3, "בעתיד"). שלב א' (שרת) ושלב ב' (מסך set-password, סטטוס הזמנה
   ברשימה ובעריכה, שליחה מחדש, סינון לפי סטטוס הזמנה) – הושלמו.
@@ -266,6 +266,31 @@
     הנתיב `tickets/:id` מוגן ב-`unsavedChangesGuard` + `beforeunload`.
   * מונה תווים משותף: `components/employee/character-count.ts` (`describeCount`, `COUNTER_ANNOUNCE_DELAY_MS`).
 
+- ניתוב ו-SLA (משימה 3.3):
+  * איש HR מחלקתי: `Departments.HrUserId` (רשות). עובד פעיל עם Handler, גם ממחלקה אחרת, ויכול לשרת כמה מחלקות
+    (400 על `hrUserId` אחרת). השבתה שלו ← 422 `department-hr-deactivation`, הסרת Handler ממנו ← 422 `department-hr-role`
+    (`GetNamesServedByHrAsync`). PUT של מחלקה מלא: hrUserId חסר = ניקוי (כמו managerUserId) – גם ב-`DepartmentsStore.setActive`.
+    Seeder: ליאת (IsDepartmentHr) = HrUserId של פיתוח.
+  * "משאבי אנוש מרכזי" = המחלקה המטפלת של קטגוריית הגיבוי (IsFallback), לא לפי שם. לכן הגיבוי חייב להישאר FixedDepartment
+    (422 `fallback-category-routing`); מותר להעביר אותו למחלקה אחרת.
+  * הכללים: `RoutingRules.Decide` (טהור, `Services/Implementations/Routing`). FixedDepartment ← מחלקת הקטגוריה; RequesterDepartmentHr ←
+    איש ה-HR, ו-**המחלקה המטפלת = המחלקה של איש ה-HR** (לא של הפונה – שמטפלים אחרים במחלקת הפונה לא יראו בתור פניות HR של
+    עמיתיהם). HR חסר / לא מועמד / הוא הפונה ← מרכזי. בחירה: לא הפונה, הכי מעט `TicketStatuses.Unresolved`, שוויון ← Id נמוך.
+    אין מטפל ← מרכזי; גם שם אין ← תור המרכזי (Handler null). איש HR נשאר מועמד רגיל במחלקה שלו. `RoutingReason` נרשם ללוג.
+    ה-Seeder (`TicketSeedGenerator.Route`) מחזיק עותק של אותם כללים (Repositories לא מכיר את Services) – לשנות יחד.
+  * `RoutingService` (IRoutingService): קטגוריות ומחלקות מה-Cache לפי ארגון מפורש (מוכן ל-Worker), מועמדים מה-DB בשאילתה אחת
+    (`GetHandlerCandidatesAsync`). קריאות ה-Cache דרך `ReferenceDataLookups` בלבד (אותו טיפוס לכל מפתח).
+  * SLA: `SlaCalculator` (טהור) – CreatedAt + שעות הדחיפות, ריק ← Medium, רמה חסרה ← `SlaDefaults`. שעות ה-SLA ב-Cache
+    (`ReferenceData.SlaPolicies`, `sla:{org}`), ‏`SlaPolicyService.UpdateAsync` מנקה. ב-3.5 – להוסיף את זמן ההמתנה.
+  * נקודת החיבור לסיווג: `ITicketClassifier.ApplyAsync(ticket, TicketClassification(categoryId, urgency, source), now)` – ל-3.3,
+    ל-AI (4.3) ולסיווג ידני (3.4). בלי SaveChanges. קטגוריה חדשה (או פנייה שלא נותבה) ← ניתוב מחדש; דחיפות בלבד ← רק DueAt.
+    DueAt תמיד מחושב מחדש. New ← Assigned + שורת היסטוריה של המערכת; סטטוס אחר לא משתנה (מה קורה ב-InProgress בהעברה – 3.4).
+    מחזיר את ההחלטה, והקורא רושם `RoutingLog.Routed` אחרי השמירה (מזהים וסיבה בלבד).
+  * יצירת פנייה (`StageNewTicketAsync`): `AiStatus.Skipped` (ערך חדש = 5: "לא בוצע ניתוח", לא Failed ולא Pending), ואז
+    GENERAL / Fallback / Urgency null ← Assigned, DueAt = +72h, שתי שורות היסטוריה – SaveChanges אחד. ב-4.3 זה יישאר המסלול
+    של `Ai:Enabled=false`; מדד "סווג אוטומטית" (7.9) לפי ClassificationSource. אין גיבוי פעיל ← נשמרת New בלי ניתוב + LogError.
+  * ה-Seeder עדיין יוצר 6 פניות New עם AiStatus Pending/Processing (הדגמה של עולם ה-AI) – אין Worker שיטפל בהן עד 4.3.
+
 ## בהמשך
 - משימה 2.2: לטעון את Shell ב-loadComponent (lazy), מסך ההתחברות מחוצה לו –
   כדי להוריד את ה-bundle הראשוני מתחת ל-500KB. לא להגדיל את ה-budget.
@@ -277,6 +302,8 @@
 - 3.5: העובד לא רואה נימוקים בציר הזמן – רק תגובות שנכתבו אליו.
 - 3.5: נקודת החיבור ב-`TicketConversationService.AddCommentAsync`: תגובת פונה ב-WaitingForEmployee ← InProgress
   (TicketStatusRules + שורת היסטוריה, באותו save). ‏IsResolution נקבע רק משם ("שלח פתרון").
+- 3.4: endpoint הסיווג (PATCH /classification) קורא ל-`ITicketClassifier.ApplyAsync` עם `ClassificationSource.Manual`
+  (+ ולידציה שהקטגוריה פעילה, נימוק בהיסטוריה). 4.3: אותה מתודה עם `Ai`, ו-`RoutingService` עם `job.OrganizationId`.
 - 3.4: אותם היקפים של `TicketAccessPolicy` כ-Expression לרשימות הצוות (עם בדיקה ששתי הגרסאות תואמות). תצוגת צוות
   ל-GET /tickets/{id}. ‏AuditLog "צפייה בפנייה של עובד אחר" (6.4).
 - 4.3: ה-AI מקבל רק את התיאור המנוקה – לא קבצים ולא שמות קבצים (הערה ב-`IAiClient` וב-`StageNewTicket`).

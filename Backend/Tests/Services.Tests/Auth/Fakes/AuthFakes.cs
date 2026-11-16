@@ -49,6 +49,10 @@ public sealed class FakeUserRepository : IUserRepository
     public Task<Common.DTOs.Tickets.TicketViewer?> GetTicketViewerAsync(int userId, CancellationToken cancellationToken) =>
         throw new NotSupportedException("Tested with EF Core InMemory in Tickets/*.");
 
+    public Task<IReadOnlyList<Common.DTOs.Routing.HandlerCandidate>> GetHandlerCandidatesAsync(
+        IReadOnlyCollection<int> departmentIds, int? userId, CancellationToken cancellationToken) =>
+        throw new NotSupportedException("Tested with EF Core InMemory in Routing/*.");
+
     public Task<CurrentUserDto?> GetCurrentUserAsync(int userId, CancellationToken cancellationToken)
     {
         var user = Users.SingleOrDefault(u => u.Id == userId && u.IsActive);

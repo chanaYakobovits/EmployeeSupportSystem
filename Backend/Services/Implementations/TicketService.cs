@@ -1,4 +1,5 @@
 using Common.DTOs.Paging;
+using Common.DTOs.Routing;
 using Common.DTOs.Tickets;
 using Common.Enums;
 using Common.Exceptions;
@@ -25,6 +26,8 @@ public sealed class TicketService(
     IUserRepository users,
     IUnitOfWork unitOfWork,
     ITicketAccess ticketAccess,
+    IRoutingService routing,
+    ITicketClassifier classifier,
     IFileStorage storage,
     IDateTimeProvider clock,
     ICurrentUser currentUser,
@@ -61,15 +64,19 @@ public sealed class TicketService(
             ticket.Attachments.Add(await staged.SaveAttachmentAsync(file, requesterId, now, cancellationToken));
         }
 
-        StageNewTicket(ticket, now);
+        var routed = await StageNewTicketAsync(ticket, now, cancellationToken);
 
-        // One SaveChanges = one transaction for the ticket and every row staged with it (spec 4.3: the ticket and its
-        // analysis job are never saved apart).
+        // One SaveChanges = one transaction for the ticket and every row staged with it: routing, SLA and the history
+        // (spec 4.3: the ticket and its analysis job are never saved apart).
         await unitOfWork.SaveChangesAsync(cancellationToken);
         staged.Commit();
 
         logger.LogInformation("Ticket {TicketId} created by user {UserId} with {AttachmentCount} attachments",
             ticket.Id, requesterId, ticket.Attachments.Count);
+        if (routed is not null)
+        {
+            RoutingLog.Routed(logger, ticket.Id, routed, ClassificationSource.Fallback);
+        }
         foreach (var attachment in ticket.Attachments)
         {
             logger.LogInformation("Attachment {AttachmentId} added to ticket {TicketId} ({SizeBytes} bytes, {ContentType})",
@@ -80,12 +87,15 @@ public sealed class TicketService(
     }
 
     /// <summary>
-    /// Everything saved together with a new ticket. Later tasks add their rows here, in the same transaction:
-    /// routing and SLA (3.3) and the AI analysis job (4.3).
+    /// Everything saved together with a new ticket, in the same transaction: the opening history row, and the
+    /// fallback classification with its routing and SLA (task 3.3: no AI yet, so every ticket goes to GENERAL right
+    /// away, AiStatus Skipped). Task 4.3 adds the AI analysis job here, and keeps this path for Ai:Enabled = false.
     /// The AI job of 4.3 analyzes only the redacted description – attachments are never sent to the AI (spec 4.3, 5.1):
     /// not their content, not their names.
     /// </summary>
-    private void StageNewTicket(Ticket ticket, DateTime now)
+    /// <returns>The routing decision, to log after the save; null if the ticket could not be routed.</returns>
+    private async Task<RoutingDecision?> StageNewTicketAsync(Ticket ticket, DateTime now,
+        CancellationToken cancellationToken)
     {
         // The opening entry of the timeline (spec 3.3: every transition is recorded).
         ticket.StatusHistory.Add(new TicketStatusHistory
@@ -95,8 +105,22 @@ public sealed class TicketService(
             ChangedByUserId = ticket.RequesterId,
             ChangedAt = now,
         });
-
         tickets.Add(ticket);
+
+        ticket.AiStatus = AiStatus.Skipped;
+        var fallbackId = await routing.GetFallbackCategoryIdAsync(ticket.OrganizationId, cancellationToken);
+        if (fallbackId is not { } categoryId)
+        {
+            // Cannot happen with valid data (one fallback per organization, never deactivated). The employee's ticket is
+            // still saved – New, unrouted – rather than failing the request.
+            logger.LogError("Organization {OrganizationId} has no active fallback category; a new ticket stays unrouted",
+                ticket.OrganizationId);
+            return null;
+        }
+
+        // Urgency null until a handler sets it (decision in CLAUDE.md); the SLA then uses Medium (spec 3.4).
+        return await classifier.ApplyAsync(ticket,
+            new TicketClassification(categoryId, Urgency: null, ClassificationSource.Fallback), now, cancellationToken);
     }
 
     // ===================== The requester's view (spec 7.3, 7.5) =====================

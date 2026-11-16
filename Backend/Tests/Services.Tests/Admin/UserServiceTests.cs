@@ -341,6 +341,41 @@ public sealed class UserServiceTests : AdminTestBase
     }
 
     [Fact]
+    public async Task A_departmental_hr_handler_cannot_be_deactivated()
+    {
+        Departments.Departments[DevelopmentId].HrUserId = LiatId;
+        Departments.Departments[ManagementId].HrUserId = LiatId;
+
+        var exception = await Assert.ThrowsAsync<BusinessRuleException>(() => SetActive(LiatId, false));
+
+        Assert.Equal("department-hr-deactivation", exception.ErrorType);
+        Assert.Contains("הנהלה, פיתוח", exception.Title);
+        Assert.True(UserById(LiatId).IsActive);
+        Assert.Empty(Tickets.UnassignedHandlers);
+    }
+
+    [Fact]
+    public async Task The_handler_role_cannot_be_removed_from_a_departmental_hr_handler()
+    {
+        Departments.Departments[DevelopmentId].HrUserId = LiatId;
+
+        var exception = await Assert.ThrowsAsync<BusinessRuleException>(() =>
+            Update(LiatId, UpdateOf(LiatId, roles: [Role.Employee])));
+
+        Assert.Equal("department-hr-role", exception.ErrorType);
+        Assert.Contains("מחלקת פיתוח", exception.Title);
+        Assert.Contains(Role.Handler, RolesOf(UserById(LiatId)));
+    }
+
+    [Fact]
+    public async Task A_handler_who_is_no_departmental_hr_can_lose_the_handler_role()
+    {
+        var result = await Update(LiatId, UpdateOf(LiatId, roles: [Role.Employee]));
+
+        Assert.DoesNotContain(Role.Handler, result.Roles);
+    }
+
+    [Fact]
     public async Task Deactivating_a_handler_revokes_all_sessions_and_returns_unresolved_tickets_to_the_queue()
     {
         AddActiveRefreshTokens(LiatId, 2);
