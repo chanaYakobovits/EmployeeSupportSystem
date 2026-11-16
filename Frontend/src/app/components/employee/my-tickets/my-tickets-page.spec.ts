@@ -104,6 +104,20 @@ describe('MyTicketsPage', () => {
     expect(other.classList).not.toContain('row-attention');
   });
 
+  it('a resolved ticket is marked "ממתינה לאישורך", next to its status', async () => {
+    const element = await open('/employee', [
+      fakeTicketItem({ id: 1, status: 'Resolved' }),
+      fakeTicketItem({ id: 2, status: 'InProgress' }),
+      fakeTicketItem({ id: 3, status: 'Closed' }),
+    ]);
+    const [resolved, inProgress, closed] = rows(element);
+    expect(resolved.textContent).toContain('ממתינה לאישורך');
+    expect(resolved.querySelector('app-status-badge')!.textContent).toContain('נפתרה');
+    expect(resolved.classList).toContain('row-attention');
+    expect(inProgress.textContent).not.toContain('ממתינה לאישורך');
+    expect(closed.textContent).not.toContain('ממתינה לאישורך');
+  });
+
   it('the ticket number links to the ticket', async () => {
     const element = await open('/employee', [fakeTicketItem({ id: 77 })]);
     expect(rows(element)[0].querySelector('a.ticket-number')!.getAttribute('href')).toBe('/employee/tickets/77');

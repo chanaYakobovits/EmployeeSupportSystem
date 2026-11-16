@@ -8,6 +8,7 @@ import { CategoriesApiService } from './categories-api.service';
 import { Category } from '../models/category.models';
 import { TicketsApiService } from './tickets-api.service';
 import { isTicketClosedError } from './ticket-view.store';
+import { statusChangeAnnouncement } from './status-announcement';
 import {
   AssignTicketRequest,
   ReclassifyTicketRequest,
@@ -15,6 +16,7 @@ import {
   StaffTicketHistory,
   TicketAction,
   TicketAssignOptions,
+  TicketStatus,
   TicketUpdated,
   isStaffTicketDetails,
 } from '../models/ticket.models';
@@ -30,6 +32,22 @@ export type ChangeOutcome = 'updated' | 'left';
 /** 409 Conflict: someone else changed the ticket since it was loaded (spec 11.2). */
 export function isConflictError(error: unknown): boolean {
   return error instanceof HttpErrorResponse && error.status === 409;
+}
+
+/**
+ * The status changed and its message was sent, but the files sent afterwards (POST /attachments) failed.
+ * The ticket was reloaded; the form keeps the files so they can be sent again. filesError: the attachments' error.
+ */
+export class FilesNotAttachedError extends Error {
+  constructor(readonly filesError: unknown) {
+    super('The status changed, but the files were not attached.');
+  }
+}
+
+/** Where the handler is sent from the actions area: the reply mode of the writing area, focused. */
+export interface ComposerFocusRequest {
+  /** Grows with every request, so the same request twice is seen twice. */
+  seq: number;
 }
 
 interface TicketHandleData {
@@ -59,6 +77,13 @@ export class TicketHandleStore {
   private readonly historySignal = signal<StaffTicketHistory | null>(null);
   private readonly statusSignal = signal<TicketHandleStatus>('loading');
   private readonly busySignal = signal(false);
+  private readonly statusAnnouncementSignal = signal('');
+  private readonly composerFocusSignal = signal<ComposerFocusRequest | null>(null);
+
+  /** Announced to screen readers when the loaded ticket's status changed (an action, a reload, an automatic move). */
+  readonly statusAnnouncement = this.statusAnnouncementSignal.asReadonly();
+  /** "בקשת מידע" / "שליחת פתרון" in the actions area: the writing area moves to the reply mode and takes the focus. */
+  readonly composerFocus = this.composerFocusSignal.asReadonly();
 
   readonly ticket = this.ticketSignal.asReadonly();
   readonly history = this.historySignal.asReadonly();
@@ -156,6 +181,38 @@ export class TicketHandleStore {
     return this.assign({ targetUserId: userId });
   }
 
+  /** "התחל טיפול": Assigned → InProgress; from the department's queue the server also assigns the user. */
+  start(): Observable<ChangeOutcome> {
+    return this.changeStatus('InProgress');
+  }
+
+  /**
+   * A status change with the loaded version (PATCH /status). message: the visible comment saved with it (required for
+   * WaitingForEmployee and Resolved). Files are sent afterwards (POST /attachments – PATCH is JSON), so a rejected change
+   * (409 / 422) never leaves files on the ticket; when only they fail → FilesNotAttachedError (the ticket is reloaded).
+   */
+  changeStatus(newStatus: TicketStatus, message?: string, files: readonly File[] = []): Observable<ChangeOutcome> {
+    return this.change(
+      (id, rowVersion) => this.api.changeStatus(id, { newStatus, rowVersion, ...(message ? { message } : {}) }),
+      (id, updated) =>
+        files.length === 0 || !updated.canView
+          ? of(undefined)
+          : this.api.addAttachments(id, files).pipe(
+              map(() => undefined),
+              catchError((error: unknown) =>
+                this.reloadAfterChange(id).pipe(
+                  switchMap(() => throwError(() => new FilesNotAttachedError(error))),
+                ),
+              ),
+            ),
+    );
+  }
+
+  /** The actions area asks the writing area for the reply mode and the focus. */
+  focusReply(): void {
+    this.composerFocusSignal.update((request) => ({ seq: (request?.seq ?? 0) + 1 }));
+  }
+
   /**
    * A comment or an internal note (internal is always sent explicitly, so the server never guesses). Files without text
    * are allowed only for a visible reply (an internal file must belong to an internal note – the form checks it).
@@ -184,8 +241,14 @@ export class TicketHandleStore {
     });
   }
 
-  /** Sends a change with the loaded version; reloads when the ticket is still in scope. */
-  private change(send: (id: number, rowVersion: string) => Observable<TicketUpdated>): Observable<ChangeOutcome> {
+  /**
+   * Sends a change with the loaded version; reloads when the ticket is still in scope. after: a follow-up request once
+   * the change succeeded (the files of a status change), before the reload.
+   */
+  private change(
+    send: (id: number, rowVersion: string) => Observable<TicketUpdated>,
+    after?: (id: number, updated: TicketUpdated) => Observable<void>,
+  ): Observable<ChangeOutcome> {
     const ticket = this.ticketSignal();
     if (ticket === null) {
       return throwError(() => new Error('No ticket loaded.'));
@@ -201,6 +264,7 @@ export class TicketHandleStore {
           }
           return throwError(() => error);
         }),
+        switchMap((updated) => (after ? after(id, updated) : of(undefined)).pipe(map(() => updated))),
         switchMap((updated): Observable<ChangeOutcome> =>
           updated.canView ? this.reloadAfterChange(id).pipe(map(() => 'updated' as const)) : of('left' as const),
         ),
@@ -238,6 +302,10 @@ export class TicketHandleStore {
   }
 
   private apply(data: TicketHandleData): void {
+    const announcement = statusChangeAnnouncement(this.ticketSignal(), data.ticket);
+    if (announcement !== null) {
+      this.statusAnnouncementSignal.set(announcement);
+    }
     this.ticketSignal.set(data.ticket);
     this.historySignal.set(data.history);
   }

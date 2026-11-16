@@ -75,7 +75,37 @@
     <app-file-upload formControlName="files" [serverError]="filesError()" [busy]="store.busy()" />
 
     <div class="form-actions">
+      <!-- The reply mode's status sends: the same text and files, with the status change. Only when allowed. -->
+      @if (!isInternal()) {
+        @if (canResolve()) {
+          <button
+            mat-stroked-button
+            type="button"
+            class="status-send"
+            data-send="resolve"
+            [disabled]="store.busy()"
+            (click)="send('resolve')"
+          >
+            <mat-icon aria-hidden="true">task_alt</mat-icon>
+            שליחה כפתרון
+          </button>
+        }
+        @if (canRequestInfo()) {
+          <button
+            mat-stroked-button
+            type="button"
+            class="status-send"
+            data-send="requestInfo"
+            [disabled]="store.busy()"
+            (click)="send('requestInfo')"
+          >
+            <mat-icon aria-hidden="true">help_outline</mat-icon>
+            שליחה ובקשת מידע
+          </button>
+        }
+      }
       <button
+        data-send="comment"
         mat-flat-button
         type="submit"
         class="submit-button"

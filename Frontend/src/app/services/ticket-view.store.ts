@@ -4,13 +4,19 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Observable, Subscription, catchError, defer, finalize, forkJoin, map, of, switchMap, tap, throwError } from 'rxjs';
 
 import { TicketsApiService } from './tickets-api.service';
+import { statusChangeAnnouncement } from './status-announcement';
 import { problemType } from '../models/problem-details';
 import {
-  CLOSED_TICKET_STATUSES,
+  RESOLVED_WINDOW_DAYS,
+  RequesterTicketAction,
   RequesterTicketDetails,
   RequesterTicketHistory,
+  TicketStatus,
   isStaffTicketDetails,
 } from '../models/ticket.models';
+import { parseApiDate } from '../pipes/date-time.pipe';
+
+const DAY_MS = 86_400_000;
 
 /** staffView: the user is staff on this ticket, not its requester – it belongs on the handling screen. */
 export type TicketViewStatus = 'loading' | 'ready' | 'error' | 'notFound' | 'staffView';
@@ -45,18 +51,44 @@ export class TicketViewStore {
   private readonly sendingSignal = signal(false);
   /** The server answered 422 ticket-closed (closed by someone else after the page was loaded). */
   private readonly closedByServer = signal(false);
+  private readonly statusAnnouncementSignal = signal('');
 
   readonly ticket = this.ticketSignal.asReadonly();
   readonly history = this.historySignal.asReadonly();
   readonly status = this.statusSignal.asReadonly();
-  /** True while a reply is being sent: the send button is disabled. */
+  /** True while a reply or a status change is being sent: the other actions wait. */
   readonly sending = this.sendingSignal.asReadonly();
 
-  /** Comments and files can be added – not to a closed or cancelled ticket (the server would answer 422). */
-  readonly canReply = computed(() => {
-    const ticket = this.ticketSignal();
-    return ticket !== null && !CLOSED_TICKET_STATUSES.includes(ticket.status) && !this.closedByServer();
+  /** What the server allows now – the screen shows only these (never computed here). */
+  readonly allowedActions = computed<readonly RequesterTicketAction[]>(() => this.ticketSignal()?.allowedActions ?? []);
+
+  /** Comments and files can be added – the server allows it, and did not answer 422 ticket-closed meanwhile. */
+  readonly canReply = computed(() => this.can('reply') && !this.closedByServer());
+
+  /** Announced to screen readers when the loaded ticket's status changed (an action, a reload, an automatic move). */
+  readonly statusAnnouncement = this.statusAnnouncementSignal.asReadonly();
+
+  /** The handler's resolution reply – the latest comment marked as such. */
+  readonly resolution = computed(() => {
+    const items = this.historySignal()?.items ?? [];
+    for (let i = items.length - 1; i >= 0; i--) {
+      const item = items[i];
+      if (item.kind === 'comment' && item.isResolution) {
+        return item;
+      }
+    }
+    return null;
   });
+
+  /** Until when the requester may reopen (resolvedAt + RESOLVED_WINDOW_DAYS); then the ticket is closed automatically. */
+  readonly reopenUntil = computed<Date | null>(() => {
+    const resolvedAt = parseApiDate(this.ticketSignal()?.resolvedAt);
+    return resolvedAt === null ? null : new Date(resolvedAt.getTime() + RESOLVED_WINDOW_DAYS * DAY_MS);
+  });
+
+  can(action: RequesterTicketAction): boolean {
+    return this.allowedActions().includes(action);
+  }
 
   load(id: number): void {
     this.loading?.unsubscribe();
@@ -132,6 +164,40 @@ export class TicketViewStore {
     });
   }
 
+  /**
+   * The requester's status changes: cancel (Cancelled), "הבעיה נפתרה" (Closed), reopen (InProgress, optional message).
+   * Sends the loaded version. Completes after the ticket and its timeline were loaded again.
+   * 409 / 422 → the data is reloaded quietly and the error re-thrown (a dialog keeps what was written).
+   */
+  changeStatus(newStatus: TicketStatus, message?: string): Observable<void> {
+    const ticket = this.ticketSignal();
+    if (ticket === null) {
+      return throwError(() => new Error('No ticket loaded.'));
+    }
+    const id = ticket.id;
+    return defer(() => {
+      this.sendingSignal.set(true);
+      return this.api
+        .changeStatus(id, { newStatus, rowVersion: ticket.rowVersion, ...(message ? { message } : {}) })
+        .pipe(
+          catchError((error: unknown) => {
+            if (error instanceof HttpErrorResponse && (error.status === 409 || error.status === 422)) {
+              this.refreshQuietly(id);
+            }
+            return throwError(() => error);
+          }),
+          switchMap(() => this.fetch(id).pipe(catchError(() => of(null)))),
+          tap((data) => {
+            if (data && this.ticketId === id) {
+              this.apply(data);
+            }
+          }),
+          map(() => undefined),
+          finalize(() => this.sendingSignal.set(false)),
+        );
+    });
+  }
+
   private refreshQuietly(id: number): void {
     this.fetch(id)
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -160,6 +226,10 @@ export class TicketViewStore {
   }
 
   private apply(data: TicketViewData): void {
+    const announcement = statusChangeAnnouncement(this.ticketSignal(), data.ticket);
+    if (announcement !== null) {
+      this.statusAnnouncementSignal.set(announcement);
+    }
     this.ticketSignal.set(data.ticket);
     this.historySignal.set(data.history);
   }

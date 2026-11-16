@@ -1,0 +1,47 @@
+<h2 mat-dialog-title id="reopen-dialog-title">פתיחת הפנייה מחדש</h2>
+
+<form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+  <mat-dialog-content>
+    <p id="reopen-dialog-description" class="description">
+      הפנייה תחזור לטיפול המטפל. אפשר לכתוב מה עדיין לא עובד – זה יעזור לו להמשיך.
+    </p>
+
+    @if (alert(); as alert) {
+      <app-form-alert [alert]="alert" />
+    }
+
+    <mat-form-field appearance="outline" class="field">
+      <mat-label>מה עדיין לא נפתר? (לא חובה)</mat-label>
+      <textarea
+        #messageField
+        matInput
+        formControlName="message"
+        dir="auto"
+        cdkFocusInitial
+        cdkTextareaAutosize
+        cdkAutosizeMinRows="3"
+        cdkAutosizeMaxRows="10"
+        [attr.maxlength]="bodyMaxLength"
+        [readonly]="store.sending()"
+      ></textarea>
+      <mat-hint align="end" class="counter">{{ messageLength() }} / {{ bodyMaxText }}</mat-hint>
+      @let message = form.controls.message;
+      @if (message.hasError('maxlength')) {
+        <mat-error>ההודעה יכולה להכיל עד {{ bodyMaxText }} תווים</mat-error>
+      } @else if (message.hasError('server')) {
+        <mat-error>{{ message.getError('server') }}</mat-error>
+      }
+    </mat-form-field>
+    <p class="visually-hidden" aria-live="polite" aria-atomic="true">{{ counterAnnouncement() }}</p>
+  </mat-dialog-content>
+
+  <mat-dialog-actions align="end">
+    <button mat-button type="button" mat-dialog-close>ביטול</button>
+    <button mat-flat-button type="submit" class="btn-primary-gradient" [disabled]="store.sending()">
+      @if (store.sending()) {
+        <mat-spinner diameter="18" aria-hidden="true" />
+      }
+      פתיחה מחדש
+    </button>
+  </mat-dialog-actions>
+</form>

@@ -33,6 +33,7 @@ describe('TicketViewPage', () => {
       'history',
       'addComment',
       'addAttachments',
+      'changeStatus',
     ]);
     api.get.and.returnValue(of(fakeTicketDetails()));
     api.history.and.returnValue(of(fakeHistory()));
@@ -315,6 +316,223 @@ describe('TicketViewPage', () => {
   it('no banner in another status', async () => {
     const element = await open();
     expect(element.querySelector('.waiting-banner')).toBeNull();
+  });
+
+  it('after replying to WaitingForEmployee the ticket is reloaded and the banner is gone', async () => {
+    api.get.and.returnValue(of(fakeTicketDetails({ status: 'WaitingForEmployee' })));
+    api.addComment.and.returnValue(of({ id: 9 }));
+    const element = await open();
+    expect(element.querySelector('.waiting-banner')).not.toBeNull();
+
+    // The server moved it back to handling (an automatic transition).
+    api.get.and.returnValue(of(fakeTicketDetails({ status: 'InProgress' })));
+    type(element, 'מספר המדפסת: 2-14');
+    send(element);
+    await harness.fixture.whenStable();
+    harness.detectChanges();
+
+    expect(api.get).toHaveBeenCalledTimes(2);
+    expect(element.querySelector('.waiting-banner')).toBeNull();
+    expect(element.querySelector('p[aria-live]')!.textContent).toContain('סטטוס הפנייה עודכן: בטיפול');
+  });
+
+  it('the reply is shown by allowedActions, not by the status', async () => {
+    api.get.and.returnValue(of(fakeTicketDetails({ status: 'InProgress', allowedActions: [] })));
+    const element = await open();
+    expect(element.querySelector('app-ticket-reply')).toBeNull();
+    expect(element.querySelector('.closed-note')).not.toBeNull();
+  });
+
+  // ---- status actions (task 3.5) ----
+
+  const UPDATED = () => of({ id: 1042, rowVersion: 'new', canView: true });
+
+  function actionButtons(element: HTMLElement): string[] {
+    return Array.from(element.querySelectorAll('[data-action]')).map((button) => button.getAttribute('data-action')!);
+  }
+
+  function click(element: HTMLElement, action: string): void {
+    element.querySelector<HTMLButtonElement>(`[data-action="${action}"]`)!.click();
+    harness.detectChanges();
+  }
+
+  describe('cancel', () => {
+    it('shown when the server allows it', async () => {
+      api.get.and.returnValue(of(fakeTicketDetails({ status: 'Assigned', allowedActions: ['reply', 'cancel'] })));
+      const element = await open();
+      expect(actionButtons(element)).toEqual(['cancel']);
+      expect(element.querySelector('[data-action="cancel"]')!.textContent).toContain('ביטול פנייה');
+    });
+
+    it('not shown when the server does not allow it', async () => {
+      api.get.and.returnValue(of(fakeTicketDetails({ status: 'InProgress', allowedActions: ['reply'] })));
+      const element = await open();
+      expect(actionButtons(element)).toEqual([]);
+    });
+
+    it('asks first (it cannot be undone), then cancels with the loaded version and reloads', async () => {
+      api.get.and.returnValue(of(fakeTicketDetails({ allowedActions: ['reply', 'cancel'] })));
+      api.changeStatus.and.returnValue(UPDATED());
+      confirm.confirm.and.returnValue(of(true));
+      const element = await open();
+      api.get.and.returnValue(of(fakeTicketDetails({ status: 'Cancelled' })));
+
+      click(element, 'cancel');
+      await harness.fixture.whenStable();
+      harness.detectChanges();
+
+      expect(confirm.confirm).toHaveBeenCalledWith(
+        jasmine.objectContaining({ tone: 'danger', message: jasmine.stringContaining('לא ניתן לבטל את הביטול') }),
+      );
+      expect(api.changeStatus).toHaveBeenCalledWith(1042, { newStatus: 'Cancelled', rowVersion: 'AAAAAAAAA+g=' });
+      expect(api.get).toHaveBeenCalledTimes(2);
+      expect(notifications.success).toHaveBeenCalledWith('הפנייה בוטלה');
+      expect(actionButtons(element)).toEqual([]);
+      expect(element.querySelector('.closed-note')).not.toBeNull();
+    });
+
+    it('not confirmed: nothing is sent', async () => {
+      api.get.and.returnValue(of(fakeTicketDetails({ allowedActions: ['reply', 'cancel'] })));
+      confirm.confirm.and.returnValue(of(false));
+      const element = await open();
+      click(element, 'cancel');
+
+      expect(api.changeStatus).not.toHaveBeenCalled();
+    });
+
+    it('409: a message and the ticket is reloaded', async () => {
+      api.get.and.returnValue(of(fakeTicketDetails({ allowedActions: ['reply', 'cancel'] })));
+      api.changeStatus.and.returnValue(throwError(() => new HttpErrorResponse({ status: 409 })));
+      confirm.confirm.and.returnValue(of(true));
+      const element = await open();
+      click(element, 'cancel');
+      await harness.fixture.whenStable();
+
+      expect(notifications.error).toHaveBeenCalledWith(jasmine.stringContaining('הפנייה עודכנה בינתיים'));
+      expect(api.get).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('resolved', () => {
+    const resolved = () =>
+      fakeTicketDetails({
+        status: 'Resolved',
+        // 00:30 on 11/11 in Israel – the window ends on 18/11 Israel time (17/11 in UTC).
+        resolvedAt: '2026-11-10T22:30:00Z',
+        allowedActions: ['reply', 'confirmResolved', 'reopen'],
+      });
+    const resolutionHistory = () =>
+      fakeHistory([
+        { kind: 'status', at: '2026-11-10T08:00:00Z', previousStatus: null, newStatus: 'New', changedByName: 'ישראל ישראלי' },
+        fakeComment({ id: 3, body: 'הוחלף ספק הכוח.\nהמחשב עובד.', isResolution: true, at: '2026-11-10T22:30:00Z' }),
+      ]);
+
+    beforeEach(() => {
+      api.get.and.returnValue(of(resolved()));
+      api.history.and.returnValue(of(resolutionHistory()));
+    });
+
+    it('a prominent area with the resolution, both answers and the reopen window', async () => {
+      const element = await open();
+      const area = element.querySelector('.resolved-card')!;
+
+      expect(area.textContent).toContain('המטפל סימן את הפנייה כנפתרה');
+      expect(area.querySelector('.resolution-body')!.textContent).toBe('הוחלף ספק הכוח.\nהמחשב עובד.');
+      expect(actionButtons(element)).toEqual(['confirmResolved', 'reopen']);
+      expect(area.querySelector('[data-action="confirmResolved"]')!.textContent).toContain('הבעיה נפתרה');
+      expect(area.querySelector('[data-action="reopen"]')!.textContent).toContain('הבעיה לא נפתרה – פתיחה מחדש');
+      expect(area.querySelector('[data-test="reopen-window"]')!.textContent).toContain(
+        'ניתן לפתוח מחדש עד 18/11/2026. אחרי תאריך זה הפנייה תיסגר אוטומטית.',
+      );
+    });
+
+    it('without the reopen action (the window passed): no reopen button and no window text', async () => {
+      api.get.and.returnValue(of({ ...resolved(), allowedActions: ['reply', 'confirmResolved'] }));
+      const element = await open();
+      expect(actionButtons(element)).toEqual(['confirmResolved']);
+      expect(element.querySelector('[data-test="reopen-window"]')).toBeNull();
+    });
+
+    it('no area in another status', async () => {
+      api.get.and.returnValue(of(fakeTicketDetails({ status: 'InProgress' })));
+      const element = await open();
+      expect(element.querySelector('.resolved-card')).toBeNull();
+    });
+
+    it('"הבעיה נפתרה" asks first, then closes the ticket and reloads', async () => {
+      api.changeStatus.and.returnValue(UPDATED());
+      confirm.confirm.and.returnValue(of(true));
+      const element = await open();
+      api.get.and.returnValue(of(fakeTicketDetails({ status: 'Closed' })));
+
+      click(element, 'confirmResolved');
+      await harness.fixture.whenStable();
+      harness.detectChanges();
+
+      expect(confirm.confirm).toHaveBeenCalledWith(jasmine.objectContaining({ message: jasmine.stringContaining('תיסגר סופית') }));
+      expect(api.changeStatus).toHaveBeenCalledWith(1042, { newStatus: 'Closed', rowVersion: 'AAAAAAAAA+g=' });
+      expect(notifications.success).toHaveBeenCalledWith('הפנייה נסגרה. תודה!');
+      expect(element.querySelector('.resolved-card')).toBeNull();
+    });
+
+    it('reopen: a dialog with an optional message, sent with the change', async () => {
+      api.changeStatus.and.returnValue(UPDATED());
+      const element = await open();
+      click(element, 'reopen');
+      await harness.fixture.whenStable();
+
+      const dialog = document.querySelector<HTMLElement>('app-reopen-dialog')!;
+      expect(dialog.textContent).toContain('פתיחת הפנייה מחדש');
+      const field = dialog.querySelector<HTMLTextAreaElement>('textarea')!;
+      field.value = '  עדיין לא נדלק  ';
+      field.dispatchEvent(new Event('input'));
+      harness.detectChanges();
+      dialog.querySelector<HTMLButtonElement>('button[type="submit"]')!.click();
+      harness.detectChanges();
+      await harness.fixture.whenStable();
+
+      expect(api.changeStatus).toHaveBeenCalledWith(1042, {
+        newStatus: 'InProgress',
+        rowVersion: 'AAAAAAAAA+g=',
+        message: 'עדיין לא נדלק',
+      });
+      expect(notifications.success).toHaveBeenCalledWith('הפנייה נפתחה מחדש');
+    });
+
+    it('reopen without a message: no message is sent', async () => {
+      api.changeStatus.and.returnValue(UPDATED());
+      const element = await open();
+      click(element, 'reopen');
+      await harness.fixture.whenStable();
+      document.querySelector<HTMLButtonElement>('app-reopen-dialog button[type="submit"]')!.click();
+      harness.detectChanges();
+
+      expect(api.changeStatus).toHaveBeenCalledWith(1042, { newStatus: 'InProgress', rowVersion: 'AAAAAAAAA+g=' });
+    });
+
+    it('reopen 409: the dialog stays with the text and a message', async () => {
+      api.changeStatus.and.returnValue(throwError(() => new HttpErrorResponse({ status: 409 })));
+      const element = await open();
+      click(element, 'reopen');
+      await harness.fixture.whenStable();
+      const dialog = document.querySelector<HTMLElement>('app-reopen-dialog')!;
+      const field = dialog.querySelector<HTMLTextAreaElement>('textarea')!;
+      field.value = 'לא עובד';
+      field.dispatchEvent(new Event('input'));
+      dialog.querySelector<HTMLButtonElement>('button[type="submit"]')!.click();
+      harness.detectChanges();
+      await harness.fixture.whenStable();
+      harness.detectChanges();
+
+      expect(document.querySelector('app-reopen-dialog')!.textContent).toContain('הפנייה עודכנה בינתיים');
+      expect(field.value).toBe('לא עובד');
+      expect(api.get).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  afterEach(() => {
+    // Dialogs live in the overlay container, outside the fixture.
+    document.querySelectorAll('.cdk-overlay-container').forEach((container) => (container.innerHTML = ''));
   });
 
   describe('leaving the screen', () => {

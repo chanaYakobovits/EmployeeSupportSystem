@@ -1,4 +1,4 @@
-import { formatDateTime } from './date-time.pipe';
+import { formatDate, formatDateTime } from './date-time.pipe';
 
 describe('formatDateTime', () => {
   it('dd/MM/yyyy HH:mm in Israel time (winter UTC+2, summer UTC+3)', () => {
@@ -14,5 +14,16 @@ describe('formatDateTime', () => {
     expect(formatDateTime(null)).toBe('');
     expect(formatDateTime(undefined)).toBe('');
     expect(formatDateTime('not a date')).toBe('');
+  });
+});
+
+describe('formatDate', () => {
+  it('dd/MM/yyyy in Israel time – the day may differ from UTC', () => {
+    expect(formatDate('2026-11-17T22:30:00Z')).toBe('18/11/2026');
+    expect(formatDate('2026-11-17T08:00:00Z')).toBe('17/11/2026');
+  });
+
+  it('no value: an empty string', () => {
+    expect(formatDate(null)).toBe('');
   });
 });

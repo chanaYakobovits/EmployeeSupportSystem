@@ -15,7 +15,8 @@
 - 3.4 חלק ב' (מסכי תור המטפל ומסך הטיפול ב-Angular, allowedActions ו-assign-options בשרת) – הושלם.
 - שינוי ב-3.4 (לא באפיון): מיון "עדיפות" כברירת מחדל ותור בלי סגורות/מבוטלות כברירת מחדל – הושלם.
 - 3.5 חלק א' (שרת: TicketStatusRules, PATCH /status, השהיית SLA, פתיחה מחדש, סגירה אוטומטית, allowedActions) – הושלם.
-- הבא בתור: 3.5 חלק ב' – כפתורי הסטטוס במסכי העובד והמטפל, 409 ב-UI.
+- 3.5 חלק ב' (פעולות סטטוס במסכי העובד והמטפל, אזור "נפתרה", אירועי מערכת בציר הזמן) – הושלם.
+- הבא בתור: 3.6 – עדכון מרובה.
 - תוספת שלא באפיון: בדיקת איכות סיווג AI על 30 פניות לדוגמה – אחרי משימה 4.3.
 - תוספת שלא באפיון: הזמנת עובד במייל (האפיון 14 שאלה 3, "בעתיד"). שלב א' (שרת) ושלב ב' (מסך set-password, סטטוס הזמנה
   ברשימה ובעריכה, שליחה מחדש, סינון לפי סטטוס הזמנה) – הושלמו.
@@ -413,6 +414,23 @@
   * Seeder: שדות השעון לכל פנייה, DueAt אחרי פתיחה מחדש מזמן הפתיחה; בלי Reason במעברים של העובד ובסגירה האוטומטית.
     מספרי הפניות המתועדים לא זזו.
 
+- פעולות סטטוס – Frontend (משימה 3.5 חלק ב'):
+  * כל כפתור לפי `allowedActions` בלבד. `TicketAction` כולל start/requestInfo/resolve; לפונה `RequesterTicketAction`
+    (reply/cancel/confirmResolved/reopen) + `rowVersion` ב-`RequesterTicketDetails`. ‏`TicketViewStore.canReply` לפי `reply` (לא לפי סטטוס).
+  * `TicketsApiService.changeStatus` (PATCH /status, JSON). ב-`TicketHandleStore.changeStatus(newStatus, message?, files)` הקבצים
+    נשלחים **אחרי** הצלחת ה-PATCH (POST /attachments) – 409/422 לא משאירים קבצים. כשל רק בקבצים ← `FilesNotAttachedError`
+    (הפנייה נטענת מחדש; בקומפוזר הטקסט מתאפס והקבצים נשארים עם הודעה).
+  * מסך הטיפול: "התחל טיפול" ראשי באזור 4; "בקשת מידע" / "שליחת פתרון" באזור 4 הם קיצורים (`store.focusReply()` ← הקומפוזר
+    עובר למצב תגובה וממקד). השליחה עצמה בקומפוזר במצב "תגובה לעובד": "שליחה לעובד" (submit, ראשי), "שליחה ובקשת מידע",
+    "שליחה כפתרון" (confirm). בשתי פעולות הסטטוס טקסט חובה. ‏`left` מהקומפוזר ← חזרה לתור.
+  * מסך העובד: כרטיס "המטפל סימן את הפנייה כנפתרה" (תגובת ה-isResolution האחרונה מ-history), "הבעיה נפתרה" (confirm – סגירה סופית,
+    לא באפיון) ו-`reopen-dialog` (הודעה אופציונלית). חלון: resolvedAt + `RESOLVED_WINDOW_DAYS` (=7, כמו `TicketStatusRules.ResolvedWindow`
+    – לשנות יחד), מוצג ב-`formatDate` (dd/MM/yyyy, שעון ישראל). "ביטול פנייה" ב-aside עם confirm (danger). הודעות ב-`ticket-view-messages.ts`.
+  * שינוי סטטוס מוכרז: `statusAnnouncement` בשני ה-stores (`services/status-announcement.ts`), נקבע ב-`apply()` כשאותה פנייה
+    נטענת בסטטוס אחר – גם אחרי 409 ומעבר אוטומטי. אזור `aria-live` בכל מסך.
+  * ציר הזמן: `systemEventText` – תג "מערכת" + טקסט לפי המעבר (שיוך, חזרה לטיפול אחרי תגובה, סגירה אוטומטית, החלפת מטפל).
+    תגובת פתרון: מחלקה `resolution` (`--success-border`/`--success-bg`) + תג "פתרון". "הפניות שלי": Resolved ← "ממתינה לאישורך" + `row-attention`.
+
 ## בהמשך
 - משימה 2.2: לטעון את Shell ב-loadComponent (lazy), מסך ההתחברות מחוצה לו –
   כדי להוריד את ה-bundle הראשוני מתחת ל-500KB. לא להגדיל את ה-budget.
@@ -421,9 +439,6 @@
   לרשת מ-`PollingBackgroundService` ולעבד כל משימה ב-`CreateOrganizationScope(job.OrganizationId)`. לא IgnoreQueryFilters כללי.
 
   - 6.1 (בדיקות אינטגרציה): 429 ביצירת פנייה; JSON של עובד מ-GET /api/tickets/{id} בלי שדות פנימיים.
-- 3.5 חלק ב': כפתורים במסך העובד (ביטול, "הבעיה נפתרה", "פתיחה מחדש" עם הודעה) ובמסך הטיפול (התחל, בקש מידע, שלח פתרון)
-  לפי `allowedActions`; טיפוסי `RequesterTicketDetails` ב-Frontend לקבל `rowVersion` ו-`allowedActions`; 409 ← טעינה
-  ו-`CONFLICT_MESSAGE`. קבצים לפתרון – POST /attachments אחרי השינוי (PATCH /status הוא JSON).
 - 3.6 (עדכון מרובה): לעבור דרך `TicketStatusRules` ו-`TicketStatusTransitions.Apply`, כל פנייה עם save משלה (כמו AutoClose).
 - 4.3: הסיווג של ה-AI דרך `ITicketClassifier.ApplyAsync` עם `Ai`, ו-`RoutingService` עם `job.OrganizationId`. אם מטפל כבר
   סיווג ידנית (`ClassificationSource.Manual`) – תוצאת ה-AI נשמרת כהמלצה בלבד (11.2).

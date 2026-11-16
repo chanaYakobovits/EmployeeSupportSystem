@@ -20,6 +20,7 @@
   }
   @default {
     @if (ticket(); as ticket) {
+      <p class="visually-hidden" aria-live="polite" aria-atomic="true">{{ store.statusAnnouncement() }}</p>
       <header class="ticket-header">
         <p class="ticket-number" dir="ltr">#{{ ticket.id }}</p>
         <h1 class="ticket-title" dir="auto">
@@ -78,7 +79,7 @@
 
           <!-- Area 3: writing – only the modes the server allows. -->
           @if (store.can('internalNote') || store.can('reply')) {
-            <app-ticket-composer />
+            <app-ticket-composer (left)="onOutcome('left')" />
           } @else {
             <p class="surface-card card closed-note" role="status">
               <mat-icon aria-hidden="true">lock</mat-icon>
@@ -100,6 +101,19 @@
           <section class="surface-card card actions" aria-labelledby="actions-title">
             <h2 id="actions-title" class="card-title">פעולות</h2>
             <div class="action-buttons">
+              @if (store.can('start')) {
+                <button
+                  mat-flat-button
+                  type="button"
+                  class="btn-primary-gradient start-button"
+                  data-action="start"
+                  [disabled]="store.busy()"
+                  (click)="start()"
+                >
+                  <mat-icon aria-hidden="true">play_arrow</mat-icon>
+                  התחל טיפול
+                </button>
+              }
               @if (store.can('takeFromQueue')) {
                 <button
                   mat-flat-button
@@ -131,8 +145,35 @@
                   העברה
                 </button>
               }
-              <!-- Task 3.5: the status buttons (התחל טיפול, בקש מידע, שלח פתרון) go here. -->
+              <!-- Shortcuts: the message is written in the writing area, sent from there with the status change. -->
+              @if (store.can('requestInfo')) {
+                <button
+                  mat-stroked-button
+                  type="button"
+                  data-action="requestInfo"
+                  [disabled]="store.busy()"
+                  (click)="store.focusReply()"
+                >
+                  <mat-icon aria-hidden="true">help_outline</mat-icon>
+                  בקשת מידע מהעובד
+                </button>
+              }
+              @if (store.can('resolve')) {
+                <button
+                  mat-stroked-button
+                  type="button"
+                  data-action="resolve"
+                  [disabled]="store.busy()"
+                  (click)="store.focusReply()"
+                >
+                  <mat-icon aria-hidden="true">task_alt</mat-icon>
+                  שליחת פתרון
+                </button>
+              }
             </div>
+            @if (store.can('requestInfo') || store.can('resolve')) {
+              <p class="muted shortcut-hint">בקשת מידע ושליחת פתרון נשלחות מאזור הכתיבה, במצב "תגובה לעובד".</p>
+            }
             @if (store.allowedActions().length === 0) {
               <p class="muted">אין פעולות זמינות לפנייה זו.</p>
             }

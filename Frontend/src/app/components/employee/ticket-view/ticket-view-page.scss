@@ -123,6 +123,75 @@
   color: var(--text-secondary);
 }
 
+// Resolved: what is expected of the employee now (task 3.5). Green with words – the colour is never the only cue.
+.resolved-card {
+  border: 2px solid var(--success-border);
+  background: var(--success-bg);
+}
+
+.resolved-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--status-resolved);
+}
+
+.resolution {
+  margin: 0 0 16px;
+  padding: 14px 16px;
+  border-radius: var(--radius-field);
+  background: var(--surface);
+  border: 1px solid var(--success-border);
+}
+
+.resolution-author {
+  margin-bottom: 6px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.resolution-body {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.resolved-question {
+  margin: 0 0 10px;
+  font-weight: 600;
+}
+
+.resolved-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.reopen-window {
+  margin: 14px 0 0;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.cancel-area {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.cancel-button {
+  width: 100%;
+  color: var(--error-text);
+  border-color: var(--error-border);
+}
+
+.cancel-hint {
+  margin: 8px 0 0;
+  font-size: 13px;
+}
+
 @keyframes slide-up {
   from {
     opacity: 0;
@@ -156,5 +225,9 @@
 
   .card {
     padding: 16px;
+  }
+
+  .resolved-actions button {
+    flex: 1 1 100%;
   }
 }

@@ -97,6 +97,11 @@
         <mat-icon aria-hidden="true">reply</mat-icon>
         נדרשת תגובתך
       </span>
+    } @else if (ticket.status === 'Resolved') {
+      <span class="attention-note confirm-note">
+        <mat-icon aria-hidden="true">task_alt</mat-icon>
+        ממתינה לאישורך
+      </span>
     }
   </ng-template>
 
@@ -142,6 +147,11 @@
           {{ ticket.subject }}
         }
       </span>
+      @if (ticket.status === 'WaitingForEmployee') {
+        <span class="attention-note"><mat-icon aria-hidden="true">reply</mat-icon>נדרשת תגובתך</span>
+      } @else if (ticket.status === 'Resolved') {
+        <span class="attention-note confirm-note"><mat-icon aria-hidden="true">task_alt</mat-icon>ממתינה לאישורך</span>
+      }
       <span class="ticket-card-updated">עודכנה <app-relative-time [value]="ticket.updatedAt" /></span>
     </a>
   </ng-template>

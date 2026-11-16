@@ -36,8 +36,60 @@
         <app-status-badge class="header-status" [status]="ticket.status" />
       </header>
 
+      <p class="visually-hidden" aria-live="polite" aria-atomic="true">{{ store.statusAnnouncement() }}</p>
+
       <div class="layout">
         <div class="main">
+          @if (showResolvedArea()) {
+            <!-- What is expected of the employee now: confirm, or reopen within the window. -->
+            <section class="surface-card card resolved-card" aria-labelledby="resolved-title">
+              <h2 id="resolved-title" class="card-title resolved-title">
+                <mat-icon aria-hidden="true">task_alt</mat-icon>
+                המטפל סימן את הפנייה כנפתרה
+              </h2>
+              @if (store.resolution(); as resolution) {
+                <figure class="resolution">
+                  <figcaption class="resolution-author">הפתרון מ-{{ resolution.authorName }}</figcaption>
+                  <!-- Plain text (interpolation, never innerHTML); line breaks kept by white-space: pre-wrap. -->
+                  <p class="resolution-body" dir="auto">{{ resolution.body }}</p>
+                </figure>
+              }
+              <p class="resolved-question">האם הבעיה נפתרה?</p>
+              <div class="resolved-actions">
+                @if (store.can('confirmResolved')) {
+                  <button
+                    mat-flat-button
+                    type="button"
+                    class="btn-primary-gradient"
+                    data-action="confirmResolved"
+                    [disabled]="store.sending()"
+                    (click)="confirmResolved()"
+                  >
+                    <mat-icon aria-hidden="true">check_circle</mat-icon>
+                    הבעיה נפתרה
+                  </button>
+                }
+                @if (store.can('reopen')) {
+                  <button
+                    mat-stroked-button
+                    type="button"
+                    data-action="reopen"
+                    [disabled]="store.sending()"
+                    (click)="reopen()"
+                  >
+                    <mat-icon aria-hidden="true">replay</mat-icon>
+                    הבעיה לא נפתרה – פתיחה מחדש
+                  </button>
+                }
+              </div>
+              @if (store.can('reopen') && reopenUntilText()) {
+                <p class="reopen-window" data-test="reopen-window">
+                  ניתן לפתוח מחדש עד {{ reopenUntilText() }}. אחרי תאריך זה הפנייה תיסגר אוטומטית.
+                </p>
+              }
+            </section>
+          }
+
           <section class="surface-card card" aria-labelledby="description-title">
             <h2 id="description-title" class="card-title">תיאור הפנייה</h2>
             <!-- Plain text (interpolation, never innerHTML); line breaks kept by white-space: pre-wrap. -->
@@ -109,6 +161,22 @@
               </div>
             }
           </dl>
+          @if (store.can('cancel')) {
+            <div class="cancel-area">
+              <button
+                mat-stroked-button
+                type="button"
+                class="cancel-button"
+                data-action="cancel"
+                [disabled]="store.sending()"
+                (click)="cancelTicket()"
+              >
+                <mat-icon aria-hidden="true">block</mat-icon>
+                ביטול פנייה
+              </button>
+              <p class="muted cancel-hint">אפשר לבטל כל עוד הטיפול לא התחיל.</p>
+            </div>
+          }
         </aside>
       </div>
     }

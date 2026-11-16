@@ -11,6 +11,7 @@ import {
   viewChild,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { Observable } from 'rxjs';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
@@ -40,6 +41,7 @@ import { openReclassifyDialog } from './reclassify-dialog/reclassify-dialog';
 import { TicketComposer } from './ticket-composer/ticket-composer';
 
 export const RECLASSIFIED_MESSAGE = 'הסיווג עודכן';
+export const STARTED_MESSAGE = 'הטיפול בפנייה התחיל';
 export const TRANSFERRED_MESSAGE = 'הפנייה הועברה';
 
 /**
@@ -132,18 +134,24 @@ export class TicketHandlePage implements HasUnsavedChanges {
 
   /** "קח לטיפולי". 409 → the store reloaded the ticket; the message says so. */
   protected take(): void {
-    this.store
-      .take()
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: (outcome) => this.onOutcome(outcome, TAKEN_MESSAGE),
-        error: (error: unknown) =>
-          this.notifications.error(
-            isConflictError(error)
-              ? CONFLICT_MESSAGE
-              : toUserMessage(error instanceof HttpErrorResponse ? error : new HttpErrorResponse({ status: 500 })),
-          ),
-      });
+    this.runAction(this.store.take(), TAKEN_MESSAGE);
+  }
+
+  /** "התחל טיפול" (Assigned → InProgress). 409 → reloaded + the message of 11.2; 422 → the server's title. */
+  protected start(): void {
+    this.runAction(this.store.start(), STARTED_MESSAGE);
+  }
+
+  private runAction(action: Observable<ChangeOutcome>, success: string): void {
+    action.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: (outcome) => this.onOutcome(outcome, success),
+      error: (error: unknown) =>
+        this.notifications.error(
+          isConflictError(error)
+            ? CONFLICT_MESSAGE
+            : toUserMessage(error instanceof HttpErrorResponse ? error : new HttpErrorResponse({ status: 500 })),
+        ),
+    });
   }
 
   protected openReclassify(): void {
@@ -158,9 +166,12 @@ export class TicketHandlePage implements HasUnsavedChanges {
       .subscribe((outcome) => this.onOutcome(outcome, TRANSFERRED_MESSAGE));
   }
 
-  /** Updated → a confirmation; out of the user's scope → a message and back to the queue. Cancelled → nothing. */
-  private onOutcome(outcome: ChangeOutcome | undefined, success: string): void {
-    if (outcome === 'updated') {
+  /**
+   * Updated → a confirmation (none when the caller showed its own); out of the user's scope → a message and back to the
+   * queue. Cancelled → nothing.
+   */
+  protected onOutcome(outcome: ChangeOutcome | undefined, success?: string): void {
+    if (outcome === 'updated' && success) {
       this.notifications.success(success);
     } else if (outcome === 'left') {
       this.leaving = true;

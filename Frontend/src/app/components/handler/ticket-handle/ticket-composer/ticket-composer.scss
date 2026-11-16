@@ -75,7 +75,15 @@
 
 .form-actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
+  gap: 10px;
+}
+
+@media (max-width: 599.98px) {
+  .form-actions button {
+    flex: 1 1 100%;
+  }
 }
 
 .submit-button mat-spinner {

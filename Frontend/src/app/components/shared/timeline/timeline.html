@@ -1,14 +1,19 @@
 <ol class="timeline">
   @for (item of items(); track trackKey(item)) {
     @if (item.kind === 'status') {
-      <li class="entry entry-status" [class.opening]="item.previousStatus === null">
+      @let systemText = systemEventText(item);
+      <li class="entry entry-status" [class.opening]="item.previousStatus === null" [class.system]="systemText !== null">
         <span class="marker" aria-hidden="true">
-          <mat-icon>{{ item.previousStatus === null ? 'flag' : 'sync_alt' }}</mat-icon>
+          <mat-icon>{{ item.previousStatus === null ? 'flag' : systemText !== null ? 'settings' : 'sync_alt' }}</mat-icon>
         </span>
         <div class="content">
           <p class="what">
             @if (item.previousStatus === null) {
               הפנייה נפתחה
+            } @else if (systemText !== null) {
+              <span class="system-tag">מערכת</span>
+              <span>{{ systemText }}</span>
+              <app-status-badge [status]="item.newStatus" />
             } @else {
               הסטטוס שונה ל-<app-status-badge [status]="item.newStatus" />
             }
@@ -61,19 +66,22 @@
         [class.from-me]="item.isFromRequester"
         [class.from-staff]="!item.isFromRequester"
         [class.internal]="internal"
+        [class.resolution]="item.isResolution"
       >
         <span class="marker" aria-hidden="true">
           <mat-icon>{{ internal ? 'lock' : item.isResolution ? 'task_alt' : 'chat_bubble_outline' }}</mat-icon>
         </span>
         <article class="bubble">
           <header class="bubble-header">
-            <span class="visually-hidden">{{ commentLabel(item.authorName, item.isFromRequester, internal) }}</span>
+            <span class="visually-hidden">{{
+              commentLabel(item.authorName, item.isFromRequester, internal, item.isResolution)
+            }}</span>
             <span class="author" aria-hidden="true">{{ item.authorName }}</span>
             @if (internal) {
               <span class="internal-tag" aria-hidden="true"><mat-icon>lock</mat-icon>פנימי</span>
             }
             @if (item.isResolution) {
-              <span class="resolution-tag">פתרון</span>
+              <span class="resolution-tag" aria-hidden="true"><mat-icon>task_alt</mat-icon>פתרון</span>
             }
             <app-relative-time class="meta" [value]="item.at" />
           </header>

@@ -87,7 +87,7 @@ export class MyTicketsPage {
 
   /** A ticket waiting for the employee's answer stands out (spec 7.3). */
   protected readonly rowClass = (ticket: RequesterTicketListItem): string | null =>
-    ticket.status === 'WaitingForEmployee' ? 'row-attention' : null;
+    ticket.status === 'WaitingForEmployee' || ticket.status === 'Resolved' ? 'row-attention' : null;
 
   protected viewFilter(): ViewFilter {
     return this.state().filters.view ?? 'all';

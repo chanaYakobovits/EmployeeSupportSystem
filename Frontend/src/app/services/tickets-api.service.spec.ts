@@ -141,5 +141,15 @@ describe('TicketsApiService', () => {
       service.assignOptions(152).subscribe();
       expect(http.expectOne(`${url}/152/assign-options`).request.method).toBe('GET');
     });
+
+    it('changeStatus: PATCH /status with JSON, errors shown on the screen', () => {
+      service
+        .changeStatus(152, { newStatus: 'Resolved', rowVersion: 'AAA=', message: 'הוחלף הטונר' })
+        .subscribe();
+      const request = http.expectOne(`${url}/152/status`);
+      expect(request.request.method).toBe('PATCH');
+      expect(request.request.body).toEqual({ newStatus: 'Resolved', rowVersion: 'AAA=', message: 'הוחלף הטונר' });
+      expect(request.request.context.get(SKIP_ERROR_TOAST)).toBeTrue();
+    });
   });
 });

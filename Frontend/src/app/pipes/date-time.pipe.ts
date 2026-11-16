@@ -26,6 +26,11 @@ export function formatDateTime(value: string | Date | null | undefined): string 
   return `${parts['day']}/${parts['month']}/${parts['year']} ${parts['hour']}:${parts['minute']}`;
 }
 
+/** dd/MM/yyyy in Israel time (spec 11.6), or '' for no value. */
+export function formatDate(value: string | Date | null | undefined): string {
+  return formatDateTime(value).slice(0, 10);
+}
+
 /** A date from the API (UTC; a value without a zone is read as UTC too), or null for no / invalid value. */
 export function parseApiDate(value: string | Date | null | undefined): Date | null {
   if (value === null || value === undefined || value === '') {

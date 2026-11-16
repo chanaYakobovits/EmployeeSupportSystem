@@ -9,6 +9,7 @@ import { PagedResult } from '../models/paging.models';
 import { TicketAttachment } from '../models/attachment.models';
 import {
   AssignTicketRequest,
+  ChangeTicketStatusRequest,
   CommentCreated,
   CreateTicketRequest,
   MyTicketsQuery,
@@ -108,6 +109,15 @@ export class TicketsApiService {
   /** To a handler of the handling department (the user = "קח לטיפולי") or to another department's queue. */
   assign(id: number, request: AssignTicketRequest): Observable<TicketUpdated> {
     return this.http.post<TicketUpdated>(`${this.baseUrl}/${id}/assign`, request, { context: skipErrorToast() });
+  }
+
+  /**
+   * A status change (spec 3.3): the action is (current status, newStatus, the user's role). JSON only – files go through
+   * addAttachments afterwards. 400 on message (required for WaitingForEmployee / Resolved); 403 when the user may not
+   * change the status; 409 when the ticket changed since rowVersion; 422 for a transition that is not allowed.
+   */
+  changeStatus(id: number, request: ChangeTicketStatusRequest): Observable<TicketUpdated> {
+    return this.http.patch<TicketUpdated>(`${this.baseUrl}/${id}/status`, request, { context: skipErrorToast() });
   }
 
   /** The targets of the transfer dialog. 403 without the assign permission. */

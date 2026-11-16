@@ -26,6 +26,8 @@
   --warning-text: #a14e00; // darker orange: passes WCAG AA as text
   --success-text: #1b6e3a;
   --success-soft: rgba(27, 110, 58, 0.1); // badge background (10% of the text colour)
+  --success-border: rgba(27, 110, 58, 0.3); // the resolved area and the resolution reply (task 3.5)
+  --success-bg: #f1f8f3;
   --warning-soft: rgba(161, 78, 0, 0.1);
   --warning-border: rgba(161, 78, 0, 0.25);
   // Urgency dots (design guide): Low green, Medium orange, High red, Critical dark red.

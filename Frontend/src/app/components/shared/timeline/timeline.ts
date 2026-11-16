@@ -1,7 +1,13 @@
 import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 
-import { StaffTimelineChange, TimelineItem } from '../../../models/ticket.models';
+import {
+  RESOLVED_WINDOW_DAYS,
+  RequesterTimelineStatus,
+  StaffTimelineChange,
+  TimelineItem,
+} from '../../../models/ticket.models';
+import { statusLabel } from '../../../pipes/status-label.pipe';
 import { urgencyLabel } from '../../../pipes/urgency-label.pipe';
 import { AttachmentChip } from '../attachment-chip/attachment-chip';
 import { RelativeTime } from '../relative-time/relative-time';
@@ -38,6 +44,32 @@ export function changeLines(change: StaffTimelineChange): ChangeLine[] {
   add('מחלקה מטפלת', change.fromDepartmentName, change.toDepartmentName, 'ללא');
   add('מטפל', change.fromHandlerName, change.toHandlerName, 'תור המחלקה');
   return lines;
+}
+
+/**
+ * A status change the system made (changedByName null), in words – the server's automatic moves (spec 3.3):
+ * routing, back to handling after the requester's reply, the automatic close, a removed handler. Null for a person's
+ * change and for the opening entry.
+ */
+export function systemEventText(item: RequesterTimelineStatus, perspective: 'requester' | 'staff'): string | null {
+  if (item.changedByName !== null || item.previousStatus === null) {
+    return null;
+  }
+  const move = `${item.previousStatus}>${item.newStatus}`;
+  switch (move) {
+    case 'New>Assigned':
+      return 'הפנייה שויכה לטיפול';
+    case 'WaitingForEmployee>InProgress':
+      return perspective === 'requester'
+        ? 'הפנייה חזרה לטיפול אחרי התגובה שלך'
+        : 'הפנייה חזרה לטיפול אחרי תגובת העובד';
+    case 'Resolved>Closed':
+      return `הפנייה נסגרה אוטומטית ${RESOLVED_WINDOW_DAYS} ימים אחרי הפתרון`;
+    case 'InProgress>Assigned':
+      return 'המטפל הוחלף – הפנייה ממתינה לתחילת טיפול';
+    default:
+      return `הסטטוס שונה ל-${statusLabel(item.newStatus)}`;
+  }
 }
 
 /**
@@ -84,13 +116,18 @@ export class Timeline {
     return item.kind === 'status' && 'reason' in item ? item.reason : null;
   }
 
-  protected commentLabel(authorName: string, isFromRequester: boolean, internal: boolean): string {
+  /** What the system did, in words (null for a person's change and for the opening entry). */
+  protected systemEventText(item: TimelineItem): string | null {
+    return item.kind === 'status' ? systemEventText(item, this.perspective()) : null;
+  }
+
+  protected commentLabel(authorName: string, isFromRequester: boolean, internal: boolean, resolution = false): string {
     if (internal) {
       return `הערה פנימית מ-${authorName}`;
     }
     if (isFromRequester) {
       return this.perspective() === 'requester' ? 'תגובה שלך' : `תגובה מהעובד ${authorName}`;
     }
-    return `תגובה מ-${authorName}`;
+    return resolution ? `תגובת פתרון מ-${authorName}` : `תגובה מ-${authorName}`;
   }
 }

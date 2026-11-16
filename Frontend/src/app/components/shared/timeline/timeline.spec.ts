@@ -79,9 +79,55 @@ describe('Timeline', () => {
     expect(downloads.download).toHaveBeenCalledOnceWith(1042, attachment);
   });
 
-  it('marks the resolution reply', () => {
-    const element = render([fakeComment({ isResolution: true })]);
-    expect(element.querySelector('.resolution-tag')!.textContent).toContain('פתרון');
+  it('the resolution reply stands out: the "פתרון" tag, its own look and a label for screen readers', () => {
+    const element = render([
+      fakeComment({ id: 1, isResolution: true, authorName: 'דנה כהן' }),
+      fakeComment({ id: 2, isResolution: false }),
+    ]);
+    const [resolution, plain] = Array.from(element.querySelectorAll<HTMLElement>('.entry-comment'));
+    expect(resolution.classList).toContain('resolution');
+    expect(resolution.querySelector('.resolution-tag')!.textContent).toContain('פתרון');
+    expect(resolution.textContent).toContain('תגובת פתרון מ-דנה כהן');
+    expect(plain.classList).not.toContain('resolution');
+    expect(plain.querySelector('.resolution-tag')).toBeNull();
+    expect(getComputedStyle(resolution.querySelector('.bubble')!).backgroundColor).not.toBe(
+      getComputedStyle(plain.querySelector('.bubble')!).backgroundColor,
+    );
+  });
+
+  it('system events: the "מערכת" tag and what happened, in words', () => {
+    const at = '2026-11-10T08:00:00Z';
+    const element = render([
+      { kind: 'status', at, previousStatus: null, newStatus: 'New', changedByName: 'ישראל ישראלי' },
+      { kind: 'status', at, previousStatus: 'New', newStatus: 'Assigned', changedByName: null },
+      { kind: 'status', at, previousStatus: 'WaitingForEmployee', newStatus: 'InProgress', changedByName: null },
+      { kind: 'status', at, previousStatus: 'Resolved', newStatus: 'Closed', changedByName: null },
+      { kind: 'status', at, previousStatus: 'Assigned', newStatus: 'InProgress', changedByName: 'דנה כהן' },
+    ]);
+    const entries = Array.from(element.querySelectorAll<HTMLElement>('.entry-status'));
+
+    expect(entries[0].querySelector('.system-tag')).toBeNull();
+    expect(entries[1].querySelector('.system-tag')!.textContent).toContain('מערכת');
+    expect(entries[1].textContent).toContain('הפנייה שויכה לטיפול');
+    expect(entries[2].textContent).toContain('הפנייה חזרה לטיפול אחרי התגובה שלך');
+    expect(entries[3].textContent).toContain('הפנייה נסגרה אוטומטית 7 ימים אחרי הפתרון');
+    expect(entries[4].querySelector('.system-tag')).toBeNull();
+    expect(entries[4].textContent).toContain('דנה כהן');
+  });
+
+  it('system events from the staff perspective speak of the employee', () => {
+    fixture.componentRef.setInput('perspective', 'staff');
+    const element = render([
+      {
+        kind: 'status',
+        at: '2026-11-10T08:00:00Z',
+        previousStatus: 'WaitingForEmployee',
+        newStatus: 'InProgress',
+        changedByName: null,
+        reason: null,
+      },
+    ]);
+    expect(element.textContent).toContain('הפנייה חזרה לטיפול אחרי תגובת העובד');
   });
 
   describe('staff view (task 3.4)', () => {

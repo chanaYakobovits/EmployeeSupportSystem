@@ -9,6 +9,7 @@ import {
   computed,
   effect,
   inject,
+  output,
   signal,
   untracked,
   viewChild,
@@ -21,19 +22,21 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { debounceTime, map } from 'rxjs';
+import { debounceTime, filter, map, of, switchMap } from 'rxjs';
 
 import { toUserMessage } from '../../../../interceptors/error.interceptor';
 import { isProblemDetails } from '../../../../models/problem-details';
 import { COMMENT_FIELD_LIMITS } from '../../../../models/ticket.models';
+import { ConfirmService } from '../../../../services/confirm.service';
 import { NotificationService } from '../../../../services/notification.service';
+import { ConfirmDialogData } from '../../../shared/confirm-dialog/confirm-dialog';
 import {
   FILES_FIELD,
   applyServerErrors,
   attachmentServerError,
   clearServerErrors,
 } from '../../../../services/server-errors';
-import { TicketHandleStore, isConflictError } from '../../../../services/ticket-handle.store';
+import { FilesNotAttachedError, TicketHandleStore, isConflictError } from '../../../../services/ticket-handle.store';
 import { isTicketClosedError } from '../../../../services/ticket-view.store';
 import { COUNTER_ANNOUNCE_DELAY_MS, describeCount, formatCount } from '../../../employee/character-count';
 import { FileUpload } from '../../../shared/file-upload/file-upload';
@@ -49,6 +52,21 @@ export const INTERNAL_SAVED_MESSAGE = 'ההערה הפנימית נשמרה';
 export const REPLY_SENT_MESSAGE = 'התגובה נשלחה לעובד';
 export const EMPTY_INTERNAL_MESSAGE = 'יש לכתוב את ההערה הפנימית';
 export const EMPTY_REPLY_MESSAGE = 'יש לכתוב תגובה או לצרף קובץ';
+/** Same wording as the server's ChangeTicketStatusRequestValidator. */
+export const EMPTY_INFO_REQUEST_MESSAGE = 'יש לכתוב לעובד איזה מידע חסר';
+export const EMPTY_RESOLUTION_MESSAGE = 'יש לכתוב לעובד את הפתרון';
+export const INFO_REQUESTED_MESSAGE = 'הבקשה למידע נשלחה לעובד';
+export const RESOLUTION_SENT_MESSAGE = 'הפתרון נשלח לעובד';
+export const FILES_NOT_ATTACHED_MESSAGE = 'הסטטוס עודכן וההודעה נשלחה, אך הקבצים לא צורפו';
+
+export const RESOLVE_CONFIRM: ConfirmDialogData = {
+  heading: 'שליחה כפתרון',
+  message: 'הפנייה תסומן כנפתרה. העובד יוכל לאשר או לפתוח מחדש תוך 7 ימים.',
+  confirmText: 'שליחה כפתרון',
+};
+
+/** What a send does: a comment / internal note, or a reply that also changes the status. */
+export type SendKind = 'comment' | 'requestInfo' | 'resolve';
 
 const MODE_ANNOUNCEMENTS: Record<ComposerMode, string> = {
   internal: 'מצב כתיבה: הערה פנימית – גלוי לצוות בלבד',
@@ -78,8 +96,12 @@ const MODE_ANNOUNCEMENTS: Record<ComposerMode, string> = {
   styleUrl: './ticket-composer.scss',
 })
 export class TicketComposer {
+  /** A status change moved the ticket out of the user's scopes – the page goes back to the queue. */
+  readonly left = output<void>();
+
   protected readonly store = inject(TicketHandleStore);
   private readonly notifications = inject(NotificationService);
+  private readonly confirm = inject(ConfirmService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly injector = inject(Injector);
   private readonly bodyField = viewChild<ElementRef<HTMLTextAreaElement>>('bodyField');
@@ -92,6 +114,11 @@ export class TicketComposer {
   protected readonly canReply = computed(() => this.store.can('reply'));
   /** Both modes allowed: the switch is shown; otherwise the one mode, labelled. */
   protected readonly showSwitch = computed(() => this.canInternal() && this.canReply());
+  /** The status sends of the reply mode – only when the server allows them. */
+  protected readonly canRequestInfo = computed(() => this.canReply() && this.store.can('requestInfo'));
+  protected readonly canResolve = computed(() => this.canReply() && this.store.can('resolve'));
+  /** Which send the "required" error belongs to (its wording). */
+  private readonly emptyKind = signal<SendKind>('comment');
 
   private readonly chosenMode = signal<ComposerMode>('internal');
   /** The chosen mode if allowed; otherwise the allowed one. The default is the internal note (no accidental reply). */
@@ -133,6 +160,17 @@ export class TicketComposer {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => this.filesError.set(null));
 
+    // "בקשת מידע" / "שליחת פתרון" in the actions area: the reply mode, and the focus in the text.
+    effect(() => {
+      if (this.store.composerFocus() === null) {
+        return;
+      }
+      untracked(() => {
+        this.setMode('reply');
+        this.focusBody();
+      });
+    });
+
     // A required error belongs to the mode it was raised in.
     effect(() => {
       this.mode();
@@ -164,19 +202,30 @@ export class TicketComposer {
     this.modeAnnouncement.set(MODE_ANNOUNCEMENTS[this.mode()]);
   }
 
+  /** The form's submit (Enter, "שליחה לעובד" / "שמירת הערה פנימית"): a comment without a status change. */
   protected submit(): void {
+    this.send('comment');
+  }
+
+  /**
+   * One of the sends: a comment (or internal note), or a reply with a status change – "שליחה ובקשת מידע"
+   * (WaitingForEmployee) or "שליחה כפתרון" (Resolved, after a confirmation). A status change needs text: it is the
+   * message the employee gets (files alone are not enough).
+   */
+  protected send(kind: SendKind): void {
     if (this.store.busy()) {
       return;
     }
     this.alert.set(null);
     this.filesError.set(null);
     clearServerErrors(this.form);
+    this.emptyKind.set(kind);
 
-    const internal = this.isInternal();
+    const internal = kind === 'comment' && this.isInternal();
     const body = this.form.controls.body.value.trim();
     const files = this.form.controls.files.value;
     // An internal note needs text (its files are internal through it); a reply may be files only.
-    if (body === '' && (internal || files.length === 0)) {
+    if (body === '' && (kind !== 'comment' || internal || files.length === 0)) {
       this.form.controls.body.setErrors({ required: true });
       this.form.controls.body.markAsTouched();
       this.focusBody();
@@ -188,21 +237,70 @@ export class TicketComposer {
       return;
     }
 
-    this.store
-      .sendComment(body, files, internal)
-      .pipe(takeUntilDestroyed(this.destroyRef))
+    if (kind === 'comment') {
+      this.store
+        .sendComment(body, files, internal)
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe({
+          next: () => this.sent(internal ? INTERNAL_SAVED_MESSAGE : REPLY_SENT_MESSAGE),
+          error: (error: unknown) => this.showError(error, files),
+        });
+      return;
+    }
+
+    const confirmed = kind === 'resolve' ? this.confirm.confirm(RESOLVE_CONFIRM) : of(true);
+    confirmed
+      .pipe(
+        filter(Boolean),
+        switchMap(() =>
+          this.store.changeStatus(kind === 'resolve' ? 'Resolved' : 'WaitingForEmployee', body, files),
+        ),
+        takeUntilDestroyed(this.destroyRef),
+      )
       .subscribe({
-        next: () => {
-          this.form.reset({ body: '', files: [] });
-          this.notifications.success(internal ? INTERNAL_SAVED_MESSAGE : REPLY_SENT_MESSAGE);
-          this.focusBody();
+        next: (outcome) => {
+          if (outcome === 'left') {
+            this.form.reset({ body: '', files: [] });
+            this.left.emit();
+            return;
+          }
+          this.sent(kind === 'resolve' ? RESOLUTION_SENT_MESSAGE : INFO_REQUESTED_MESSAGE);
         },
-        error: (error: unknown) => this.showError(error, files),
+        error: (error: unknown) => {
+          if (error instanceof FilesNotAttachedError) {
+            this.filesNotAttached(error, files);
+          } else {
+            this.showError(error, files);
+          }
+        },
       });
   }
 
   protected emptyMessage(): string {
-    return this.isInternal() ? EMPTY_INTERNAL_MESSAGE : EMPTY_REPLY_MESSAGE;
+    switch (this.emptyKind()) {
+      case 'requestInfo':
+        return EMPTY_INFO_REQUEST_MESSAGE;
+      case 'resolve':
+        return EMPTY_RESOLUTION_MESSAGE;
+      default:
+        return this.isInternal() ? EMPTY_INTERNAL_MESSAGE : EMPTY_REPLY_MESSAGE;
+    }
+  }
+
+  /** Sent: the store already reloaded the status, the timeline and the allowed actions. */
+  private sent(message: string): void {
+    this.form.reset({ body: '', files: [] });
+    this.notifications.success(message);
+    this.focusBody();
+  }
+
+  /** The status changed and the message was sent; only the files failed. The text goes, the files stay. */
+  private filesNotAttached(error: FilesNotAttachedError, files: readonly File[]): void {
+    this.form.controls.body.reset('');
+    this.filesError.set(attachmentServerError(error.filesError, files));
+    const httpError =
+      error.filesError instanceof HttpErrorResponse ? error.filesError : new HttpErrorResponse({ status: 500 });
+    this.alert.set({ title: FILES_NOT_ATTACHED_MESSAGE, detail: toUserMessage(httpError) });
   }
 
   /** The text and files stay in the form whatever the error. */
@@ -217,7 +315,8 @@ export class TicketComposer {
     }
     const filesError = attachmentServerError(error, files);
     this.filesError.set(filesError);
-    const applied = applyServerErrors(this.form, error, { skipFields: [FILES_FIELD] });
+    // PATCH /status names the text "message"; the comment endpoints name it "body".
+    const applied = applyServerErrors(this.form, error, { skipFields: [FILES_FIELD], fieldAliases: { message: 'body' } });
     if (applied.unmatched.length === 0 && (filesError || applied.fields.length > 0)) {
       if (applied.fields.length > 0) {
         this.focusBody();

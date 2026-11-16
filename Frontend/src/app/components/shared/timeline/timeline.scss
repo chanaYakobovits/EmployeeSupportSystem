@@ -123,12 +123,44 @@
 }
 
 .resolution-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
   padding: 0 10px;
   border-radius: 20px;
   background: var(--success-soft);
   color: var(--success-text);
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
+  line-height: 20px;
+
+  mat-icon {
+    width: 14px;
+    height: 14px;
+    font-size: 14px;
+  }
+}
+
+// The handler's resolution reply stands out (task 3.5).
+.resolution .bubble {
+  border: 1px solid var(--success-border);
+  border-inline-start: 3px solid var(--success-text);
+  background: var(--success-bg);
+}
+
+.resolution .marker {
+  background: var(--success-soft);
+  color: var(--success-text);
+}
+
+// What the system did on its own: a neutral "מערכת" tag next to the words.
+.system-tag {
+  padding: 0 8px;
+  border-radius: 20px;
+  background: var(--neutral-soft);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
   line-height: 20px;
 }
 

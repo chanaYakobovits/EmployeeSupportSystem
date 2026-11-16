@@ -1,16 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import {
-  ChangeDetectionStrategy,
-  Component,
-  DestroyRef,
-  ElementRef,
-  Injector,
-  afterNextRender,
-  computed,
-  inject,
-  signal,
-  viewChild,
-} from '@angular/core';
+import { ChangeDetectionStrategy,Component,DestroyRef,ElementRef,Injector,afterNextRender,computed, inject,signal,viewChild,} from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { AbstractControl, FormControl, FormGroup, ReactiveFormsModule, ValidationErrors, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -20,7 +9,6 @@ import { MatInputModule } from '@angular/material/input';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { Router, RouterLink } from '@angular/router';
 import { debounceTime, map } from 'rxjs';
-
 import { toUserMessage } from '../../../interceptors/error.interceptor';
 import { isProblemDetails } from '../../../models/problem-details';
 import { TICKET_FIELD_LIMITS } from '../../../models/ticket.models';
@@ -28,12 +16,7 @@ import { NotificationService } from '../../../services/notification.service';
 import { FileUpload } from '../../shared/file-upload/file-upload';
 import { FormAlert, FormAlertBox } from '../../shared/form-alert/form-alert';
 import { PageHeader } from '../../shared/page-header/page-header';
-import {
-  FILES_FIELD,
-  applyServerErrors,
-  attachmentServerError,
-  clearServerErrors,
-} from '../../../services/server-errors';
+import { FILES_FIELD,applyServerErrors,attachmentServerError,clearServerErrors,} from '../../../services/server-errors';
 import { HasUnsavedChanges, unsavedMessage } from '../../../guards/unsaved-changes.guard';
 import { COUNTER_ANNOUNCE_DELAY_MS, describeCount, formatCount } from '../character-count';
 import { MY_TICKETS_URL, ticketUrl } from '../employee-urls';
@@ -63,18 +46,8 @@ const FIELD_ORDER = ['subject', 'description'] as const;
  */
 @Component({
   selector: 'app-new-ticket-page',
-  imports: [
-    ReactiveFormsModule,
-    RouterLink,
-    MatButtonModule,
-    MatFormFieldModule,
-    MatIconModule,
-    MatInputModule,
-    MatProgressSpinnerModule,
-    PageHeader,
-    FormAlertBox,
-    FileUpload,
-  ],
+  imports: [ReactiveFormsModule,RouterLink, MatButtonModule,MatFormFieldModule,
+    MatIconModule, MatInputModule,MatProgressSpinnerModule, PageHeader,FormAlertBox,FileUpload,],
   providers: [NewTicketStore],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { '(window:beforeunload)': 'onBeforeUnload($event)' },

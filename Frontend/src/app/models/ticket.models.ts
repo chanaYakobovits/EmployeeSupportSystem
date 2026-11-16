@@ -98,6 +98,30 @@ export interface RequesterTicketDetails {
   closedAt: string | null;
   /** Status changes only (task 3.1). The ticket view shows GET /history instead. */
   timeline: RequesterTicketHistoryItem[];
+  /** Base64; sent back with the requester's status changes (cancel, confirm, reopen). */
+  rowVersion: string;
+  /** What the requester may do now – the screen shows only these (never computed in the client). */
+  allowedActions: RequesterTicketAction[];
+}
+
+/** The requester's actions on their ticket (Backend TicketActions: reply, cancel, confirmResolved, reopen). */
+export type RequesterTicketAction = 'reply' | 'cancel' | 'confirmResolved' | 'reopen';
+
+/**
+ * After a resolution the requester may reopen within this many days; then the ticket is closed automatically.
+ * Same value as the server's TicketStatusRules.ResolvedWindow – change both together.
+ */
+export const RESOLVED_WINDOW_DAYS = 7;
+
+/**
+ * PATCH /api/tickets/{id}/status (JSON). message: a comment the requester sees, saved with the change – required for
+ * WaitingForEmployee and Resolved. reason: internal (handlers only). Files go through POST /attachments afterwards.
+ */
+export interface ChangeTicketStatusRequest {
+  newStatus: TicketStatus;
+  rowVersion: string;
+  reason?: string;
+  message?: string;
 }
 
 /** A status change in the timeline of GET /history. No reason (it may be internal). */
@@ -142,9 +166,6 @@ export interface RequesterTicketHistory {
   ticketId: number;
   items: RequesterTimelineItem[];
 }
-
-/** No comments or files can be added (the server answers 422 ticket-closed). */
-export const CLOSED_TICKET_STATUSES: readonly TicketStatus[] = ['Closed', 'Cancelled'];
 
 /** Closed list of sortBy values of GET /api/tickets/my (Backend MyTicketSortFields). */
 export const MY_TICKET_SORT_FIELDS = ['createdAt', 'updatedAt', 'status'] as const;
@@ -254,7 +275,19 @@ export interface StaffTicketListItem {
 }
 
 /** The actions the server allows on one ticket (Backend TicketActions) – the screen shows only these. */
-export type TicketAction = 'reply' | 'internalNote' | 'reclassify' | 'assign' | 'transferToDepartment' | 'takeFromQueue';
+export type TicketAction =
+  | 'reply'
+  | 'internalNote'
+  | 'reclassify'
+  | 'assign'
+  | 'transferToDepartment'
+  | 'takeFromQueue'
+  /** "התחל טיפול": Assigned → InProgress (from the queue it also assigns the user). */
+  | 'start'
+  /** InProgress → WaitingForEmployee, with a message to the employee. */
+  | 'requestInfo'
+  /** InProgress → Resolved, with the resolution reply. */
+  | 'resolve';
 
 export interface NamedRef {
   id: number;

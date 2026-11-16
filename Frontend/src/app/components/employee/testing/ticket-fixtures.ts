@@ -26,8 +26,15 @@ export function pageOf<T>(items: T[]): PagedResult<T> {
   return { items, page: 1, pageSize: 25, totalCount: items.length };
 }
 
+/**
+ * Without allowedActions in the overrides: reply only (none for a closed / cancelled ticket) – the status actions are
+ * added by the tests that need them, as the server would send them.
+ */
 export function fakeTicketDetails(overrides: Partial<RequesterTicketDetails> = {}): RequesterTicketDetails {
+  const status = overrides.status ?? 'New';
   return {
+    allowedActions: status === 'Closed' || status === 'Cancelled' ? [] : ['reply'],
+    rowVersion: 'AAAAAAAAA+g=',
     id: 1042,
     subject: 'המחשב לא נדלק',
     description: 'הבוקר המחשב לא נדלק.\nניסיתי להחליף שקע.',
