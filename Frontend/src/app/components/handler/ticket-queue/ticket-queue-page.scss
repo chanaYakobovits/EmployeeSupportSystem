@@ -100,3 +100,24 @@
   font-size: 13px;
   color: var(--text-secondary);
 }
+
+// Bulk selection (task 3.6). On phones the table header is gone, so "select all" sits above the cards; the cards' own
+// checkbox selects one ticket (no long press: it is not reachable by keyboard or a screen reader).
+.select-all-narrow {
+  display: none;
+  margin-bottom: 8px;
+}
+
+@media (max-width: 599.98px) {
+  .select-all-narrow {
+    display: block;
+  }
+}
+
+.card-select {
+  margin-inline: -8px -4px;
+}
+
+.ticket-card-top .ticket-number {
+  margin-inline-end: auto;
+}

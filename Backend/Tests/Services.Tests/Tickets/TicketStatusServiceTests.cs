@@ -491,6 +491,8 @@ public sealed class TicketStatusServiceTests : TicketTestBase
     {
         public Task SaveChangesAsync(CancellationToken cancellationToken) => Task.FromException(exception);
 
+        public void DiscardChanges() { }
+
         public Task<T> ExecuteInTransactionAsync<T>(Func<CancellationToken, Task<T>> action,
             CancellationToken cancellationToken) => throw new NotSupportedException();
     }

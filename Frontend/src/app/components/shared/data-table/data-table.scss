@@ -136,6 +136,24 @@ tbody tr {
   }
 }
 
+// rowClass "row-selected": chosen for a bulk action (task 3.6). A tint and an inner outline, so it also shows on a red
+// (overdue) row; the row's checkbox says it in text. Before the other row classes – their background wins.
+tr.row-selected {
+  background: var(--primary-soft-hover);
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+
+  &:hover {
+    background: var(--primary-soft-hover);
+  }
+}
+
+.row-card.row-selected {
+  background: var(--primary-soft-hover);
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+
 // rowClass "row-attention": a row that needs the user's action (e.g. a ticket waiting for the employee).
 // Tinted, with a stripe on the start side – the row also says why in text, so colour is not the only cue.
 tr.row-attention {

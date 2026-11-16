@@ -1,7 +1,9 @@
+using API.Auth;
 using API.Extensions;
 using Common.Constants;
 using Common.DTOs.Paging;
 using Common.DTOs.Tickets;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Services.Interfaces;
@@ -23,7 +25,8 @@ public class TicketsController(
     ITicketService ticketService,
     ITicketConversationService conversationService,
     ITicketHandlingService handlingService,
-    ITicketStatusService statusService) : ControllerBase
+    ITicketStatusService statusService,
+    ITicketBulkService bulkService) : ControllerBase
 {
     /// <summary>
     /// Opens a ticket for the signed-in user (multipart: subject, description, up to 3 files). Saved immediately with
@@ -144,6 +147,44 @@ public class TicketsController(
     public async Task<ActionResult<TicketAssignOptionsDto>> GetAssignOptions(int id,
         CancellationToken cancellationToken) =>
         Ok(await handlingService.GetAssignOptionsAsync(id, cancellationToken));
+
+    /// <summary>
+    /// Bulk "התחל טיפול" (spec 11.2, task 3.6): up to 100 tickets with the version the user saw; each one through
+    /// PATCH /{id}/status with its own save. 200 with the tickets that succeeded and why the others did not (Conflict,
+    /// NotFound, InvalidTransition). Another status (request info, resolve – they need a message) → 400.
+    /// </summary>
+    [HttpPost("bulk/status")]
+    [Authorize(Policy = Policies.Handler)]
+    [Consumes("application/json")]
+    [ProducesResponseType<BulkUpdateResultDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<BulkUpdateResultDto>> BulkChangeStatus(BulkChangeStatusRequest request,
+        CancellationToken cancellationToken) =>
+        Ok(await bulkService.ChangeStatusAsync(request, HttpContext.ClientIp(), cancellationToken));
+
+    /// <summary>
+    /// Bulk transfer (task 3.6): every ticket to the same handler or department queue with one reason; each one through
+    /// POST /{id}/assign with its own save. 200 with the tickets that succeeded and why the others did not (Conflict,
+    /// NotFound, InvalidTransition, InvalidTarget).
+    /// </summary>
+    [HttpPost("bulk/assign")]
+    [Authorize(Policy = Policies.Handler)]
+    [Consumes("application/json")]
+    [ProducesResponseType<BulkUpdateResultDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<BulkUpdateResultDto>> BulkAssign(BulkAssignRequest request,
+        CancellationToken cancellationToken) =>
+        Ok(await bulkService.AssignAsync(request, HttpContext.ClientIp(), cancellationToken));
+
+    /// <summary>
+    /// The targets of the bulk transfer dialog (task 3.6): active handlers of the user's department (not the user) and
+    /// other departments with an active handler. What depends on one ticket is checked per ticket.
+    /// </summary>
+    [HttpGet("bulk/assign-options")]
+    [Authorize(Policy = Policies.Handler)]
+    [ProducesResponseType<BulkAssignOptionsDto>(StatusCodes.Status200OK)]
+    public async Task<ActionResult<BulkAssignOptionsDto>> GetBulkAssignOptions(CancellationToken cancellationToken) =>
+        Ok(await handlingService.GetBulkAssignOptionsAsync(cancellationToken));
 
     /// <summary>
     /// The timeline: status changes, comments and files in order. The requester gets

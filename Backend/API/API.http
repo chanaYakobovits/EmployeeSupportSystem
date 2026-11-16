@@ -1584,3 +1584,83 @@ Content-Type: application/json
 ### Auto-close (AutoCloseResolvedWorker, every AutoClose:IntervalMinutes): Resolved for 7 days → Closed by "מערכת".
 ### To see it locally: resolve a ticket, then UPDATE Tickets SET ResolvedAt = DATEADD(day, -8, SYSUTCDATETIME()) WHERE Id = ...,
 ### set AutoClose:IntervalMinutes to 1 and restart the API.
+
+### ======================================================================================
+### ============ Bulk update – task 3.6. Run --seed first and the Alon / Liat logins above ============
+### ======================================================================================
+### POST /bulk/status (only "התחל טיפול" = InProgress) and POST /bulk/assign: up to 100 { id, rowVersion }; each ticket
+### through the single action with its own save. 200 { succeeded: [ids], failed: [{ id, reason, errorType }] },
+### reason = Conflict | NotFound | InvalidTransition | InvalidTarget. The ids and versions come from Alon's queue list.
+
+### Alon's queue (seed: ticket 152 and the other tickets of הנהלת חשבונות without a personal handler)
+# @name bulkQueue
+GET {{API_HostAddress}}/api/tickets?scope=queue&status=Assigned
+Authorization: Bearer {{staffAlon.response.body.$.accessToken}}
+
+### Partial success: the first two of the queue start (Alon is assigned – a "Taken" change row), a stale version →
+### Conflict, a missing ticket → NotFound, Liat's ticket 12 (outside Alon's scopes) → NotFound
+POST {{API_HostAddress}}/api/tickets/bulk/status
+Authorization: Bearer {{staffAlon.response.body.$.accessToken}}
+Content-Type: application/json
+
+{
+  "newStatus": "InProgress",
+  "items": [
+    { "id": {{bulkQueue.response.body.$.items[0].id}}, "rowVersion": "{{bulkQueue.response.body.$.items[0].rowVersion}}" },
+    { "id": {{bulkQueue.response.body.$.items[1].id}}, "rowVersion": "{{bulkQueue.response.body.$.items[1].rowVersion}}" },
+    { "id": {{bulkQueue.response.body.$.items[2].id}}, "rowVersion": "AAAAAAAAAAE=" },
+    { "id": 99999, "rowVersion": "AAAAAAAAAAE=" },
+    { "id": 12, "rowVersion": "AAAAAAAAAAE=" }
+  ]
+}
+
+### Run it again: the first two are InProgress now → Conflict (their version changed). With fresh versions from
+### scope=assigned they would be InvalidTransition ("invalid-status-transition").
+
+### A status that needs a message to the employee → 400 on newStatus
+POST {{API_HostAddress}}/api/tickets/bulk/status
+Authorization: Bearer {{staffAlon.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "newStatus": "Resolved", "items": [ { "id": 152, "rowVersion": "AAAAAAAAAAE=" } ] }
+
+### A repeated ticket → 400 on items ("פנייה מספר 152 נבחרה יותר מפעם אחת"); an empty list or over 100 → 400 on items
+POST {{API_HostAddress}}/api/tickets/bulk/status
+Authorization: Bearer {{staffAlon.response.body.$.accessToken}}
+Content-Type: application/json
+
+{
+  "newStatus": "InProgress",
+  "items": [ { "id": 152, "rowVersion": "AAAAAAAAAAE=" }, { "id": 152, "rowVersion": "AAAAAAAAAAE=" } ]
+}
+
+### The targets of the bulk transfer dialog → 200 { handlers (Alon's department, not Alon), departments (with handlers) }
+# @name bulkOptions
+GET {{API_HostAddress}}/api/tickets/bulk/assign-options
+Authorization: Bearer {{staffAlon.response.body.$.accessToken}}
+
+### Bulk transfer to another department's queue with one reason (required) → each one with a "Transferred" change row
+### (the reason in the staff timeline only); canView is not returned – the list is reloaded
+# @name bulkQueue2
+GET {{API_HostAddress}}/api/tickets?scope=queue&status=Assigned
+Authorization: Bearer {{staffAlon.response.body.$.accessToken}}
+
+###
+POST {{API_HostAddress}}/api/tickets/bulk/assign
+Authorization: Bearer {{staffAlon.response.body.$.accessToken}}
+Content-Type: application/json
+
+{
+  "targetDepartmentId": {{bulkOptions.response.body.$.departments[0].id}},
+  "reason": "העברה מרוכזת: נושאים של המחלקה",
+  "items": [
+    { "id": {{bulkQueue2.response.body.$.items[0].id}}, "rowVersion": "{{bulkQueue2.response.body.$.items[0].rowVersion}}" }
+  ]
+}
+
+### Without a reason → 400 on reason; Ron (no Handler role) → 403 on every bulk endpoint
+POST {{API_HostAddress}}/api/tickets/bulk/assign
+Authorization: Bearer {{staffRon.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "targetDepartmentId": 2, "reason": "", "items": [ { "id": 152, "rowVersion": "AAAAAAAAAAE=" } ] }

@@ -1,0 +1,45 @@
+<div class="bar" role="region" aria-label="פעולות על הפניות שנבחרו">
+  <p class="count" aria-live="polite" aria-atomic="true">{{ countText() }}</p>
+
+  <div class="actions">
+    <button
+      mat-flat-button
+      type="button"
+      class="btn-primary-gradient"
+      data-action="start"
+      [disabled]="busy() || overLimit()"
+      (click)="start.emit()"
+    >
+      @if (running() === 'start') {
+        <mat-spinner diameter="18" aria-hidden="true" />
+      } @else {
+        <mat-icon aria-hidden="true">play_arrow</mat-icon>
+      }
+      התחל טיפול
+    </button>
+
+    <button
+      mat-stroked-button
+      type="button"
+      data-action="assign"
+      [disabled]="busy() || overLimit()"
+      (click)="assign.emit()"
+    >
+      @if (running() === 'assign') {
+        <mat-spinner diameter="18" aria-hidden="true" />
+      } @else {
+        <mat-icon aria-hidden="true">swap_horiz</mat-icon>
+      }
+      העברה…
+    </button>
+
+    <button mat-button type="button" data-action="clear" [disabled]="busy()" (click)="clear.emit()">
+      <mat-icon aria-hidden="true">close</mat-icon>
+      ניקוי בחירה
+    </button>
+  </div>
+
+  @if (overLimit()) {
+    <p class="limit" role="alert">ניתן לעדכן עד {{ maxItems }} פניות בפעולה אחת. יש להסיר חלק מהבחירה.</p>
+  }
+</div>

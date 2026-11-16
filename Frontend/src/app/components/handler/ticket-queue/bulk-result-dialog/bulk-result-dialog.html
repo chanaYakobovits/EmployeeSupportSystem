@@ -1,0 +1,29 @@
+<h2 mat-dialog-title id="bulk-result-title">
+  {{ data.action === 'start' ? 'התחלת טיפול' : 'העברת פניות' }}
+</h2>
+
+<mat-dialog-content>
+  <p id="bulk-result-summary" class="summary" [class.has-failures]="failures.length > 0">
+    <mat-icon aria-hidden="true">{{ failures.length === 0 ? 'check_circle' : 'info' }}</mat-icon>
+    <span>{{ summary }}</span>
+  </p>
+
+  @if (failures.length > 0) {
+    <h3 class="failures-heading" id="bulk-failures-heading">פניות שלא עודכנו</h3>
+    <ul class="failures" aria-labelledby="bulk-failures-heading">
+      @for (failure of failures; track failure.id) {
+        <li class="failure">
+          <a class="ticket-number" mat-dialog-close [routerLink]="ticketUrl(failure.id)" [state]="navigationState">
+            <span class="visually-hidden">פנייה מספר </span><span dir="ltr">#{{ failure.id }}</span>
+          </a>
+          <span class="reason">{{ failure.text }}</span>
+        </li>
+      }
+    </ul>
+    <p class="note">הפניות שלא עודכנו נשארו מסומנות ברשימה, והרשימה רועננה.</p>
+  }
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-flat-button type="button" class="btn-primary-gradient" mat-dialog-close cdkFocusInitial>סגירה</button>
+</mat-dialog-actions>

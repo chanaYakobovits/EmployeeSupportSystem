@@ -52,6 +52,16 @@ export class DataTableCell {
 }
 
 /**
+ * Custom content of a column's header (e.g. a "select all" checkbox): <ng-template appHeaderCell="select">…</ng-template>.
+ * Replaces the header text; the column is then not sortable from its header.
+ */
+@Directive({ selector: 'ng-template[appHeaderCell]' })
+export class DataTableHeaderCell {
+  readonly key = input.required<string>({ alias: 'appHeaderCell' });
+  readonly template = inject<TemplateRef<unknown>>(TemplateRef);
+}
+
+/**
  * Optional card layout of a row for narrow screens (phones): <ng-template appRowCard let-row>…</ng-template>.
  * When present, the table is replaced by a list of these cards below the XSmall breakpoint.
  * The card should contain a link, so keyboard users can open the row.
@@ -91,7 +101,8 @@ export class DataTable<T> {
   readonly trackBy = input<(row: T) => unknown>((row) => (row as { id?: unknown }).id ?? row);
   /**
    * Extra CSS class of a row (or its card). Styled here: "row-attention" (needs the user's action), "row-overdue"
-   * (past its SLA – the row must also say so in text and with an icon, not by colour alone).
+   * (past its SLA – the row must also say so in text and with an icon, not by colour alone), "row-selected" (chosen for a
+   * bulk action – the row's checkbox says so too).
    */
   readonly rowClass = input<(row: T) => string | null>(() => null);
 
@@ -104,6 +115,10 @@ export class DataTable<T> {
   private readonly cells = contentChildren(DataTableCell);
   protected readonly templates = computed(() => new Map(this.cells().map((cell) => [cell.key(), cell.template])));
   protected readonly rowCard = contentChild(DataTableRowCard);
+  private readonly headerCells = contentChildren(DataTableHeaderCell);
+  protected readonly headerTemplates = computed(
+    () => new Map(this.headerCells().map((cell) => [cell.key(), cell.template])),
+  );
 
   private readonly isNarrow = toSignal(
     inject(BreakpointObserver)
@@ -174,7 +189,7 @@ export class DataTable<T> {
     }
     // A link or a button inside the row does its own thing.
     const target = event.target as HTMLElement | null;
-    if (target?.closest('a, button, input, select, textarea, [role="button"], [role="menuitem"]')) {
+    if (target?.closest('a, button, input, select, textarea, label, .mat-mdc-checkbox, [role="button"], [role="menuitem"]')) {
       return;
     }
     this.rowActivate.emit(row);

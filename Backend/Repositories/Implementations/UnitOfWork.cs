@@ -47,6 +47,8 @@ public sealed partial class UnitOfWork(AppDbContext db) : IUnitOfWork
         return result;
     }
 
+    public void DiscardChanges() => db.ChangeTracker.Clear();
+
     [GeneratedRegex("(?:index|constraint) '([^']+)'")]
     private static partial Regex IndexNamePattern();
 }

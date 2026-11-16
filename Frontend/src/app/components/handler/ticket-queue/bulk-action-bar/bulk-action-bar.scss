@@ -1,0 +1,60 @@
+:host {
+  display: block;
+  position: sticky;
+  bottom: 16px;
+  z-index: 2;
+  margin-top: 16px;
+}
+
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 12px 16px;
+  border: 1px solid var(--primary);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+
+.count {
+  margin: 0;
+  font-weight: 600;
+  color: var(--primary-dark);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-inline-start: auto;
+}
+
+.limit {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 14px;
+  color: var(--error-text);
+}
+
+mat-spinner {
+  display: inline-block;
+  margin-inline-end: 8px;
+}
+
+// Phones: the count on its own line, the actions share the width.
+@media (max-width: 599.98px) {
+  :host {
+    bottom: 8px;
+  }
+
+  .actions {
+    margin-inline-start: 0;
+    width: 100%;
+
+    button {
+      flex: 1 1 auto;
+    }
+  }
+}

@@ -16,7 +16,8 @@
 - שינוי ב-3.4 (לא באפיון): מיון "עדיפות" כברירת מחדל ותור בלי סגורות/מבוטלות כברירת מחדל – הושלם.
 - 3.5 חלק א' (שרת: TicketStatusRules, PATCH /status, השהיית SLA, פתיחה מחדש, סגירה אוטומטית, allowedActions) – הושלם.
 - 3.5 חלק ב' (פעולות סטטוס במסכי העובד והמטפל, אזור "נפתרה", אירועי מערכת בציר הזמן) – הושלם.
-- הבא בתור: 3.6 – עדכון מרובה.
+- 3.6 עדכון מרובה (שרת: bulk/status ו-bulk/assign; מסך: בחירה, סרגל פעולות, חלון תוצאה בתור המטפל) – הושלם.
+- הבא בתור: 4.3 – ניתוח AI ברקע (שלב ד').
 - תוספת שלא באפיון: בדיקת איכות סיווג AI על 30 פניות לדוגמה – אחרי משימה 4.3.
 - תוספת שלא באפיון: הזמנת עובד במייל (האפיון 14 שאלה 3, "בעתיד"). שלב א' (שרת) ושלב ב' (מסך set-password, סטטוס הזמנה
   ברשימה ובעריכה, שליחה מחדש, סינון לפי סטטוס הזמנה) – הושלמו.
@@ -431,6 +432,33 @@
   * ציר הזמן: `systemEventText` – תג "מערכת" + טקסט לפי המעבר (שיוך, חזרה לטיפול אחרי תגובה, סגירה אוטומטית, החלפת מטפל).
     תגובת פתרון: מחלקה `resolution` (`--success-border`/`--success-bg`) + תג "פתרון". "הפניות שלי": Resolved ← "ממתינה לאישורך" + `row-attention`.
 
+- עדכון מרובה (משימה 3.6, 11.2 – Partial Success):
+  * `POST /api/tickets/bulk/status` (רק `newStatus: InProgress` = "התחל טיפול"; כל סטטוס אחר ← 400 על newStatus – בקשת מידע ופתרון
+    דורשים הודעה לעובד, פנייה-פנייה), `POST /bulk/assign` (`{ targetUserId? | targetDepartmentId?, reason, items }`, נימוק חובה),
+    `GET /bulk/assign-options` (מטפלי המחלקה של המשתמש בלעדיו + מחלקות פעילות אחרות עם מטפל; אותן מתודות פרטיות כמו
+    assign-options של פנייה). שלושתם `[Authorize(Policy = Policies.Handler)]`.
+  * items: 1–`BulkLimits.MaxItems` (100, בלקוח `BULK_LIMITS`) של `{ id, rowVersion }`, מזהה כפול ← 400 על `items`, פריט פגום ←
+    `items[i].id`/`items[i].rowVersion` (`BulkItemRules`).
+  * **בלי כללים משלו:** `TicketBulkService` קורא לכל פנייה ל-`ITicketStatusService.ChangeStatusAsync` / `ITicketHandlingService.AssignAsync`
+    (TicketAccess, TicketStatusRules, ניתוב, היסטוריה, rowVersion ולוג – כמו בבודדת), ו-`BulkFailures.Classify` ממפה את החריגה:
+    NotFound/Forbidden ← `NotFound` (לא מבחינים); Conflict "concurrency" ← `Conflict`; BusinessRule עם קוד יעד (`TargetErrorTypes`:
+    assignee-*, assignment-unchanged, ticket-not-routed, department-has-no-handlers) ← `InvalidTarget`, אחר ← `InvalidTransition`;
+    Validation של פריט ← `InvalidTarget`. כל חריגה אחרת (401, תקלת מסד) נזרקת – מה שכבר נשמר נשאר. תשובה 200
+    `{ succeeded: [ids], failed: [{ id, reason, errorType }] }` בסדר הבקשה; errorType כדי שהלקוח יסביר במדויק (null ב-NotFound).
+  * **`IUnitOfWork.DiscardChanges()` (`ChangeTracker.Clear`) אחרי כל פנייה** – אחרת פנייה שה-save שלה נכשל (409) נשארת Modified
+    ונכתבת עם הפנייה הבאה. בבדיקות: `ConflictOnFirstSave` ב-`TicketBulkServiceTests`.
+  * AuditLog: אין שורה לכל פנייה (כמו בבודדת – ההיסטוריה היא התיעוד); שורה אחת לבקשה `Ticket.BulkStatus` / `Ticket.BulkAssign`
+    (EntityId null). ל-AuditLog אין שדות תוכן, ולכן המונים (מבוקשות/הצליחו/נכשלו, משך) רק בלוג. לכל כישלון שורת לוג עם מזהה,
+    reason ו-errorType. בלי נימוק.
+  * לקוח: הבחירה ב-`TicketQueueStore` (`selectedIds`, `toggle`, `toggleAllOnPage` – רק `list.items()`). effect על `list.state()` מאפס
+    (עמוד, גודל, סינון, מיון; לשונית = מסך חדש); `reload()` לא משנה את ה-state ולכן שומר. אחרי כל טעינה נשארות מסומנות רק פניות
+    שבעמוד. אחרי פעולה: הבחירה = הכשלונות, והרשימה נטענת מחדש בכל תשובה (גם בשגיאה). rowVersion מהשורה הטעונה.
+  * `app-data-table`: `appHeaderCell="key"` (תבנית בכותרת עמודה), ‏rowClass `row-selected` (רקע + outline, משתלב עם row-overdue).
+  * `components/handler/ticket-queue/`: `bulk-action-bar` (region + "נבחרו X פניות" ב-aria-live, מעל 100 ← מושבת עם הסבר),
+    `bulk-assign-dialog` (כמו assign-dialog, יעד + נימוק אחד), `bulk-result-dialog` (סיכום + רשימת כשלונות עם קישור ו-`bulkFailureText`
+    מ-`handler-messages.ts`, מוכרז ב-LiveAnnouncer). ‏checkbox: ‏"בחר פנייה 1042", כותרת "בחירת כל הפניות בעמוד".
+  * רוחב צר: checkbox בכל כרטיס + "בחירת כל הפניות בעמוד" מעל הכרטיסים (CSS, רק ב-XSmall). בלי לחיצה ארוכה – לא נגישה.
+
 ## בהמשך
 - משימה 2.2: לטעון את Shell ב-loadComponent (lazy), מסך ההתחברות מחוצה לו –
   כדי להוריד את ה-bundle הראשוני מתחת ל-500KB. לא להגדיל את ה-budget.
@@ -439,7 +467,6 @@
   לרשת מ-`PollingBackgroundService` ולעבד כל משימה ב-`CreateOrganizationScope(job.OrganizationId)`. לא IgnoreQueryFilters כללי.
 
   - 6.1 (בדיקות אינטגרציה): 429 ביצירת פנייה; JSON של עובד מ-GET /api/tickets/{id} בלי שדות פנימיים.
-- 3.6 (עדכון מרובה): לעבור דרך `TicketStatusRules` ו-`TicketStatusTransitions.Apply`, כל פנייה עם save משלה (כמו AutoClose).
 - 4.3: הסיווג של ה-AI דרך `ITicketClassifier.ApplyAsync` עם `Ai`, ו-`RoutingService` עם `job.OrganizationId`. אם מטפל כבר
   סיווג ידנית (`ClassificationSource.Manual`) – תוצאת ה-AI נשמרת כהמלצה בלבד (11.2).
 - שלב ה': היקף `department` (מנהל/מנכ"ל) קיים ב-API, אין לו מסך. מנהל שפותח פנייה של עובד אחר במסך העובד רואה

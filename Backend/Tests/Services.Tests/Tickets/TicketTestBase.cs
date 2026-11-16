@@ -172,6 +172,28 @@ public abstract class TicketTestBase
             StatusLogger);
     }
 
+    /// <summary>
+    /// Bulk update (task 3.6) as in a request of <paramref name="userId"/>: the single services over one context and one
+    /// unit of work, as in the app's request scope.
+    /// </summary>
+    protected readonly CapturingLogger<TicketBulkService> BulkLogger = new();
+
+    protected TicketBulkService BulkFor(int userId, int organizationId = OrgA)
+    {
+        var db = CreateContext(userId, organizationId);
+        var currentUser = new FakeCurrentUser { SignedInUserId = userId, SignedInOrganizationId = organizationId };
+        var unitOfWork = UnitOfWorkFor(db);
+        var access = AccessFor(db, currentUser);
+        var status = new TicketStatusService(access, new TicketRepository(db), new UserRepository(db), ReferenceData,
+            new SlaPolicyRepository(db), unitOfWork, Clock, new ChangeTicketStatusRequestValidator(), StatusLogger);
+        var handling = new TicketHandlingService(access, new TicketRepository(db), new UserRepository(db),
+            new CategoryRepository(db), new DepartmentRepository(db), ReferenceData, ClassifierFor(db, RoutingFor(db)),
+            unitOfWork, Clock, currentUser, new ReclassifyTicketRequestValidator(), new AssignTicketRequestValidator(),
+            HandlingLogger);
+        return new TicketBulkService(status, handling, new AuditLogRepository(db), unitOfWork, currentUser, Clock,
+            new BulkChangeStatusRequestValidator(), new BulkAssignRequestValidator(), BulkLogger);
+    }
+
     /// <summary>The auto-close job: listing without an organization, closing in a scope entered for the organization.</summary>
     protected readonly CapturingLogger<AutoCloseService> AutoCloseLogger = new();
 

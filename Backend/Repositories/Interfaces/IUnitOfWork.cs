@@ -13,4 +13,10 @@ public interface IUnitOfWork
     /// or mixes SaveChanges with bulk updates that must succeed or fail together.
     /// </summary>
     Task<T> ExecuteInTransactionAsync<T>(Func<CancellationToken, Task<T>> action, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Forgets everything loaded or staged in this scope and not saved. Required between the items of a bulk update
+    /// (task 3.6): a ticket whose save failed (409) stays modified in the scope, and the next item's save would write it.
+    /// </summary>
+    void DiscardChanges();
 }

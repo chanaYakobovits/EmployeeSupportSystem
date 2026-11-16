@@ -151,6 +151,8 @@ public sealed class CreateTicketTests : TicketTestBase
         public int SaveCount { get; private set; }
         public int TransactionCount { get; private set; }
 
+        public void DiscardChanges() => inner?.DiscardChanges();
+
         public Task SaveChangesAsync(CancellationToken cancellationToken)
         {
             SaveCount++;

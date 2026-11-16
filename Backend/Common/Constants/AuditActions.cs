@@ -43,6 +43,11 @@ public static class AuditActions
 
     // Task 3.4 (spec 6.4: viewing another employee's ticket). EntityId = the ticket id; every staff view is recorded.
     public const string TicketViewed = "Ticket.Viewed";
+
+    // Task 3.6: one record per bulk request (EntityId null). Every ticket's change is in its own history rows; the counts
+    // are in the log – the audit log has no content fields.
+    public const string TicketBulkStatus = "Ticket.BulkStatus";
+    public const string TicketBulkAssign = "Ticket.BulkAssign";
 }
 
 /// <summary>Values of <c>AuditLog.EntityType</c>.</summary>

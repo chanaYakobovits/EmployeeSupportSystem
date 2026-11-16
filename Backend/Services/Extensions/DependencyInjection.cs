@@ -43,6 +43,7 @@ public static class DependencyInjection
         services.AddScoped<ITicketConversationService, TicketConversationService>();
         services.AddScoped<ITicketHandlingService, TicketHandlingService>();
         services.AddScoped<ITicketStatusService, TicketStatusService>();
+        services.AddScoped<ITicketBulkService, TicketBulkService>();
         services.AddScoped<IAutoCloseService, AutoCloseService>();
         services.AddScoped<IRoutingService, Services.Implementations.Routing.RoutingService>();
         services.AddScoped<ITicketClassifier, TicketClassifier>();

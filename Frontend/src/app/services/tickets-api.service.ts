@@ -9,6 +9,10 @@ import { PagedResult } from '../models/paging.models';
 import { TicketAttachment } from '../models/attachment.models';
 import {
   AssignTicketRequest,
+  BulkAssignOptions,
+  BulkAssignRequest,
+  BulkChangeStatusRequest,
+  BulkUpdateResult,
   ChangeTicketStatusRequest,
   CommentCreated,
   CreateTicketRequest,
@@ -123,6 +127,24 @@ export class TicketsApiService {
   /** The targets of the transfer dialog. 403 without the assign permission. */
   assignOptions(id: number): Observable<TicketAssignOptions> {
     return this.http.get<TicketAssignOptions>(`${this.baseUrl}/${id}/assign-options`, { context: skipErrorToast() });
+  }
+
+  /**
+   * Bulk "התחל טיפול" (task 3.6): up to 100 tickets, each one on its own – 200 with what succeeded and why the others
+   * did not. 400 for an invalid request (empty, over 100, a repeated id).
+   */
+  bulkChangeStatus(request: BulkChangeStatusRequest): Observable<BulkUpdateResult> {
+    return this.http.post<BulkUpdateResult>(`${this.baseUrl}/bulk/status`, request, { context: skipErrorToast() });
+  }
+
+  /** Bulk transfer to one handler or department queue with one reason – Partial Success like bulkChangeStatus. */
+  bulkAssign(request: BulkAssignRequest): Observable<BulkUpdateResult> {
+    return this.http.post<BulkUpdateResult>(`${this.baseUrl}/bulk/assign`, request, { context: skipErrorToast() });
+  }
+
+  /** The targets of the bulk transfer dialog (the user's department, not one ticket). */
+  bulkAssignOptions(): Observable<BulkAssignOptions> {
+    return this.http.get<BulkAssignOptions>(`${this.baseUrl}/bulk/assign-options`, { context: skipErrorToast() });
   }
 
   /** Download address of an attachment – fetched through HttpClient (AttachmentDownloadService), so the token is sent. */

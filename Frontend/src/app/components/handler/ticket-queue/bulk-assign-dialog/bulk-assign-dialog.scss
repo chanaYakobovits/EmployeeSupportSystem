@@ -1,0 +1,38 @@
+.intro {
+  margin: 0 0 12px;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.field {
+  width: 100%;
+  margin-top: 4px;
+}
+
+.targets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin: 4px 0 12px;
+}
+
+.load {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.empty,
+.options-error p {
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.options-error {
+  margin-bottom: 12px;
+}
+
+mat-spinner {
+  display: inline-block;
+  margin-inline-end: 8px;
+}

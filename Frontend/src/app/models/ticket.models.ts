@@ -402,3 +402,49 @@ export interface TicketAssignOptions {
 
 /** Same limits as the server's TicketFieldLimits.Reason*. */
 export const REASON_LIMITS = { minLength: 3, maxLength: 500 } as const;
+
+// ===================== Bulk update (task 3.6, spec 11.2) =====================
+
+/** Same limit as the server's BulkLimits.MaxItems. */
+export const BULK_LIMITS = { maxItems: 100 } as const;
+
+/** One selected ticket with the version of its row in the list. */
+export interface BulkTicketItem {
+  id: number;
+  rowVersion: string;
+}
+
+/** POST /api/tickets/bulk/status – "התחל טיפול" only (a status that needs a message to the employee → 400). */
+export interface BulkChangeStatusRequest {
+  newStatus: 'InProgress';
+  items: BulkTicketItem[];
+}
+
+/** POST /api/tickets/bulk/assign – one target and one required reason for every ticket. */
+export interface BulkAssignRequest {
+  targetUserId?: number;
+  targetDepartmentId?: number;
+  reason: string;
+  items: BulkTicketItem[];
+}
+
+export type BulkFailureReason = 'Conflict' | 'NotFound' | 'InvalidTransition' | 'InvalidTarget';
+
+/** errorType: the single action's error type (e.g. "ticket-assigned-to-other"); null for NotFound. */
+export interface BulkFailure {
+  id: number;
+  reason: BulkFailureReason;
+  errorType: string | null;
+}
+
+/** 200 even when some or all failed: the updated ids and the others with their reason, in the order sent. */
+export interface BulkUpdateResult {
+  succeeded: number[];
+  failed: BulkFailure[];
+}
+
+/** The bulk actions of the queue. */
+export type BulkAction = 'start' | 'assign';
+
+/** GET /api/tickets/bulk/assign-options: handlers of the user's department (not the user), departments with handlers. */
+export type BulkAssignOptions = TicketAssignOptions;

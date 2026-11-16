@@ -39,4 +39,12 @@ public interface ITicketHandlingService
     /// <exception cref="Common.Exceptions.NotFoundException">Missing or outside the user's scope.</exception>
     /// <exception cref="Common.Exceptions.ForbiddenException">The user may not assign this ticket.</exception>
     Task<TicketAssignOptionsDto> GetAssignOptionsAsync(int ticketId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The targets of the bulk transfer dialog (task 3.6): active handlers of the user's department (not the user) and
+    /// other departments with an active handler – the same lists as <see cref="GetAssignOptionsAsync"/>, for the
+    /// department instead of one ticket.
+    /// </summary>
+    /// <exception cref="Common.Exceptions.ForbiddenException">The user is not a handler.</exception>
+    Task<BulkAssignOptionsDto> GetBulkAssignOptionsAsync(CancellationToken cancellationToken);
 }

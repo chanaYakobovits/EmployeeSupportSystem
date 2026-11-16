@@ -5,7 +5,8 @@ import { Router, provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { of, throwError } from 'rxjs';
 
-import { StaffTicketListItem } from '../../../models/ticket.models';
+import { PagedResult } from '../../../models/paging.models';
+import { BulkUpdateResult, StaffTicketListItem } from '../../../models/ticket.models';
 import { AuthService } from '../../../services/auth.service';
 import { CategoriesApiService } from '../../../services/categories-api.service';
 import { NotificationService } from '../../../services/notification.service';
@@ -25,7 +26,13 @@ describe('TicketQueuePage', () => {
   let harness: RouterTestingHarness;
 
   beforeEach(() => {
-    api = jasmine.createSpyObj<TicketsApiService>('TicketsApiService', ['listStaff', 'assign']);
+    api = jasmine.createSpyObj<TicketsApiService>('TicketsApiService', [
+      'listStaff',
+      'assign',
+      'bulkChangeStatus',
+      'bulkAssign',
+      'bulkAssignOptions',
+    ]);
     notifications = jasmine.createSpyObj<NotificationService>('NotificationService', ['success', 'error']);
     TestBed.configureTestingModule({
       providers: [
@@ -43,8 +50,12 @@ describe('TicketQueuePage', () => {
     });
   });
 
-  async function open(url: string, items: StaffTicketListItem[] = []): Promise<HTMLElement> {
-    api.listStaff.and.returnValue(of(pageOf(items)));
+  async function open(
+    url: string,
+    items: StaffTicketListItem[] = [],
+    page: PagedResult<StaffTicketListItem> = pageOf(items),
+  ): Promise<HTMLElement> {
+    api.listStaff.and.returnValue(of(page));
     harness = await RouterTestingHarness.create();
     await harness.navigateByUrl(url, TicketQueuePage);
     harness.detectChanges();
@@ -168,6 +179,7 @@ describe('TicketQueuePage', () => {
       th.textContent!.replace(/unfold_more|arrow_upward|arrow_downward/, '').trim(),
     );
     expect(headers).toEqual([
+      '',
       "מס'",
       'נושא',
       'שם העובד',
@@ -254,5 +266,184 @@ describe('TicketQueuePage', () => {
   it('the ticket number links to the handling screen', async () => {
     const element = await open('/handler/assigned', [fakeStaffItem({ id: 77 })]);
     expect(rows(element)[0].querySelector('a.ticket-number')!.getAttribute('href')).toBe('/handler/tickets/77');
+  });
+
+  // ===================== Bulk selection and actions (task 3.6) =====================
+
+  function checkbox(element: HTMLElement, id: number): HTMLInputElement {
+    return element.querySelector<HTMLInputElement>(`tbody mat-checkbox[data-ticket="${id}"] input`)!;
+  }
+
+  function selectAll(element: HTMLElement): HTMLInputElement {
+    return element.querySelector<HTMLInputElement>('thead mat-checkbox input')!;
+  }
+
+  function bar(element: HTMLElement): HTMLElement | null {
+    return element.querySelector('app-bulk-action-bar');
+  }
+
+  function barButton(element: HTMLElement, action: 'start' | 'assign' | 'clear'): HTMLButtonElement {
+    return bar(element)!.querySelector<HTMLButtonElement>(`button[data-action="${action}"]`)!;
+  }
+
+  const threeOnPage = (): StaffTicketListItem[] => [
+    fakeStaffItem({ id: 1042, rowVersion: 'AAAAAAAAAAE=' }),
+    fakeStaffItem({ id: 1043, rowVersion: 'AAAAAAAAAAI=' }),
+    fakeStaffItem({ id: 1044, rowVersion: 'AAAAAAAAAAM=' }),
+  ];
+
+  it('every row has a checkbox named after its ticket, and the header one selects the page', async () => {
+    const element = await open('/handler/assigned', threeOnPage());
+
+    expect(checkbox(element, 1042).getAttribute('aria-label')).toBe('בחר פנייה 1042');
+    expect(selectAll(element).getAttribute('aria-label')).toBe('בחירת כל הפניות בעמוד');
+    expect(bar(element)).toBeNull();
+  });
+
+  it('"select all" selects the rows of this page only, not every result', async () => {
+    // 3 rows shown out of 60 results.
+    const items = threeOnPage();
+    const element = await open('/handler/assigned', items, { items, page: 1, pageSize: 25, totalCount: 60 });
+
+    selectAll(element).click();
+    harness.detectChanges();
+
+    expect(bar(element)!.textContent).toContain('נבחרו 3 פניות');
+    expect(rows(element).every((tr) => tr.classList.contains('row-selected'))).toBeTrue();
+
+    api.bulkChangeStatus.and.returnValue(of({ succeeded: [1042, 1043, 1044], failed: [] }));
+    barButton(element, 'start').click();
+    harness.detectChanges();
+
+    expect(api.bulkChangeStatus).toHaveBeenCalledWith({
+      newStatus: 'InProgress',
+      items: [
+        { id: 1042, rowVersion: 'AAAAAAAAAAE=' },
+        { id: 1043, rowVersion: 'AAAAAAAAAAI=' },
+        { id: 1044, rowVersion: 'AAAAAAAAAAM=' },
+      ],
+    });
+  });
+
+  it('selecting a row shows the bar (a region, its count announced); "ניקוי בחירה" clears it', async () => {
+    const element = await open('/handler/assigned', threeOnPage());
+
+    checkbox(element, 1043).click();
+    harness.detectChanges();
+
+    expect(bar(element)!.textContent).toContain('נבחרה פנייה אחת');
+    expect(bar(element)!.querySelector('[role="region"]')!.getAttribute('aria-label')).toBe('פעולות על הפניות שנבחרו');
+    expect(bar(element)!.querySelector('[aria-live="polite"]')!.textContent).toContain('נבחרה פנייה אחת');
+    expect(selectAll(element).indeterminate).toBeTrue();
+
+    barButton(element, 'clear').click();
+    harness.detectChanges();
+
+    expect(bar(element)).toBeNull();
+    expect(checkbox(element, 1043).checked).toBeFalse();
+  });
+
+  for (const [what, url] of [
+    ['another page', '/handler/assigned?page=2'],
+    ['a filter', '/handler/assigned?search=xyz'],
+    ['another sort', '/handler/assigned?sortBy=dueAt'],
+  ] as const) {
+    it(`${what} clears the selection`, async () => {
+      const items = threeOnPage();
+      const element = await open('/handler/assigned', items, { items, page: 1, pageSize: 25, totalCount: 60 });
+      checkbox(element, 1042).click();
+      harness.detectChanges();
+      expect(bar(element)).not.toBeNull();
+
+      await harness.navigateByUrl(url);
+      harness.detectChanges();
+
+      expect(bar(element)).toBeNull();
+      expect(checkbox(element, 1042).checked).toBeFalse();
+    });
+  }
+
+  it('a reload of the same view keeps the selection', async () => {
+    const element = await open('/handler/queue', threeOnPage());
+    checkbox(element, 1042).click();
+    harness.detectChanges();
+    api.assign.and.returnValue(of({ id: 1043, rowVersion: 'x', canView: true }));
+    const calls = api.listStaff.calls.count();
+
+    // "קח לטיפולי" on another row reloads the list.
+    element.querySelectorAll<HTMLButtonElement>('.take-button')[1].click();
+    harness.detectChanges();
+
+    expect(api.listStaff.calls.count()).toBe(calls + 1);
+    expect(checkbox(element, 1042).checked).toBeTrue();
+  });
+
+  it('after "התחל טיפול": the result dialog with the Hebrew reasons, and only the failures stay selected', async () => {
+    const element = await open('/handler/assigned', threeOnPage());
+    selectAll(element).click();
+    harness.detectChanges();
+    const result: BulkUpdateResult = {
+      succeeded: [1042],
+      failed: [
+        { id: 1043, reason: 'Conflict', errorType: 'concurrency' },
+        { id: 1044, reason: 'InvalidTransition', errorType: 'invalid-status-transition' },
+      ],
+    };
+    api.bulkChangeStatus.and.returnValue(of(result));
+    const calls = api.listStaff.calls.count();
+
+    barButton(element, 'start').click();
+    harness.detectChanges();
+    await harness.fixture.whenStable();
+    harness.detectChanges();
+
+    // The list was reloaded; the rows that failed are still selected.
+    expect(api.listStaff.calls.count()).toBe(calls + 1);
+    expect(checkbox(element, 1042).checked).toBeFalse();
+    expect(checkbox(element, 1043).checked).toBeTrue();
+    expect(checkbox(element, 1044).checked).toBeTrue();
+    expect(bar(element)!.textContent).toContain('נבחרו 2 פניות');
+
+    const dialog = document.querySelector('app-bulk-result-dialog')!;
+    expect(dialog.textContent).toContain('פנייה אחת עודכנה בהצלחה, 2 פניות לא עודכנו');
+    const failures = Array.from(dialog.querySelectorAll('li.failure')).map((li) => [
+      li.querySelector('a')!.textContent!.replace(/\s+/g, ' ').trim(),
+      li.querySelector('.reason')!.textContent!.trim(),
+    ]);
+    expect(failures).toEqual([
+      ['פנייה מספר #1043', 'עודכנה על ידי משתמש אחר'],
+      ['פנייה מספר #1044', 'לא ניתן להתחיל טיפול בסטטוס הנוכחי'],
+    ]);
+    expect(dialog.querySelector('a.ticket-number')!.getAttribute('href')).toBe('/handler/tickets/1043');
+  });
+
+  it('a failed bulk request: an error message, the list is reloaded and the selection kept', async () => {
+    const element = await open('/handler/assigned', threeOnPage());
+    checkbox(element, 1042).click();
+    harness.detectChanges();
+    api.bulkChangeStatus.and.returnValue(throwError(() => new HttpErrorResponse({ status: 500 })));
+    const calls = api.listStaff.calls.count();
+
+    barButton(element, 'start').click();
+    harness.detectChanges();
+
+    expect(notifications.error).toHaveBeenCalled();
+    expect(api.listStaff.calls.count()).toBe(calls + 1);
+    expect(checkbox(element, 1042).checked).toBeTrue();
+  });
+
+  it('"העברה…" opens the transfer dialog for the selected tickets', async () => {
+    const element = await open('/handler/assigned', threeOnPage());
+    api.bulkAssignOptions.and.returnValue(of({ handlers: [], departments: [] }));
+    checkbox(element, 1042).click();
+    checkbox(element, 1044).click();
+    harness.detectChanges();
+
+    barButton(element, 'assign').click();
+    harness.detectChanges();
+    await harness.fixture.whenStable();
+
+    const dialogs = document.querySelectorAll('app-bulk-assign-dialog');
+    expect(dialogs[dialogs.length - 1].querySelector('h2')!.textContent).toContain('העברת 2 פניות');
   });
 });

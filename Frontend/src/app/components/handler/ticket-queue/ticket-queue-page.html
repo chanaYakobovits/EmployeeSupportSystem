@@ -100,6 +100,20 @@
     }
   </app-filter-bar>
 
+  <!-- Phones (cards, no header row): "select all" of the page above the list. -->
+  @if (list.items().length > 0) {
+    <div class="select-all-narrow">
+      <mat-checkbox
+        [checked]="store.allOnPageSelected()"
+        [indeterminate]="store.someOnPageSelected()"
+        [disabled]="store.bulkBusy()"
+        (change)="store.toggleAllOnPage()"
+      >
+        בחירת כל הפניות בעמוד
+      </mat-checkbox>
+    </div>
+  }
+
   <app-data-table
     caption="רשימת הפניות"
     [columns]="columns"
@@ -116,6 +130,26 @@
     (rowActivate)="openTicket($event)"
     (retry)="list.reload()"
   >
+    <ng-template appHeaderCell="select">
+      <mat-checkbox
+        aria-label="בחירת כל הפניות בעמוד"
+        [checked]="store.allOnPageSelected()"
+        [indeterminate]="store.someOnPageSelected()"
+        [disabled]="store.bulkBusy()"
+        (change)="store.toggleAllOnPage()"
+      />
+    </ng-template>
+
+    <ng-template appCell="select" let-ticket>
+      <mat-checkbox
+        [attr.data-ticket]="ticket.id"
+        [aria-label]="'בחר פנייה ' + ticket.id"
+        [checked]="store.isSelected(ticket.id)"
+        [disabled]="store.bulkBusy()"
+        (change)="store.toggle(ticket.id)"
+      />
+    </ng-template>
+
     <ng-template appCell="id" let-ticket>
       <a class="ticket-number" [routerLink]="ticketUrl(ticket.id)" [state]="navigationState()">
         <span class="visually-hidden">פנייה מספר</span>
@@ -189,6 +223,14 @@
     <ng-template appRowCard let-ticket>
       <div class="ticket-card">
         <span class="ticket-card-top">
+          <mat-checkbox
+            class="card-select"
+            [attr.data-ticket]="ticket.id"
+            [aria-label]="'בחר פנייה ' + ticket.id"
+            [checked]="store.isSelected(ticket.id)"
+            [disabled]="store.bulkBusy()"
+            (change)="store.toggle(ticket.id)"
+          />
           <a class="ticket-number" [routerLink]="ticketUrl(ticket.id)" [state]="navigationState()">
             <span class="visually-hidden">פנייה מספר </span><span dir="ltr">#{{ ticket.id }}</span>
           </a>
@@ -229,4 +271,14 @@
       }
     </div>
   </app-data-table>
+
+  @if (store.selectedCount() > 0) {
+    <app-bulk-action-bar
+      [count]="store.selectedCount()"
+      [running]="runningBulkAction()"
+      (start)="startSelected()"
+      (assign)="assignSelected()"
+      (clear)="store.clearSelection()"
+    />
+  }
 </mat-tab-nav-panel>

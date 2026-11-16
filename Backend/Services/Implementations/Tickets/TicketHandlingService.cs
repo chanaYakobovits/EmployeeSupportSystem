@@ -193,30 +193,58 @@ public sealed class TicketHandlingService(
         }
 
         // The same targets POST /assign accepts (EnsureAssigneeAsync): not the requester, not the current handler.
-        var handlers = (await users.GetHandlerOptionsAsync(handlingDepartmentId, cancellationToken))
-            .Where(h => h.Id != ticket.RequesterId && h.Id != ticket.AssignedToUserId)
-            .ToList();
-
-        IReadOnlyList<NamedRefDto> targetDepartments = [];
-        if (access.Permissions.CanTransferToDepartment)
-        {
-            // EnsureTargetDepartmentAsync: another active department with at least one active handler.
-            var others = (await ReferenceDataLookups.DepartmentsAsync(cache, departments, currentUser.OrganizationId,
-                    cancellationToken))
-                .Where(d => d.IsActive && d.Id != handlingDepartmentId)
-                .ToList();
-            var withHandlers = (await users.GetHandlerCandidatesAsync(others.Select(d => d.Id).ToList(), null,
-                    cancellationToken))
-                .Select(h => h.DepartmentId)
-                .ToHashSet();
-            targetDepartments = others
-                .Where(d => withHandlers.Contains(d.Id))
-                .OrderBy(d => d.Name, StringComparer.Ordinal)
-                .Select(d => new NamedRefDto(d.Id, d.Name))
-                .ToList();
-        }
+        var handlers = await HandlerOptionsAsync(handlingDepartmentId, [ticket.RequesterId, ticket.AssignedToUserId],
+            cancellationToken);
+        IReadOnlyList<NamedRefDto> targetDepartments = access.Permissions.CanTransferToDepartment
+            ? await TargetDepartmentsAsync(handlingDepartmentId, cancellationToken)
+            : [];
 
         return new TicketAssignOptionsDto(handlers, targetDepartments);
+    }
+
+    // ===================== GET /bulk/assign-options (task 3.6) =====================
+
+    public async Task<BulkAssignOptionsDto> GetBulkAssignOptionsAsync(CancellationToken cancellationToken)
+    {
+        // From the database, like TicketAccess: the token may be up to 15 minutes old.
+        var viewer = await users.GetTicketViewerAsync(currentUser.UserId, cancellationToken)
+                     ?? throw new AuthenticationFailedException(AuthenticationFailedException.NotSignedInTitle,
+                         errorType: "unauthorized");
+        if (!viewer.Roles.Contains(Role.Handler))
+        {
+            throw new ForbiddenException(AssignNotAllowedTitle, errorType: "assign-not-allowed");
+        }
+
+        // The handler's queue is the queue of their department; tickets handled elsewhere fail one by one (InvalidTarget).
+        var handlers = await HandlerOptionsAsync(viewer.DepartmentId, [viewer.UserId], cancellationToken);
+        var targetDepartments = await TargetDepartmentsAsync(viewer.DepartmentId, cancellationToken);
+        return new BulkAssignOptionsDto(handlers, targetDepartments);
+    }
+
+    /// <summary>Active handlers of the department (EnsureAssigneeAsync), without <paramref name="excluded"/>.</summary>
+    private async Task<IReadOnlyList<AssigneeOptionDto>> HandlerOptionsAsync(int departmentId,
+        IReadOnlyCollection<int?> excluded, CancellationToken cancellationToken) =>
+        (await users.GetHandlerOptionsAsync(departmentId, cancellationToken))
+        .Where(h => !excluded.Contains(h.Id))
+        .ToList();
+
+    /// <summary>EnsureTargetDepartmentAsync: another active department with at least one active handler, by name.</summary>
+    private async Task<IReadOnlyList<NamedRefDto>> TargetDepartmentsAsync(int currentDepartmentId,
+        CancellationToken cancellationToken)
+    {
+        var others = (await ReferenceDataLookups.DepartmentsAsync(cache, departments, currentUser.OrganizationId,
+                cancellationToken))
+            .Where(d => d.IsActive && d.Id != currentDepartmentId)
+            .ToList();
+        var withHandlers = (await users.GetHandlerCandidatesAsync(others.Select(d => d.Id).ToList(), null,
+                cancellationToken))
+            .Select(h => h.DepartmentId)
+            .ToHashSet();
+        return others
+            .Where(d => withHandlers.Contains(d.Id))
+            .OrderBy(d => d.Name, StringComparer.Ordinal)
+            .Select(d => new NamedRefDto(d.Id, d.Name))
+            .ToList();
     }
 
     // ===================== Shared steps =====================

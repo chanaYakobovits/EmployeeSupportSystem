@@ -164,6 +164,8 @@ public sealed class FakeUnitOfWork : IUnitOfWork
 
     public int TransactionCount { get; private set; }
 
+    public void DiscardChanges() { }
+
     public Task<T> ExecuteInTransactionAsync<T>(Func<CancellationToken, Task<T>> action, CancellationToken cancellationToken)
     {
         TransactionCount++;

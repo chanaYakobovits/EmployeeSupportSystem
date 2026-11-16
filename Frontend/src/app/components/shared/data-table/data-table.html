@@ -33,7 +33,9 @@
               <tr>
                 @for (column of columns(); track column.key) {
                   <th scope="col" [attr.aria-sort]="ariaSort(column)" [class]="'align-' + (column.align ?? 'start')">
-                    @if (column.sortKey) {
+                    @if (headerTemplates().get(column.key); as headerTemplate) {
+                      <ng-container [ngTemplateOutlet]="headerTemplate" />
+                    } @else if (column.sortKey) {
                       <button
                         type="button"
                         class="sort-button"

@@ -1,8 +1,8 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Injectable, computed, inject, signal } from '@angular/core';
+import { Injectable, computed, effect, inject, signal, untracked } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute } from '@angular/router';
-import { Observable, catchError, finalize, map, of, tap } from 'rxjs';
+import { EMPTY, Observable, catchError, finalize, map, of, tap } from 'rxjs';
 
 import { AuthService } from './auth.service';
 import { CategoriesApiService } from './categories-api.service';
@@ -11,6 +11,10 @@ import { ListStateDef, boolParam, dateParam, enumParam, idParam, listParam, text
 import { ListStore } from './list-store';
 import { Category } from '../models/category.models';
 import {
+  BULK_LIMITS,
+  BulkAssignOptions,
+  BulkTicketItem,
+  BulkUpdateResult,
   FINAL_TICKET_STATUSES,
   STAFF_TICKET_DESCENDING_BY_DEFAULT,
   STAFF_TICKET_SORT_FIELDS,
@@ -78,6 +82,9 @@ export function withFinalStatuses(status: readonly TicketStatus[] | null, includ
   return rest.length === 0 || rest.length === allOthers.length ? null : rest;
 }
 
+/** The target of a bulk transfer: a handler of the user's department, or another department's queue. */
+export type BulkAssignTarget = { targetUserId: number } | { targetDepartmentId: number };
+
 /** The result of "קח לטיפולי" from the list. */
 export type TakeResult = 'taken' | 'conflict' | 'error';
 
@@ -106,7 +113,46 @@ export class TicketQueueStore {
   readonly taking = this.takingSignal.asReadonly();
   readonly isTaking = computed(() => this.takingSignal() !== null);
 
+  // ===================== Bulk selection (task 3.6) =====================
+
+  private readonly selectedSignal = signal<ReadonlySet<number>>(new Set());
+  /** Selected tickets – of the current page only (no selection across pages). */
+  readonly selectedIds = this.selectedSignal.asReadonly();
+  readonly selectedCount = computed(() => this.selectedSignal().size);
+  readonly allOnPageSelected = computed(() => {
+    const items = this.list.items();
+    return items.length > 0 && items.every((ticket) => this.selectedSignal().has(ticket.id));
+  });
+  readonly someOnPageSelected = computed(() => this.selectedCount() > 0 && !this.allOnPageSelected());
+  /** Over BULK_LIMITS.maxItems (cannot happen with pages of up to 100, checked anyway): the actions are disabled. */
+  readonly overBulkLimit = computed(() => this.selectedCount() > BULK_LIMITS.maxItems);
+
+  private readonly bulkBusySignal = signal(false);
+  /** A bulk action is running: the selection and the actions are locked. */
+  readonly bulkBusy = this.bulkBusySignal.asReadonly();
+
   constructor() {
+    // Another page, page size, filter or sort → the selection is cleared. A reload keeps the state object, so it does
+    // not clear (the failures of a bulk action stay selected). Another tab is another page and store.
+    effect(() => {
+      this.list.state();
+      untracked(() => this.selectedSignal.set(new Set()));
+    });
+
+    // After every load: only tickets still on the page stay selected (e.g. a ticket that left the queue).
+    effect(() => {
+      if (this.list.status() !== 'ready') {
+        return;
+      }
+      const ids = new Set(this.list.items().map((ticket) => ticket.id));
+      untracked(() => {
+        const selected = this.selectedSignal();
+        if ([...selected].some((id) => !ids.has(id))) {
+          this.selectedSignal.set(new Set([...selected].filter((id) => ids.has(id))));
+        }
+      });
+    });
+
     this.categoriesApi
       .list()
       .pipe(
@@ -114,6 +160,70 @@ export class TicketQueueStore {
         takeUntilDestroyed(),
       )
       .subscribe((categories) => this.categoriesSignal.set(categories));
+  }
+
+  isSelected(id: number): boolean {
+    return this.selectedSignal().has(id);
+  }
+
+  toggle(id: number): void {
+    if (this.bulkBusy()) {
+      return;
+    }
+    const next = new Set(this.selectedSignal());
+    if (!next.delete(id)) {
+      next.add(id);
+    }
+    this.selectedSignal.set(next);
+  }
+
+  /** "בחירת כל הפניות בעמוד": the rows of this page only; when all of them are selected – none. */
+  toggleAllOnPage(): void {
+    if (this.bulkBusy()) {
+      return;
+    }
+    this.selectedSignal.set(this.allOnPageSelected() ? new Set() : new Set(this.list.items().map((ticket) => ticket.id)));
+  }
+
+  clearSelection(): void {
+    this.selectedSignal.set(new Set());
+  }
+
+  /** "התחל טיפול" on the selected tickets (Partial Success). */
+  bulkStart(): Observable<BulkUpdateResult> {
+    return this.runBulk((items) => this.api.bulkChangeStatus({ newStatus: 'InProgress', items }));
+  }
+
+  /** Transfers the selected tickets with one reason. A 400 (e.g. on reason) is the dialog's to show. */
+  bulkAssign(target: BulkAssignTarget, reason: string): Observable<BulkUpdateResult> {
+    return this.runBulk((items) => this.api.bulkAssign({ ...target, reason, items }));
+  }
+
+  /** The targets of the bulk transfer dialog. */
+  bulkAssignOptions(): Observable<BulkAssignOptions> {
+    return this.api.bulkAssignOptions();
+  }
+
+  /**
+   * Sends the selected rows with the versions of the rows on the page. Whatever the answer, the list is reloaded; after
+   * a result only the tickets that failed stay selected (those still on the page after the reload).
+   */
+  private runBulk(send: (items: BulkTicketItem[]) => Observable<BulkUpdateResult>): Observable<BulkUpdateResult> {
+    const items = this.list
+      .items()
+      .filter((ticket) => this.selectedSignal().has(ticket.id))
+      .map((ticket) => ({ id: ticket.id, rowVersion: ticket.rowVersion }));
+    if (items.length === 0 || items.length > BULK_LIMITS.maxItems || this.bulkBusy()) {
+      return EMPTY;
+    }
+    this.bulkBusySignal.set(true);
+    return send(items).pipe(
+      tap((result) => this.selectedSignal.set(new Set(result.failed.map((failure) => failure.id)))),
+      finalize(() => {
+        this.bulkBusySignal.set(false);
+        this.list.reload();
+      }),
+    );
   }
 
   /**
