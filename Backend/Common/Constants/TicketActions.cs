@@ -44,4 +44,18 @@ public static class TicketActions
 
     /// <summary>The requester reopens ("פתיחה מחדש"): Resolved → InProgress, within 7 days of the resolution.</summary>
     public const string Reopen = "reopen";
+
+    // ===================== AI analysis (task 4.4) =====================
+
+    /// <summary>See the AI analysis (GET /ai-analysis): staff with a scope, never the requester (spec 2.4).</summary>
+    public const string ViewAiAnalysis = "viewAiAnalysis";
+
+    /// <summary>"נתח מחדש" (POST /ai-analysis/retry): a handler in scope, an open ticket, no analysis in progress.</summary>
+    public const string RetryAnalysis = "retryAnalysis";
+
+    /// <summary>
+    /// "החל המלצה": the recommended category and urgency through PATCH /classification (→ Manual). Offered when
+    /// reclassify is, the recommended category is active and differs from the current classification.
+    /// </summary>
+    public const string ApplyRecommendation = "applyRecommendation";
 }

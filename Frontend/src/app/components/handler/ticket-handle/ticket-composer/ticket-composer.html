@@ -46,6 +46,18 @@
       <app-form-alert [alert]="alert" />
     }
 
+    @if (aiDraft()) {
+      <!-- role=status: announced when it appears (spec 11.6). -->
+      <div class="ai-draft" role="status" data-state="ai-draft">
+        <mat-icon aria-hidden="true">auto_awesome</mat-icon>
+        <span>{{ aiDraftNotice }}</span>
+        <button mat-button type="button" class="clear-draft" data-action="clearDraft" (click)="clearDraft()">
+          נקה והתחל מאפס
+        </button>
+      </div>
+    }
+    <p class="visually-hidden" aria-live="polite" aria-atomic="true">{{ draftAnnouncement() }}</p>
+
     <mat-form-field appearance="outline" class="field">
       <mat-label>{{ isInternal() ? 'הערה פנימית' : 'תגובה לעובד' }}</mat-label>
       <textarea
@@ -70,6 +82,20 @@
       }
     </mat-form-field>
     <p class="visually-hidden" aria-live="polite" aria-atomic="true">{{ counterAnnouncement() }}</p>
+
+    @if (canAddMissing()) {
+      <button
+        mat-stroked-button
+        type="button"
+        class="add-missing"
+        data-action="addMissingInfo"
+        [disabled]="store.busy()"
+        (click)="addMissingInfo()"
+      >
+        <mat-icon aria-hidden="true">playlist_add</mat-icon>
+        הוספת המידע החסר לתגובה
+      </button>
+    }
 
     <!-- Locked while sending (not disabled: enabling again would run the validators and drop the server's errors). -->
     <app-file-upload formControlName="files" [serverError]="filesError()" [busy]="store.busy()" />

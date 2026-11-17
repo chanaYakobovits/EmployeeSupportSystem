@@ -8,6 +8,9 @@ public sealed class MemoryReferenceDataCache(IMemoryCache cache) : IReferenceDat
 {
     public static readonly TimeSpan Duration = TimeSpan.FromMinutes(10);
 
+    /// <summary>User names change with the users list, which is not cached otherwise – a shorter lifetime.</summary>
+    public static readonly TimeSpan UserNamesDuration = TimeSpan.FromMinutes(5);
+
     public async Task<T> GetOrCreateAsync<T>(ReferenceData kind, int organizationId,
         Func<CancellationToken, Task<T>> factory, CancellationToken cancellationToken) where T : class
     {
@@ -18,7 +21,7 @@ public sealed class MemoryReferenceDataCache(IMemoryCache cache) : IReferenceDat
         }
 
         var value = await factory(cancellationToken);
-        cache.Set(key, value, Duration);
+        cache.Set(key, value, kind == ReferenceData.UserNames ? UserNamesDuration : Duration);
         return value;
     }
 
@@ -29,6 +32,7 @@ public sealed class MemoryReferenceDataCache(IMemoryCache cache) : IReferenceDat
         ReferenceData.Departments => $"departments:{organizationId}",
         ReferenceData.Categories => $"categories:{organizationId}",
         ReferenceData.SlaPolicies => $"sla:{organizationId}",
+        ReferenceData.UserNames => $"user-names:{organizationId}",
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
     };
 }

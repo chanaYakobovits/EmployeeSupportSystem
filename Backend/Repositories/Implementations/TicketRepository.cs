@@ -81,7 +81,19 @@ public sealed class TicketRepository(AppDbContext db) : ITicketRepository
             .AsNoTracking()
             .Where(t => t.Id == ticketId)
             .Select(t => new TicketAccessFacts(t.Id, t.RequesterId, t.RequesterDepartmentId, t.AssignedDepartmentId,
-                t.AssignedToUserId, t.Status, t.ResolvedAt))
+                t.AssignedToUserId, t.Status, t.ResolvedAt,
+                new TicketAiFacts(
+                    t.AiStatus,
+                    t.CategoryId,
+                    t.Urgency,
+                    // The organization filter applies: the code is looked up among the ticket's own categories.
+                    t.AiAnalysis == null
+                        ? null
+                        : db.Categories
+                            .Where(c => c.Code == t.AiAnalysis.CategoryCode && c.IsActive)
+                            .Select(c => (int?)c.Id)
+                            .FirstOrDefault(),
+                    t.AiAnalysis == null ? null : (Urgency?)t.AiAnalysis.Urgency)))
             .SingleOrDefaultAsync(cancellationToken);
 
     public Task<Ticket?> FindForUpdateAsync(int ticketId, CancellationToken cancellationToken) =>

@@ -36,6 +36,7 @@ import {
   attachmentServerError,
   clearServerErrors,
 } from '../../../../services/server-errors';
+import { AiSuggestion, TicketAiAnalysisStore } from '../../../../services/ticket-ai-analysis.store';
 import { FilesNotAttachedError, TicketHandleStore, isConflictError } from '../../../../services/ticket-handle.store';
 import { isTicketClosedError } from '../../../../services/ticket-view.store';
 import { COUNTER_ANNOUNCE_DELAY_MS, describeCount, formatCount } from '../../../employee/character-count';
@@ -64,6 +65,17 @@ export const RESOLVE_CONFIRM: ConfirmDialogData = {
   message: 'הפנייה תסומן כנפתרה. העובד יוכל לאשר או לפתוח מחדש תוך 7 ימים.',
   confirmText: 'שליחה כפתרון',
 };
+
+/** Shown while the reply is based on the AI's suggestion (task 4.4). */
+export const AI_DRAFT_NOTICE = 'טיוטה שנוצרה ע"י AI – יש לבדוק לפני שליחה';
+export const AI_DRAFT_CLEARED = 'הטיוטה נמחקה';
+/** The line before the missing information added to the reply. */
+export const MISSING_INFO_INTRO = 'כדי שנוכל להמשיך בטיפול, נשמח לקבל את הפרטים הבאים:';
+
+/** The missing information as a block of the reply: the intro line, then one item per line. */
+export function missingInfoBlock(items: readonly string[]): string {
+  return [MISSING_INFO_INTRO, ...items.map((item) => `- ${item}`)].join('\n');
+}
 
 /** What a send does: a comment / internal note, or a reply that also changes the status. */
 export type SendKind = 'comment' | 'requestInfo' | 'resolve';
@@ -100,6 +112,8 @@ export class TicketComposer {
   readonly left = output<void>();
 
   protected readonly store = inject(TicketHandleStore);
+  /** The AI analysis of the page (task 4.4); absent outside the handling page. */
+  private readonly ai = inject(TicketAiAnalysisStore, { optional: true });
   private readonly notifications = inject(NotificationService);
   private readonly confirm = inject(ConfirmService);
   private readonly destroyRef = inject(DestroyRef);
@@ -135,6 +149,22 @@ export class TicketComposer {
   protected readonly isInternal = computed(() => this.mode() === 'internal');
   protected readonly modeAnnouncement = signal('');
 
+  /**
+   * The text is based on the AI's suggestion (prefilled, or the missing information added) – until the field is empty
+   * again. While true: the notice "טיוטה שנוצרה ע"י AI" and "נקה והתחל מאפס". Nothing is ever sent without a click.
+   */
+  protected readonly aiDraft = signal(false);
+  protected readonly aiDraftNotice = AI_DRAFT_NOTICE;
+  protected readonly draftAnnouncement = signal('');
+  /** The AI text as it was put in the field; equal to the field = not edited by the user. */
+  private draftText: string | null = null;
+  /** The analysis whose suggestion was already offered: one prefill per analysis (not again after a send or "נקה"). */
+  private usedSuggestionKey: string | null = null;
+
+  protected readonly missingInformation = computed(() => this.ai?.missingInformation() ?? []);
+  /** "הוספת המידע החסר" – in the reply mode, when the analysis lists something. */
+  protected readonly canAddMissing = computed(() => !this.isInternal() && this.missingInformation().length > 0);
+
   protected readonly form = new FormGroup({
     body: new FormControl('', { nonNullable: true, validators: [Validators.maxLength(bodyMaxLength)] }),
     files: new FormControl<File[]>([], { nonNullable: true }),
@@ -160,6 +190,25 @@ export class TicketComposer {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => this.filesError.set(null));
 
+    // Emptied (by the user, "נקה", or the reset after a send): no longer an AI draft.
+    this.form.controls.body.valueChanges.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((value) => {
+      if (this.aiDraft() && value.trim() === '') {
+        this.aiDraft.set(false);
+        this.draftText = null;
+      }
+    });
+
+    // Spec 7.7 area 3: the reply mode with an empty field starts from the AI's suggested reply. Never over text.
+    effect(() => {
+      const mode = this.mode();
+      const suggestion = this.ai?.suggestion() ?? null;
+      untracked(() => {
+        if (mode === 'reply' && suggestion) {
+          this.prefill(suggestion);
+        }
+      });
+    });
+
     // "בקשת מידע" / "שליחת פתרון" in the actions area: the reply mode, and the focus in the text.
     effect(() => {
       if (this.store.composerFocus() === null) {
@@ -183,9 +232,13 @@ export class TicketComposer {
     });
   }
 
-  /** Text typed or files chosen – leaving the page asks first. */
+  /** Text typed or files chosen – leaving the page asks first. An AI draft nobody edited is not the user's text. */
   hasText(): boolean {
-    return this.bodyValue().trim() !== '';
+    const value = this.bodyValue();
+    if (this.aiDraft() && value === this.draftText) {
+      return false;
+    }
+    return value.trim() !== '';
   }
 
   hasFiles(): boolean {
@@ -197,9 +250,53 @@ export class TicketComposer {
     if (mode === this.mode()) {
       return;
     }
+    // A reply suggestion nobody edited must not become an internal note by accident.
+    if (mode === 'internal' && this.aiDraft() && this.form.controls.body.value === this.draftText) {
+      this.form.controls.body.setValue('');
+    }
     this.chosenMode.set(mode);
     this.alert.set(null);
     this.modeAnnouncement.set(MODE_ANNOUNCEMENTS[this.mode()]);
+  }
+
+  /** "נקה והתחל מאפס": the AI draft goes, the user writes from scratch. */
+  protected clearDraft(): void {
+    this.form.controls.body.setValue('');
+    this.draftAnnouncement.set(AI_DRAFT_CLEARED);
+    this.focusBody();
+  }
+
+  /** Adds the analysis' missing information at the end of the text (useful for "שליחה ובקשת מידע"). */
+  protected addMissingInfo(): void {
+    const items = this.missingInformation();
+    if (items.length === 0) {
+      return;
+    }
+    const body = this.form.controls.body;
+    const current = body.value;
+    const untouched = current.trim() === '' || (this.aiDraft() && current === this.draftText);
+    const block = missingInfoBlock(items);
+    const next = current.trim() === '' ? block : `${current.trimEnd()}\n\n${block}`;
+    body.setValue(next);
+    body.markAsDirty();
+    this.draftText = untouched ? next : this.draftText;
+    this.aiDraft.set(true);
+    this.focusBody();
+  }
+
+  /** The first time the reply mode meets this analysis: fill the field if it is empty. */
+  private prefill(suggestion: AiSuggestion): void {
+    if (suggestion.key === this.usedSuggestionKey) {
+      return;
+    }
+    this.usedSuggestionKey = suggestion.key;
+    const body = this.form.controls.body;
+    if (body.value.trim() !== '' || this.store.busy()) {
+      return;
+    }
+    body.setValue(suggestion.text);
+    this.draftText = suggestion.text;
+    this.aiDraft.set(true);
   }
 
   /** The form's submit (Enter, "שליחה לעובד" / "שמירת הערה פנימית"): a comment without a status change. */

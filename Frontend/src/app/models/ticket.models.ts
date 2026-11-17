@@ -287,7 +287,13 @@ export type TicketAction =
   /** InProgress → WaitingForEmployee, with a message to the employee. */
   | 'requestInfo'
   /** InProgress → Resolved, with the resolution reply. */
-  | 'resolve';
+  | 'resolve'
+  /** The AI analysis area (task 4.4): staff with a scope. */
+  | 'viewAiAnalysis'
+  /** "נתח מחדש": a handler, an open ticket, no analysis in progress. */
+  | 'retryAnalysis'
+  /** "החל המלצה": reclassify allowed, and the active recommendation differs from the current classification. */
+  | 'applyRecommendation';
 
 export interface NamedRef {
   id: number;

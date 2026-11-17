@@ -42,6 +42,14 @@ public interface IUserRepository
         IReadOnlyCollection<int> departmentIds, int? userId, CancellationToken cancellationToken);
 
     /// <summary>
+    /// "First Last" of every user of the organization, active or not (PII redaction before the AI, spec 5.3). Names only.
+    /// </summary>
+    Task<IReadOnlyList<string>> GetAllFullNamesAsync(CancellationToken cancellationToken);
+
+    /// <summary>The user's first and last name (PII redaction of the requester, spec 5.3), or an empty list.</summary>
+    Task<IReadOnlyList<string>> GetNamePartsAsync(int userId, CancellationToken cancellationToken);
+
+    /// <summary>
     /// The active handlers of a department with their names and load (assigned unresolved tickets), by name – the
     /// "transfer to a handler" choices (task 3.4). Read fresh from the database.
     /// </summary>

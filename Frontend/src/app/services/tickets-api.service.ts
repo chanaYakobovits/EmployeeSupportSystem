@@ -7,6 +7,7 @@ import { skipErrorToast } from './http-context';
 import { toHttpParams } from './query-params';
 import { PagedResult } from '../models/paging.models';
 import { TicketAttachment } from '../models/attachment.models';
+import { TicketAiAnalysis } from '../models/ai-analysis.models';
 import {
   AssignTicketRequest,
   BulkAssignOptions,
@@ -127,6 +128,19 @@ export class TicketsApiService {
   /** The targets of the transfer dialog. 403 without the assign permission. */
   assignOptions(id: number): Observable<TicketAssignOptions> {
     return this.http.get<TicketAssignOptions>(`${this.baseUrl}/${id}/assign-options`, { context: skipErrorToast() });
+  }
+
+  /** The AI analysis (task 4.4): its state and the latest stored analysis. Staff only – the requester gets 404. */
+  aiAnalysis(id: number): Observable<TicketAiAnalysis> {
+    return this.http.get<TicketAiAnalysis>(`${this.baseUrl}/${id}/ai-analysis`, { context: skipErrorToast() });
+  }
+
+  /**
+   * "נתח מחדש" → 202 with the ticket's new version. 403 for staff who are not its handlers; 422 when not open, already in
+   * progress or the AI is unavailable; 429 within two minutes of the previous analysis.
+   */
+  retryAiAnalysis(id: number): Observable<TicketUpdated> {
+    return this.http.post<TicketUpdated>(`${this.baseUrl}/${id}/ai-analysis/retry`, null, { context: skipErrorToast() });
   }
 
   /**

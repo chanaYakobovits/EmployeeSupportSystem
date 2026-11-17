@@ -1664,3 +1664,50 @@ Authorization: Bearer {{staffRon.response.body.$.accessToken}}
 Content-Type: application/json
 
 { "targetDepartmentId": 2, "reason": "", "items": [ { "id": 152, "rowVersion": "AAAAAAAAAAE=" } ] }
+
+### ============ AI analysis for the handler (task 4.4) ============
+### Uses the staffAlon / staffRon logins above. The first ticket of Alon's own list.
+# @name aiTickets
+GET {{API_HostAddress}}/api/tickets?scope=assigned
+Authorization: Bearer {{staffAlon.response.body.$.accessToken}}
+
+### The analysis → 200 { processing: { status, errorCode, errorMessage, requestedAt, nextAttemptAt },
+### analysis: { categoryCode, categoryName, categoryId, urgency, confidence, confidenceLevel, summary, missingInformation,
+### suggestedSolution, verdict, disposition, applied, matchesCurrentClassification, redactedInput, ... } | null }
+GET {{API_HostAddress}}/api/tickets/{{aiTickets.response.body.$.items[0].id}}/ai-analysis
+Authorization: Bearer {{staffAlon.response.body.$.accessToken}}
+
+### The requester (Noa, the employee login) → 404 on her own ticket
+GET {{API_HostAddress}}/api/tickets/149/ai-analysis
+Authorization: Bearer {{loginEmployee.response.body.$.accessToken}}
+
+### "נתח מחדש" → 202 { id, rowVersion, canView }; Ai:Enabled=false or the breaker open → 422 ai-unavailable;
+### again within two minutes → 422 ai-analysis-in-progress (while it waits) or 429 ai-retry-too-soon (Retry-After)
+POST {{API_HostAddress}}/api/tickets/{{aiTickets.response.body.$.items[0].id}}/ai-analysis/retry
+Authorization: Bearer {{staffAlon.response.body.$.accessToken}}
+
+### Ron (department manager) sees the analysis, but may not retry → 403 ai-retry-not-allowed
+POST {{API_HostAddress}}/api/tickets/{{aiTickets.response.body.$.items[0].id}}/ai-analysis/retry
+Authorization: Bearer {{staffRon.response.body.$.accessToken}}
+
+### ============ AI evaluation (development only, not in the spec) – every call goes to OpenAI and costs money ============
+### Uses the loginAdmin request above (Yael – Admin). The requester for name redaction is the signed-in user.
+
+### One text → redactedText (exactly what was sent), analysis, verdict, decision, tokens, duration. Nothing is saved.
+POST {{API_HostAddress}}/api/dev/ai/analyze
+Authorization: Bearer {{loginAdmin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "subject": "שכחתי להחתים", "text": "אתמול שכחתי להחתים כניסה. אלון ביטון אמר לפנות אליכם, הטלפון שלי 052-7654321" }
+
+### Empty text → 400 on text (no OpenAI call)
+POST {{API_HostAddress}}/api/dev/ai/analyze
+Authorization: Bearer {{loginAdmin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "text": "  " }
+
+### The whole set (Tests/AiEvaluation/ai-evaluation-set.json), one case after the other → the report.
+### ~30 calls: ask before running (docs/ai-evaluation.md).
+POST {{API_HostAddress}}/api/dev/ai/evaluate
+Authorization: Bearer {{loginAdmin.response.body.$.accessToken}}

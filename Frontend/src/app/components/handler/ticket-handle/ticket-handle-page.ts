@@ -23,6 +23,7 @@ import { toUserMessage } from '../../../interceptors/error.interceptor';
 import { DateTimePipe } from '../../../pipes/date-time.pipe';
 import { idParam } from '../../../services/list-state';
 import { NotificationService } from '../../../services/notification.service';
+import { TicketAiAnalysisStore } from '../../../services/ticket-ai-analysis.store';
 import { ChangeOutcome, TicketHandleStore, isConflictError } from '../../../services/ticket-handle.store';
 import { ticketUrl as employeeTicketUrl } from '../../employee/employee-urls';
 import { AttachmentChip } from '../../shared/attachment-chip/attachment-chip';
@@ -36,6 +37,7 @@ import { Timeline } from '../../shared/timeline/timeline';
 import { UrgencyBadge } from '../../shared/urgency-badge/urgency-badge';
 import { CONFLICT_MESSAGE, LEFT_SCOPE_MESSAGE, TAKEN_MESSAGE } from '../handler-messages';
 import { safeQueueUrl } from '../handler-urls';
+import { AiAnalysisPanel } from './ai-analysis-panel/ai-analysis-panel';
 import { openAssignDialog } from './assign-dialog/assign-dialog';
 import { openReclassifyDialog } from './reclassify-dialog/reclassify-dialog';
 import { TicketComposer } from './ticket-composer/ticket-composer';
@@ -43,6 +45,7 @@ import { TicketComposer } from './ticket-composer/ticket-composer';
 export const RECLASSIFIED_MESSAGE = 'הסיווג עודכן';
 export const STARTED_MESSAGE = 'הטיפול בפנייה התחיל';
 export const TRANSFERRED_MESSAGE = 'הפנייה הועברה';
+export const RECOMMENDATION_APPLIED_MESSAGE = 'המלצת ה-AI הוחלה על הפנייה';
 
 /**
  * The handling screen (spec 7.7), by areas: 1 – the ticket and the employee; 2 – the AI analysis (task 4.4);
@@ -67,9 +70,10 @@ export const TRANSFERRED_MESSAGE = 'הפנייה הועברה';
     AttachmentChip,
     Timeline,
     TicketComposer,
+    AiAnalysisPanel,
     DateTimePipe,
   ],
-  providers: [TicketHandleStore],
+  providers: [TicketHandleStore, TicketAiAnalysisStore],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { '(window:beforeunload)': 'onBeforeUnload($event)' },
   templateUrl: './ticket-handle-page.html',
@@ -88,6 +92,9 @@ export class TicketHandlePage implements HasUnsavedChanges {
   private readonly composer = viewChild(TicketComposer);
 
   protected readonly ticket = this.store.ticket;
+  protected readonly appliedMessage = RECOMMENDATION_APPLIED_MESSAGE;
+  /** Created with the page: it loads the analysis (and checks a running one) as soon as the ticket is loaded. */
+  private readonly ai = inject(TicketAiAnalysisStore);
   /** The queue view the user came from (tab + filters), or the default tab. */
   protected readonly queueUrl = safeQueueUrl(this.router.getCurrentNavigation()?.extras.state ?? history.state);
   /** Leaving because the ticket left the user's scope: nothing to keep. */

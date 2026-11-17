@@ -50,4 +50,19 @@ public class AiOptionsBindingTests
     {
         Assert.Equal(0.7f, Bind(new() { ["Ai:Temperature"] = "0.7" }).Temperature);
     }
+
+    [Fact]
+    public void RetryDelaysSeconds_NotConfigured_Defaults_To_30s_2m_10m()
+    {
+        Assert.Equal([30, 120, 600], Bind([]).RetryDelaysSeconds);
+    }
+
+    [Fact]
+    public void RetryDelaysSeconds_Configured_Replaces_The_Default()
+    {
+        // The binder appends a configured array to a non-empty default; the default is therefore applied after binding.
+        var options = Bind(new() { ["Ai:RetryDelaysSeconds:0"] = "5", ["Ai:RetryDelaysSeconds:1"] = "60" });
+
+        Assert.Equal([5, 60], options.RetryDelaysSeconds);
+    }
 }

@@ -21,6 +21,8 @@ try
     builder.Services.AddServices(builder.Configuration);
     // Background queue workers. Not started by the --seed command (it never runs the host).
     builder.Services.AddHostedService<API.BackgroundJobs.InvitationEmailWorker>();
+    // Always on, also with Ai:Enabled = false: queued jobs must still reach GENERAL (spec 5.6).
+    builder.Services.AddHostedService<API.BackgroundJobs.AiAnalysisWorker>();
     if (builder.Configuration.GetValue("AutoClose:Enabled", defaultValue: true))
     {
         builder.Services.AddHostedService<API.BackgroundJobs.AutoCloseResolvedWorker>();

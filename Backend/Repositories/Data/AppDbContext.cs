@@ -57,10 +57,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IOrganizationC
     /// Bypassed with IgnoreQueryFilters() only where no user can exist yet: login lookup, refresh-token lookup and
     /// invitation-token lookup (set-password). Background jobs do not bypass: they enter an organization explicitly
     /// (ISystemOrganizationContext).
-    /// Entities without OrganizationId (UserRole, RefreshToken, UserInvitation, Ticket children, AI jobs) are not
-    /// filtered - they are always reached through a filtered parent. InvitationEmailJob has an OrganizationId but is
-    /// deliberately not filtered: the worker claims jobs of every organization before it knows which one (it then
-    /// enters each job's organization) and the claim returns only ids.
+    /// Entities without OrganizationId (UserRole, RefreshToken, UserInvitation, Ticket children) are not
+    /// filtered - they are always reached through a filtered parent. InvitationEmailJob and AiAnalysisJob have an
+    /// OrganizationId but are deliberately not filtered: their workers claim jobs of every organization before they know
+    /// which one (they then enter each job's organization) and the claim returns only ids.
     /// </summary>
     private void ApplyOrganizationFilters(ModelBuilder modelBuilder)
     {

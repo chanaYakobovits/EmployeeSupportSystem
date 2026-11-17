@@ -208,6 +208,15 @@ export class TicketHandleStore {
     );
   }
 
+  /**
+   * Loads the ticket and its timeline again without a loading state – e.g. after the AI analysis finished in the
+   * background (its AiStatus changed the ticket's version, and maybe its classification). Never fails.
+   */
+  refresh(): Observable<void> {
+    const id = this.ticketId;
+    return id === null ? of(undefined) : this.reloadAfterChange(id);
+  }
+
   /** The actions area asks the writing area for the reply mode and the focus. */
   focusReply(): void {
     this.composerFocusSignal.update((request) => ({ seq: (request?.seq ?? 0) + 1 }));

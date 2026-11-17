@@ -48,6 +48,9 @@ public static class AuditActions
     // are in the log – the audit log has no content fields.
     public const string TicketBulkStatus = "Ticket.BulkStatus";
     public const string TicketBulkAssign = "Ticket.BulkAssign";
+
+    // Task 4.4: "נתח מחדש" queued a new analysis job. EntityId = the ticket id.
+    public const string TicketAiRetryRequested = "Ticket.AiRetryRequested";
 }
 
 /// <summary>Values of <c>AuditLog.EntityType</c>.</summary>

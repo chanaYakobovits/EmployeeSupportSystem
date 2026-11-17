@@ -45,9 +45,9 @@ public sealed class OrganizationQueryFilterTests
             .Select(e => e.ClrType.Name)
             .ToList();
 
-        // The one deliberate exception: the worker claims queue rows of every organization (ids only), then enters
+        // The deliberate exceptions, the queues: their workers claim rows of every organization (ids only), then enter
         // each job's organization.
-        Assert.Equal([nameof(InvitationEmailJob)], unfiltered);
+        Assert.Equal([nameof(AiAnalysisJob), nameof(InvitationEmailJob)], unfiltered.Order());
     }
 
     // ---- explicit organization for background jobs (no signed-in user) ----

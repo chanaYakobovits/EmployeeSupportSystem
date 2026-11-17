@@ -429,7 +429,11 @@ public sealed class UserService : IUserService
 
     /// <summary>
     /// The cached department list shows active employee and handler counts and the manager's name (spec 11.3),
-    /// so a change to a user makes it stale.
+    /// so a change to a user makes it stale – and so the user names of the AI's PII redaction (task 4.3).
     /// </summary>
-    private void InvalidateDepartments() => _referenceData.Invalidate(ReferenceData.Departments, _currentUser.OrganizationId);
+    private void InvalidateDepartments()
+    {
+        _referenceData.Invalidate(ReferenceData.Departments, _currentUser.OrganizationId);
+        _referenceData.Invalidate(ReferenceData.UserNames, _currentUser.OrganizationId);
+    }
 }

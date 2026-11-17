@@ -20,6 +20,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The AI evaluation set (Tests/AiEvaluation) – its shape and coverage are checked by AiEvaluationSetTests. -->
+    <Content Include="..\AiEvaluation\ai-evaluation-set.json" Link="AiEvaluation\ai-evaluation-set.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\Services\Services.csproj" />
   </ItemGroup>
 

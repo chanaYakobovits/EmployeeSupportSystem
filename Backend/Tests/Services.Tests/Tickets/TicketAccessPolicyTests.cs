@@ -41,7 +41,7 @@ public sealed class TicketAccessPolicyTests
 
         Assert.Equal(new TicketPermissions(CanView: true, IsRequesterView: false, CanSeeInternal: true, CanReply: true,
             CanWriteInternal: true, CanReclassify: true, CanAssign: true, CanTransferToDepartment: true,
-            CanChangeStatus: true), permissions);
+            CanChangeStatus: true, CanRetryAnalysis: true), permissions);
     }
 
     [Fact]

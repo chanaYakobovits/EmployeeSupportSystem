@@ -1,4 +1,4 @@
-using API.Auth;
+﻿using API.Auth;
 using API.Extensions;
 using Common.Constants;
 using Common.DTOs.Paging;
@@ -26,7 +26,8 @@ public class TicketsController(
     ITicketConversationService conversationService,
     ITicketHandlingService handlingService,
     ITicketStatusService statusService,
-    ITicketBulkService bulkService) : ControllerBase
+    ITicketBulkService bulkService,
+    ITicketAiAnalysisService aiAnalysisService) : ControllerBase
 {
     /// <summary>
     /// Opens a ticket for the signed-in user (multipart: subject, description, up to 3 files). Saved immediately with
@@ -147,6 +148,30 @@ public class TicketsController(
     public async Task<ActionResult<TicketAssignOptionsDto>> GetAssignOptions(int id,
         CancellationToken cancellationToken) =>
         Ok(await handlingService.GetAssignOptionsAsync(id, cancellationToken));
+
+    /// <summary>
+    /// The AI analysis (spec 7.7 area 2, task 4.4): its state and the latest stored analysis. Staff with a scope on the
+    /// ticket (handler, department manager, executive); the requester → 404.
+    /// </summary>
+    [HttpGet("{id:int}/ai-analysis")]
+    [ProducesResponseType<TicketAiAnalysisDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<TicketAiAnalysisDto>> GetAiAnalysis(int id, CancellationToken cancellationToken) =>
+        Ok(await aiAnalysisService.GetAsync(id, cancellationToken));
+
+    /// <summary>
+    /// "נתח מחדש" (spec 5.6, 9.2): queues a new analysis job → 202 with the ticket's new version. A handler in scope;
+    /// 422 when the ticket is not open, an analysis is in progress, or the AI is unavailable; 429 within two minutes of
+    /// the ticket's previous job. A routed ticket keeps its classification – the result is a recommendation only.
+    /// </summary>
+    [HttpPost("{id:int}/ai-analysis/retry")]
+    [ProducesResponseType<TicketUpdatedDto>(StatusCodes.Status202Accepted)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status429TooManyRequests)]
+    public async Task<ActionResult<TicketUpdatedDto>> RetryAiAnalysis(int id, CancellationToken cancellationToken) =>
+        Accepted(await aiAnalysisService.RetryAsync(id, HttpContext.ClientIp(), cancellationToken));
 
     /// <summary>
     /// Bulk "התחל טיפול" (spec 11.2, task 3.6): up to 100 tickets with the version the user saw; each one through

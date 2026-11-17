@@ -1,0 +1,173 @@
+<section class="surface-card ai-card" aria-labelledby="ai-title">
+  <div class="ai-head">
+    <h2 id="ai-title" class="card-title">
+      <mat-icon aria-hidden="true">auto_awesome</mat-icon>
+      ניתוח AI
+    </h2>
+    @if (canRetry() && ai.analysis() && !failed()) {
+      <button mat-stroked-button type="button" data-action="retryAnalysis" [disabled]="disabled()" (click)="retry()">
+        <mat-icon aria-hidden="true">refresh</mat-icon>
+        נתח מחדש
+      </button>
+    }
+  </div>
+
+  <!-- The analysis started / ended – announced to screen readers. -->
+  <p class="visually-hidden" aria-live="polite" aria-atomic="true">{{ ai.announcement() }}</p>
+
+  @if (alert(); as current) {
+    <app-form-alert [alert]="current" [dismissible]="true" (dismissed)="alert.set(null)" />
+  }
+
+  @switch (ai.status()) {
+    @case ('loading') {
+      <p class="ai-state" role="status">
+        <mat-spinner diameter="20" aria-hidden="true" />
+        <span>טוען את ניתוח ה-AI...</span>
+      </p>
+    }
+    @case ('error') {
+      <div class="ai-state ai-error">
+        <mat-icon aria-hidden="true">error_outline</mat-icon>
+        <span>לא ניתן לטעון את ניתוח ה-AI.</span>
+        <button mat-button type="button" (click)="ai.refresh()">נסה שוב</button>
+      </div>
+    }
+    @case ('ready') {
+      @if (ai.inProgress()) {
+        <div class="ai-state ai-progress" data-state="in-progress">
+          @if (ai.stalled()) {
+            <mat-icon aria-hidden="true">hourglass_top</mat-icon>
+            <span>{{ stalledText }}</span>
+            <button mat-button type="button" data-action="refreshAnalysis" (click)="ai.refresh()">רענון</button>
+          } @else {
+            <mat-spinner diameter="20" aria-hidden="true" />
+            <span>{{ inProgressText }}</span>
+          }
+        </div>
+      }
+
+      @if (failed() && processing(); as processing) {
+        <div class="ai-failed" data-state="failed">
+          <p class="ai-failed-text">
+            <mat-icon aria-hidden="true">report</mat-icon>
+            <span>{{ processing.errorMessage ?? 'הניתוח נכשל' }}</span>
+          </p>
+          @if (ai.analysis()) {
+            <p class="muted">מוצג הניתוח הקודם.</p>
+          }
+          @if (canRetry()) {
+            <button
+              mat-flat-button
+              type="button"
+              class="btn-primary-gradient"
+              data-action="retryAnalysis"
+              [disabled]="disabled()"
+              (click)="retry()"
+            >
+              <mat-icon aria-hidden="true">refresh</mat-icon>
+              נתח מחדש
+            </button>
+          }
+        </div>
+      }
+
+      @if (ai.analysis(); as analysis) {
+        <!-- Applied or a recommendation only – in words and with an icon, never by colour alone. -->
+        @if (analysis.applied) {
+          <p class="disposition applied" data-disposition="applied">
+            <mat-icon aria-hidden="true">check_circle</mat-icon>
+            <span>
+              <strong>{{ appliedLabel }}</strong>
+              @if (!analysis.matchesCurrentClassification) {
+                – הסיווג שונה מאז
+              }
+            </span>
+          </p>
+        } @else {
+          <p class="disposition recommendation" data-disposition="recommendation">
+            <mat-icon aria-hidden="true">lightbulb</mat-icon>
+            <span>
+              <strong>{{ recommendationLabel }}</strong>
+              @if (notAppliedReason(); as reason) {
+                <span class="reason"> – {{ reason }}</span>
+              }
+            </span>
+          </p>
+        }
+
+        <dl class="ai-facts">
+          <div class="fact">
+            <dt>קטגוריה מוצעת</dt>
+            <dd dir="auto">{{ analysis.categoryName ?? analysis.categoryCode }}</dd>
+          </div>
+          <div class="fact">
+            <dt>דחיפות מוצעת</dt>
+            <dd><app-urgency-badge [urgency]="analysis.urgency" /></dd>
+          </div>
+          <div class="fact">
+            <dt>רמת ביטחון</dt>
+            <dd class="confidence" [attr.data-level]="analysis.confidenceLevel">{{ confidence() }}</dd>
+          </div>
+        </dl>
+
+        @if (analysis.summary) {
+          <div class="ai-block">
+            <h3 class="ai-subtitle">סיכום</h3>
+            <p class="ai-text" dir="auto">{{ analysis.summary }}</p>
+          </div>
+        }
+
+        @if (analysis.missingInformation.length > 0) {
+          <div class="ai-block">
+            <h3 class="ai-subtitle">מידע חסר</h3>
+            <ul class="missing">
+              @for (item of analysis.missingInformation; track $index) {
+                <li dir="auto">{{ item }}</li>
+              }
+            </ul>
+          </div>
+        }
+
+        @if (canApply() || canUseSuggestion()) {
+          <div class="ai-actions">
+            @if (canApply()) {
+              <button
+                mat-flat-button
+                type="button"
+                class="btn-primary-gradient"
+                data-action="applyRecommendation"
+                [disabled]="disabled()"
+                (click)="apply()"
+              >
+                <mat-icon aria-hidden="true">done_all</mat-icon>
+                החל המלצה
+              </button>
+            }
+            @if (canUseSuggestion()) {
+              <button mat-stroked-button type="button" data-action="useSuggestion" (click)="useSuggestion()">
+                <mat-icon aria-hidden="true">edit_note</mat-icon>
+                הצעת תשובה לעובד
+              </button>
+            }
+          </div>
+        }
+
+        <details class="sent">
+          <summary>מה נשלח ל-AI</summary>
+          <p class="muted sent-note">הטקסט אחרי ניקוי פרטים מזהים – בדיוק מה שיצא מהמערכת.</p>
+          <!-- Plain text (interpolation, never innerHTML); line breaks kept by white-space: pre-wrap. -->
+          <p class="sent-text" dir="auto">{{ analysis.redactedInput }}</p>
+        </details>
+
+        <p class="meta">
+          <span>מודל: <span dir="ltr">{{ analysis.model }}</span></span>
+          <span>גרסת הנחיה: <span dir="ltr">{{ analysis.promptVersion }}</span></span>
+          <span>נותח: {{ analysis.createdAt | dateTime }}</span>
+        </p>
+      } @else if (!ai.inProgress() && !failed()) {
+        <p class="muted">אין ניתוח AI לפנייה זו.</p>
+      }
+    }
+  }
+</section>

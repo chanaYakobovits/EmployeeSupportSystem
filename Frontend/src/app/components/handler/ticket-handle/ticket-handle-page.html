@@ -68,14 +68,10 @@
             }
           </section>
 
-          <!-- Area 2: the AI analysis – task 4.4. -->
-          <section class="surface-card card ai-card" aria-labelledby="ai-title">
-            <h2 id="ai-title" class="card-title">
-              <mat-icon aria-hidden="true">auto_awesome</mat-icon>
-              ניתוח AI
-            </h2>
-            <p class="placeholder-text">ניתוח AI יתווסף בהמשך.</p>
-          </section>
+          <!-- Area 2: the AI analysis (task 4.4) – staff with a scope only. -->
+          @if (store.can('viewAiAnalysis')) {
+            <app-ai-analysis-panel (applied)="onOutcome($event, appliedMessage)" />
+          }
 
           <!-- Area 3: writing – only the modes the server allows. -->
           @if (store.can('internalNote') || store.can('reply')) {

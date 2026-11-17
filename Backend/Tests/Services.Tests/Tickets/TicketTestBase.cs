@@ -69,6 +69,9 @@ public abstract class TicketTestBase
     protected Func<AppDbContext, IUnitOfWork>? UnitOfWorkFactory { get; set; }
 
     private readonly string _databaseName = Guid.NewGuid().ToString();
+
+    /// <summary>The test's InMemory database, for contexts built by derived test bases.</summary>
+    protected string DatabaseName => _databaseName;
     private int _nextTicketId = 1000;
 
     protected TicketTestBase()
@@ -122,10 +125,16 @@ public abstract class TicketTestBase
         var currentUser = new FakeCurrentUser { SignedInUserId = userId, SignedInOrganizationId = organizationId };
         var routing = RoutingFor(db);
         return new TicketService(new TicketRepository(db), new UserRepository(db), UnitOfWorkFor(db),
-            AccessFor(db, currentUser), routing, ClassifierFor(db, routing), Files, Clock, currentUser,
+            AccessFor(db, currentUser), routing, ClassifierFor(db, routing), AiGate, Files, Clock, currentUser,
             new CreateTicketRequestValidator(), new AttachmentFilesValidator(), new MyTicketsQueryValidator(),
             new StaffTicketsQueryValidator(), new AuditLogRepository(db), Logger);
     }
+
+    /// <summary>
+    /// What ticket creation sees of the AI (task 4.3). Disabled by default: the tests of tasks 3.x expect the immediate
+    /// fallback to GENERAL. The AI tests set it to Available.
+    /// </summary>
+    protected FakeAiAvailability AiGate { get; } = new();
 
     /// <summary>Reference data cache of the test (one per test, like the app's singleton).</summary>
     protected readonly MemoryReferenceDataCache ReferenceData = new(new MemoryCache(new MemoryCacheOptions()));
@@ -219,7 +228,7 @@ public abstract class TicketTestBase
     private static TicketAccess AccessFor(AppDbContext db, FakeCurrentUser currentUser) =>
         new(new TicketRepository(db), new UserRepository(db), currentUser);
 
-    private IUnitOfWork UnitOfWorkFor(AppDbContext db) => UnitOfWorkFactory?.Invoke(db) ?? new UnitOfWork(db);
+    protected IUnitOfWork UnitOfWorkFor(AppDbContext db) => UnitOfWorkFactory?.Invoke(db) ?? new UnitOfWork(db);
 
     /// <summary>Comments and attachments as the database has them (no query filter).</summary>
     protected List<TicketComment> AllComments()

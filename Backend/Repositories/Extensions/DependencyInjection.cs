@@ -39,6 +39,7 @@ public static class DependencyInjection
         services.AddScoped<ITicketRepository, TicketRepository>();
         services.AddScoped<ITicketConversationRepository, TicketConversationRepository>();
         services.AddScoped<IUserInvitationRepository, UserInvitationRepository>();
+        services.AddScoped<IAiAnalysisJobRepository, AiAnalysisJobRepository>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
 
         // Demo data (spec 8.5). Exposed only through the Common interface; API allows it only in Development.

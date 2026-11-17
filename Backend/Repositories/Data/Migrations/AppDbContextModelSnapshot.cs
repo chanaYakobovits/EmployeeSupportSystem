@@ -33,6 +33,7 @@ namespace Repositories.Data.Migrations
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<int>("Attempts")
+                        .IsConcurrencyToken()
                         .HasColumnType("int");
 
                     b.Property<DateTime?>("CompletedAt")
@@ -51,6 +52,9 @@ namespace Repositories.Data.Migrations
                     b.Property<DateTime>("NextAttemptAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<int>("OrganizationId")
+                        .HasColumnType("int");
+
                     b.Property<byte>("Status")
                         .HasColumnType("tinyint");
 
@@ -58,6 +62,8 @@ namespace Repositories.Data.Migrations
                         .HasColumnType("int");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("OrganizationId");
 
                     b.HasIndex("TicketId");
 
@@ -473,6 +479,9 @@ namespace Repositories.Data.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<byte>("Disposition")
+                        .HasColumnType("tinyint");
+
                     b.Property<int>("DurationMs")
                         .HasColumnType("int");
 
@@ -520,6 +529,9 @@ namespace Repositories.Data.Migrations
                         .HasColumnType("int");
 
                     b.Property<byte>("Urgency")
+                        .HasColumnType("tinyint");
+
+                    b.Property<byte>("Verdict")
                         .HasColumnType("tinyint");
 
                     b.HasKey("Id");
@@ -854,6 +866,12 @@ namespace Repositories.Data.Migrations
 
             modelBuilder.Entity("Common.Models.AiAnalysisJob", b =>
                 {
+                    b.HasOne("Common.Models.Organization", null)
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("Common.Models.Ticket", "Ticket")
                         .WithMany("AiAnalysisJobs")
                         .HasForeignKey("TicketId")

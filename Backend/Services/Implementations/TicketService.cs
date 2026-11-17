@@ -30,6 +30,7 @@ public sealed class TicketService(
     ITicketAccess ticketAccess,
     IRoutingService routing,
     ITicketClassifier classifier,
+    IAiAvailability aiAvailability,
     IFileStorage storage,
     IDateTimeProvider clock,
     ICurrentUser currentUser,
@@ -68,15 +69,23 @@ public sealed class TicketService(
             ticket.Attachments.Add(await staged.SaveAttachmentAsync(file, requesterId, now, cancellationToken));
         }
 
-        var routed = await StageNewTicketAsync(ticket, now, cancellationToken);
+        var (availability, routed) = await StageNewTicketAsync(ticket, now, cancellationToken);
 
-        // One SaveChanges = one transaction for the ticket and every row staged with it: routing, SLA and the history
-        // (spec 4.3: the ticket and its analysis job are never saved apart).
+        // One SaveChanges = one transaction for the ticket and every row staged with it: the analysis job, or the
+        // fallback routing and SLA, and the history (spec 4.3: the ticket and its analysis job are never saved apart).
         await unitOfWork.SaveChangesAsync(cancellationToken);
         staged.Commit();
 
         logger.LogInformation("Ticket {TicketId} created by user {UserId} with {AttachmentCount} attachments",
             ticket.Id, requesterId, ticket.Attachments.Count);
+        if (availability == AiAvailability.Available)
+        {
+            logger.LogInformation("Ticket {TicketId} queued for AI analysis", ticket.Id);
+        }
+        else
+        {
+            logger.LogInformation("Ticket {TicketId}: AI analysis skipped ({AiAvailability})", ticket.Id, availability);
+        }
         if (routed is not null)
         {
             RoutingLog.Routed(logger, ticket.Id, routed, ClassificationSource.Fallback);
@@ -91,15 +100,19 @@ public sealed class TicketService(
     }
 
     /// <summary>
-    /// Everything saved together with a new ticket, in the same transaction: the opening history row, and the
-    /// fallback classification with its routing and SLA (task 3.3: no AI yet, so every ticket goes to GENERAL right
-    /// away, AiStatus Skipped). Task 4.3 adds the AI analysis job here, and keeps this path for Ai:Enabled = false.
-    /// The AI job of 4.3 analyzes only the redacted description – attachments are never sent to the AI (spec 4.3, 5.1):
-    /// not their content, not their names.
+    /// Everything saved together with a new ticket, in the same transaction: the opening history row, and then
+    /// <list type="bullet">
+    /// <item>AI available → AiStatus Pending and an analysis job (spec 4.3). The ticket stays New, unrouted: the worker
+    /// classifies and routes it within seconds.</item>
+    /// <item>AI disabled / no key / circuit breaker open (spec 5.6) → AiStatus Skipped and the fallback classification
+    /// with its routing and SLA right away (the path of task 3.3).</item>
+    /// </list>
+    /// The worker analyzes only the redacted subject and description – attachments are never sent to the AI
+    /// (spec 4.3, 5.1): not their content, not their names.
     /// </summary>
-    /// <returns>The routing decision, to log after the save; null if the ticket could not be routed.</returns>
-    private async Task<RoutingDecision?> StageNewTicketAsync(Ticket ticket, DateTime now,
-        CancellationToken cancellationToken)
+    /// <returns>The AI availability, and the routing decision to log after the save (null if not routed now).</returns>
+    private async Task<(AiAvailability Availability, RoutingDecision? Routed)> StageNewTicketAsync(Ticket ticket,
+        DateTime now, CancellationToken cancellationToken)
     {
         // The opening entry of the timeline (spec 3.3: every transition is recorded).
         ticket.StatusHistory.Add(new TicketStatusHistory
@@ -111,20 +124,23 @@ public sealed class TicketService(
         });
         tickets.Add(ticket);
 
-        ticket.AiStatus = AiStatus.Skipped;
-        var fallbackId = await routing.GetFallbackCategoryIdAsync(ticket.OrganizationId, cancellationToken);
-        if (fallbackId is not { } categoryId)
+        var availability = aiAvailability.Check();
+        if (availability == AiAvailability.Available)
         {
-            // Cannot happen with valid data (one fallback per organization, never deactivated). The employee's ticket is
-            // still saved – New, unrouted – rather than failing the request.
-            logger.LogError("Organization {OrganizationId} has no active fallback category; a new ticket stays unrouted",
-                ticket.OrganizationId);
-            return null;
+            ticket.AiStatus = AiStatus.Pending;
+            ticket.AiAnalysisJobs.Add(new AiAnalysisJob
+            {
+                OrganizationId = ticket.OrganizationId,
+                Status = AiJobStatus.Pending,
+                NextAttemptAt = now,
+                CreatedAt = now,
+            });
+            return (availability, null);
         }
 
-        // Urgency null until a handler sets it (decision in CLAUDE.md); the SLA then uses Medium (spec 3.4).
-        return await classifier.ApplyAsync(ticket,
-            new TicketClassification(categoryId, Urgency: null, ClassificationSource.Fallback), now, cancellationToken);
+        ticket.AiStatus = AiStatus.Skipped;
+        var routed = await FallbackClassification.ApplyAsync(routing, classifier, ticket, now, logger, cancellationToken);
+        return (availability, routed);
     }
 
     // ===================== The requester's view (spec 7.3, 7.5) =====================

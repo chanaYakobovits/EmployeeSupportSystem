@@ -21,6 +21,7 @@ namespace Services.Implementations.Tickets;
 /// spec 14 question 8). Which ones, and only for the personal handler, is decided with the status rules. The requester's
 /// own transitions go by <paramref name="IsRequesterView"/>.
 /// </param>
+/// <param name="CanRetryAnalysis">"נתח מחדש" (spec 9.2: מטפל): a handler in scope – not a manager or the executive.</param>
 public sealed record TicketPermissions(
     bool CanView,
     bool IsRequesterView,
@@ -30,7 +31,8 @@ public sealed record TicketPermissions(
     bool CanReclassify = false,
     bool CanAssign = false,
     bool CanTransferToDepartment = false,
-    bool CanChangeStatus = false)
+    bool CanChangeStatus = false,
+    bool CanRetryAnalysis = false)
 {
     public static readonly TicketPermissions None = new(false, false, false, false, false);
 }
@@ -85,7 +87,8 @@ public static class TicketAccessPolicy
             CanReclassify: asStaff && (asHandler || managesHandling),
             CanAssign: asStaff && (asHandler || managesHandling),
             CanTransferToDepartment: asStaff && asHandler,
-            CanChangeStatus: asStaff && asHandler);
+            CanChangeStatus: asStaff && asHandler,
+            CanRetryAnalysis: asStaff && asHandler);
     }
 }
 
@@ -162,6 +165,25 @@ public static class TicketAllowedActions
         if (permissions.CanAssign && isOpen && inMyQueue)
         {
             actions.Add(TicketActions.TakeFromQueue);
+        }
+
+        // The AI analysis (task 4.4): seen by every staff scope; re-analysis and applying it by the rules above.
+        if (permissions.CanSeeInternal)
+        {
+            actions.Add(TicketActions.ViewAiAnalysis);
+        }
+
+        if (ticket.Ai is { } ai)
+        {
+            if (permissions.CanRetryAnalysis && isOpen && !ai.AnalysisInProgress)
+            {
+                actions.Add(TicketActions.RetryAnalysis);
+            }
+
+            if (permissions.CanReclassify && isOpen && ai.RecommendationDiffers)
+            {
+                actions.Add(TicketActions.ApplyRecommendation);
+            }
         }
 
         if (permissions.CanChangeStatus)

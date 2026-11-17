@@ -47,9 +47,11 @@ public sealed class StaffTicketDetailsTests : TicketTestBase
         Assert.Equal(Now.AddDays(-1), ticket.CreatedAt);
         Assert.Equal(Now.AddHours(-1), ticket.UpdatedAt);
         Assert.Equal([1, 2, 3], ticket.RowVersion);
-        // Alon is its personal handler, in progress: the status actions too (task 3.5).
+        // Alon is its personal handler, in progress: the status actions too (task 3.5), and the AI's (4.4) – the analysis
+        // is completed, so it may be run again; there is no stored analysis to apply.
         Assert.Equal([TicketActions.Reply, TicketActions.InternalNote, TicketActions.Reclassify, TicketActions.Assign,
-            TicketActions.TransferToDepartment, TicketActions.RequestInfo, TicketActions.Resolve], ticket.AllowedActions);
+            TicketActions.TransferToDepartment, TicketActions.ViewAiAnalysis, TicketActions.RetryAnalysis,
+            TicketActions.RequestInfo, TicketActions.Resolve], ticket.AllowedActions);
     }
 
     [Fact]
@@ -59,8 +61,10 @@ public sealed class StaffTicketDetailsTests : TicketTestBase
         var avner = Assert.IsType<StaffTicketDetailsDto>(await Get(AvnerId));
 
         // Ron manages פיתוח, which handles the ticket: reclassify and assign within it, not to another department.
-        Assert.Equal([TicketActions.InternalNote, TicketActions.Reclassify, TicketActions.Assign], ron.AllowedActions);
-        Assert.Empty(avner.AllowedActions);
+        // Both see the AI analysis; re-analysis is for handlers only (spec 9.2).
+        Assert.Equal([TicketActions.InternalNote, TicketActions.Reclassify, TicketActions.Assign,
+            TicketActions.ViewAiAnalysis], ron.AllowedActions);
+        Assert.Equal([TicketActions.ViewAiAnalysis], avner.AllowedActions);
     }
 
     [Fact]

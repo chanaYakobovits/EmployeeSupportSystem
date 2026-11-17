@@ -17,8 +17,13 @@
 - 3.5 חלק א' (שרת: TicketStatusRules, PATCH /status, השהיית SLA, פתיחה מחדש, סגירה אוטומטית, allowedActions) – הושלם.
 - 3.5 חלק ב' (פעולות סטטוס במסכי העובד והמטפל, אזור "נפתרה", אירועי מערכת בציר הזמן) – הושלם.
 - 3.6 עדכון מרובה (שרת: bulk/status ו-bulk/assign; מסך: בחירה, סרגל פעולות, חלון תוצאה בתור המטפל) – הושלם.
-- הבא בתור: 4.3 – ניתוח AI ברקע (שלב ד').
-- תוספת שלא באפיון: בדיקת איכות סיווג AI על 30 פניות לדוגמה – אחרי משימה 4.3.
+- 4.3 ניתוח AI ברקע (תור AiAnalysisJobs, AiAnalysisWorker, Circuit Breaker, סיווג וניתוב ע"י ה-AI) – הושלם.
+- 4.4 הצגת ניתוח ה-AI למטפל (GET /ai-analysis, ‏"נתח מחדש", אזור 2 במסך הטיפול, טיוטת AI באזור הכתיבה, נושא מוצע) – הושלם.
+- הבא בתור: שלב ה' (דשבורדים, 5.1).
+- תוספת שלא באפיון: בדיקת איכות סיווג AI על 30 פניות לדוגמה – אחרי משימה 4.3. שלב 1 (סט הבדיקה
+  `Backend/Tests/AiEvaluation/ai-evaluation-set.json` + `AiEvaluationSetTests`) – הושלם ונבדק. שלב 2 (`AiInputBuilder` משותף,
+  POST /api/dev/ai/analyze ו-/evaluate) – הושלם. שלב 3 (`docs/ai-evaluation.md`: הוראות, מדדים, טבלאות הרצות/גרסאות/תיאורים) – הושלם.
+  הבא: הרצה ראשונה של evaluate (רק באישור – עולה כסף), ואז כיוונון לפי התוצאות.
 - תוספת שלא באפיון: הזמנת עובד במייל (האפיון 14 שאלה 3, "בעתיד"). שלב א' (שרת) ושלב ב' (מסך set-password, סטטוס הזמנה
   ברשימה ובעריכה, שליחה מחדש, סינון לפי סטטוס הזמנה) – הושלמו.
 
@@ -304,7 +309,7 @@
   * יצירת פנייה (`StageNewTicketAsync`): `AiStatus.Skipped` (ערך חדש = 5: "לא בוצע ניתוח", לא Failed ולא Pending), ואז
     GENERAL / Fallback / Urgency null ← Assigned, DueAt = +72h, שתי שורות היסטוריה – SaveChanges אחד. ב-4.3 זה יישאר המסלול
     של `Ai:Enabled=false`; מדד "סווג אוטומטית" (7.9) לפי ClassificationSource. אין גיבוי פעיל ← נשמרת New בלי ניתוב + LogError.
-  * ה-Seeder עדיין יוצר 6 פניות New עם AiStatus Pending/Processing (הדגמה של עולם ה-AI) – אין Worker שיטפל בהן עד 4.3.
+  * ה-Seeder יוצר 6 פניות New עם משימות Pending/Processing – מ-4.3 ה-Worker מעבד אותן מיד בעליית ה-API.
 
 - תור מטפל ותצוגת צוות – API (משימה 3.4 חלק א'):
   * `GET /api/tickets?scope=assigned|queue|handling|department` (`StaffTicketsQuery`). ההיקפים כ-Expression ב-`TicketListScopes`
@@ -459,21 +464,92 @@
     מ-`handler-messages.ts`, מוכרז ב-LiveAnnouncer). ‏checkbox: ‏"בחר פנייה 1042", כותרת "בחירת כל הפניות בעמוד".
   * רוחב צר: checkbox בכל כרטיס + "בחירת כל הפניות בעמוד" מעל הכרטיסים (CSS, רק ב-XSmall). בלי לחיצה ארוכה – לא נגישה.
 
+- ניתוח AI ברקע (משימה 4.3, 5.2–5.6, 11.2):
+  * יצירת פנייה: `IAiAvailability` (Singleton: ‏Enabled + ApiKey + Breaker סגור). זמין ← New, ‏AiStatus Pending ושורת `AiAnalysisJob`
+    (Pending, ‏NextAttemptAt=now) באותו SaveChanges, בלי ניתוב. לא זמין (Disabled / CircuitOpen) ← המסלול של 3.3 (Skipped, GENERAL,
+    Urgency null) + לוג הסיבה. הגיבוי במקום אחד: `FallbackClassification.ApplyAsync` (Services/Implementations/Tickets) – ליצירה ול-Worker.
+  * `AiAnalysisJobs.OrganizationId` (Migration `AiJobOrganization`, מילוי מ-Tickets) בלי Query Filter – כמו InvitationEmailJobs
+    (`OrganizationQueryFilterTests` מצפה לשתיהן). ‏`Attempts` הוא Concurrency Token: עובד שהנעילה שלו פגה ומשימתו נתבעה שוב לא שומר תוצאה.
+  * Claim (`AiAnalysisJobRepository.ClaimDueJobsAsync`): אותו SQL כמו בהזמנות (ROWLOCK, READPAST, UPDLOCK; ‏Pending שהגיע זמנן או
+    Processing שנעילתן פגה; ‏Attempts+1). נעילה = ‏2×TimeoutSeconds + 60 שניות. ‏`AiAnalysisWorker` מעבד את משימות הסבב **במקביל**, כל אחת
+    ב-`CreateOrganizationScope` משלה (כדי שנעילה לא תפוג בהמתנה לאחרות). רשום תמיד, גם כש-AI כבוי (משימות קיימות ← GENERAL).
+  * `AiAnalysisProcessor` – כל הלוגיקה. לפני קריאה: פנייה חסרה/Closed/Cancelled ← המשימה Failed (`TicketNotFound`/`TicketClosed`, AiStatus
+    Failed, בלי ניתוב); ‏Attempts > MaxAttempts+1 ← `Abandoned`; ‏CreatedAt+FallbackAfterMinutes עבר ← `FallbackTimeout`; ‏Breaker פתוח ←
+    `CircuitOpen` – שלושתם GENERAL בלי קריאה. אחרת AiStatus Processing (בלי UpdatedAt) ← ניקוי ← `IAiClient`.
+  * הטקסט ל-AI: **נושא (אם יש) + שורה ריקה + תיאור**, אחרי `PiiRedactor` עם שם הפונה (`GetNamePartsAsync`, מהמסד) ושמות כל עובדי הארגון
+    (`ReferenceData.UserNames`, ‏`user-names:{org}`, ‏5 דקות; ‏UserService מנקה בכל שינוי עובד). Regex timeout ← `RedactionFailed`, לא נשלח.
+    הקטגוריות הפעילות מה-Cache. ‏RedactedInput = בדיוק מה שנשלח.
+  * תוצאה: Valid + קטגוריה עדיין פעילה ← `ITicketClassifier.ApplyAsync(…, Ai)`. ‏LowConfidence / UnknownCategory / קוד שלא ברשימה ←
+    GENERAL, ‏Fallback, ‏Urgency null. בשתיהן `TicketAiAnalysis` נשמר (upsert לפי TicketId), AiStatus Completed, משימה Succeeded.
+    זמני (Timeout/RateLimited/ServerError/InvalidResponse) ← **ניסיון ראשון + `MaxAttempts` (3) ניסיונות חוזרים** (החלטה: "עד 3 ניסיונות:
+    30s/2m/10m" = שלושה חוזרים), `RetryDelaysSeconds` [30,120,600], ‏NextAttemptAt לא אחרי שומר הזמן, AiStatus Pending. אחרי הרביעי,
+    או Rejected/Disabled ← GENERAL, ‏AiStatus Failed, ‏LastErrorCode = שם `AiErrorCode` או `AiJobErrorCodes`.
+  * 11.2: ה-AI מסווג רק פנייה New שלא Manual (`CanClassify`). אחרת נשמר רק הניתוח + AiStatus. כל שמירה (`FinishAsync`): DiscardChanges,
+    קריאה מחדש של המשימה (בדיקת claim) והפנייה, שינוי ושמירה; ‏409 ← פעם נוספת מהמצב החדש.
+  * `AiCircuitBreaker` (Singleton, ‏lock, ‏IDateTimeProvider): `CircuitBreakerFailures`=5 כישלונות רצופים (זמני או Rejected; ‏Disabled לא
+    נספר) ← פתוח `CircuitBreakerMinutes`=5. אחרי זה ניסיון: הצלחה מאפסת, כישלון פותח מיד. מקומי לכל שרת (מגבלה).
+  * `AiOptions.RetryDelaysSeconds` ריק כברירת מחדל ומתמלא ב-PostConfigure: ה-binder **מוסיף** מערך מההגדרות למערך ברירת מחדל לא ריק.
+    (אותה בעיה ב-`InvitationOptions.RetryDelaysMinutes` – בפועל ‏[1,5,30,1,5,30], בלי השפעה כי רק 3 הראשונים בשימוש. לא תוקן.)
+  * לוג: JobId, ‏TicketId, תוצאה, ErrorCode, ‏Attempt, טוקנים, משך + `RoutingLog.Routed` עם המקור. בלי טקסט, ניתוח או שמות.
+  * בדיקות: `Tests/Services.Tests/Ai/` (`AiTestBase` + `FakeAiClient`; ‏`TicketTestBase.AiGate` = Disabled כברירת מחדל לבדיקות 3.x).
+    ה-claim ב-InMemory מדומה ב-`AiTestBase.Claim`; ה-SQL אומת בהרצת ה-API מול SQL Server (6 משימות ה-Seeder, נעילה שפגה נתבעה שוב).
+
+- בדיקת איכות סיווג AI (תוספת שלא באפיון):
+  * `AiInputBuilder` (Services/Implementations/Ai, Scoped) – המקום היחיד של: הרכבת הטקסט (`ComposeText`: נושא + שורה ריקה + תיאור),
+    הניקוי (`RedactAsync`: שמות הפונה + שמות הארגון + PiiRedactor), הקטגוריות הפעילות (`ActiveCategoriesAsync`/`Offered`) וההכרעה
+    (`AcceptedCategory`: Valid + קטגוריה פעילה, אחרת גיבוי). ‏`AiAnalysisProcessor` ומסלול הפיתוח משתמשים בו – לא לשכפל.
+  * `POST /api/dev/ai/analyze` ו-`/evaluate` (`DevAiController`, ‏DevelopmentOnly + Admin, ‏`IAiEvaluationService`): הארגון והפונה (לשמות)
+    מ-ICurrentUser. לא כותבים למסד, לא מנתבים ולא נוגעים ב-Circuit Breaker (גם לא בודקים אותו). evaluate ברצף, לפי
+    `AiEvaluation:DatasetPath` (יחסי ל-ContentRoot של ה-API). ‏`AiEvaluationScorer` (טהור): קטגוריה לפי ההכרעה וגם גולמית, דחיפות
+    מדויקת/±1 לפי מה שה-AI החזיר, קריאה שנכשלה = שגויה בכל מדד. injection הצליח = קטגוריה/דחיפות היעד (כשהן שונות מהצפוי) או הסמן
+    בשדה טקסט. עלות לפי `AiEvaluationOptions` (ברירת מחדל gpt-4o-mini, ‏0.15$/0.60$ למיליון – הערכה).
+  * כל הרצה עולה כסף – לשאול לפני evaluate (וגם לפני analyze). גרסת הנחיה חדשה = קובץ חדש ב-Prompts + `AiPrompt.CurrentVersion`.
+
+- הצגת ניתוח ה-AI למטפל (משימה 4.4, 7.7 אזור 2–3, 9.2):
+  * `TicketAiAnalyses.Verdict` + ‏`Disposition` (Migration `AiAnalysisOutcome`, ‏enum `AiAnalysisDisposition`: Applied / LowConfidence /
+    UnknownCategory (גם קטגוריה שהושבתה) / ManuallyClassified / AlreadyRouted). נקבע ב-`AiAnalysisProcessor.SaveAnalysisAsync` ברגע השמירה
+    ולא משתנה אחר כך. "הוחל" = Applied; ‏`matchesCurrentClassification` מחושב בכל קריאה (קטגוריה + דחיפות נוכחיות).
+  * שומר הזמן (`FallbackDeadline`) מחושב מ-`job.CreatedAt` (לא מפתיחת הפנייה) – אחרת "נתח מחדש" על פנייה ישנה נופל מיד ל-FallbackTimeout.
+  * נושא מוצע (3.1): בשמירת ניתוח (גם המלצה בלבד), אם `Subject` ריק – `SuggestedSubject`, ‏בלי UpdatedAt. הצעה עם תגית ניקוי ([NAME] וכו')
+    לא נכתבת. ה-Seeder עושה אותו דבר לפניות עם ניתוח.
+  * `GET /tickets/{id}/ai-analysis` (`TicketAiAnalysisService`, ‏Services/Implementations/Ai): ‏`CanSeeInternal` (מטפל/מנהל/מנכ"ל בהיקף),
+    תצוגת פונה ← 404. ‏`{ processing: { status, errorCode, errorMessage, requestedAt, nextAttemptAt }, analysis | null }`. הודעות השגיאה
+    בעברית – `AiErrorMessages` (מקום אחד). ‏`confidenceLevel`: ‏High ≥ 0.85 (`AiConfidence.High`), ‏Medium ≥ `Ai:MinConfidence`, אחרת Low.
+    `categoryId` רק לקטגוריה פעילה. בלי AuditLog נוסף (Ticket.Viewed נרשם בפרטים).
+  * `POST /ai-analysis/retry` ← 202 + `TicketUpdatedDto`. סדר: 404 ← 403 `ai-retry-not-allowed` (לא מטפל בהיקף – `CanRetryAnalysis`) ←
+    422 `ticket-not-open` / `ai-analysis-in-progress` / `ai-unavailable` ("שירות ה-AI אינו זמין כרגע", ‏`IAiAvailability`) ← 429
+    `ai-retry-too-soon` (`TooManyRequestsException` + ‏Retry-After; משימה של הפנייה ב-`AiRetryLimits.Interval` = 2 דקות, לפי המסד, לכל פנייה).
+    משימה חדשה + AiStatus Pending ב-save אחד על הפנייה ה-Tracked, בלי UpdatedAt. AuditLog `Ticket.AiRetryRequested`. התוצאה לפי 4.3
+    (`CanClassify`): פנייה שאינה New ← AlreadyRouted/ManuallyClassified, בלי שינוי; כישלון ← AiStatus Failed בלבד.
+  * `allowedActions`: ‏`viewAiAnalysis` (‏CanSeeInternal), ‏`retryAnalysis` (‏CanRetryAnalysis + פנייה פתוחה + לא Pending/Processing; זמינות ה-AI
+    לא נבדקת – ה-422 מסביר), ‏`applyRecommendation` (reclassify + `TicketAiFacts.RecommendationDiffers`: קטגוריה פעילה מהניתוח ששונה בקטגוריה
+    או בדחיפות). ‏`TicketAccessFacts.Ai` נטען בשאילתת ה-facts; null ← אין פעולות AI.
+  * "החל המלצה" = ‏PATCH /classification הקיים עם `reason: 'לפי המלצת AI'` (`AI_RECOMMENDATION_REASON`) ← Manual. אין endpoint משלו.
+  * לקוח: `TicketAiAnalysisStore` (services, מסופק במסך הטיפול) – נטען בכל שינוי של הפנייה ב-`TicketHandleStore` (גרסה חדשה). Pending/Processing
+    ← בדיקה כל 3 שניות עד דקה (`AI_POLL_*`, ‏setTimeout מחוץ ל-zone), אחר כך "רענון". בסיום ← `TicketHandleStore.refresh()` (שקט) והכרזה.
+  * `app-ai-analysis-panel` (components/handler/ticket-handle): הוחל / "המלצה בלבד – לא הוחלה" + סיבה (`NOT_APPLIED_REASONS`), ביטחון
+    "גבוה · 86%", סיכום, מידע חסר, "החל המלצה" (confirm), "נתח מחדש" (ראשי בכישלון/Skipped, משני אחרת), "הצעת תשובה לעובד" (`focusReply`),
+    `<details>` "מה נשלח ל-AI". צבעים `--ai-soft`/`--ai-border` ב-styles.scss.
+  * `app-ticket-composer`: במצב "תגובה לעובד" עם שדה ריק ← הצעת הפתרון, פעם אחת לכל ניתוח (לפי createdAt; לא חוזרת אחרי שליחה/"נקה").
+    `aiDraft` עד שהשדה מתרוקן: הודעה (role=status) + "נקה והתחל מאפס". טיוטה שלא נערכה – לא עוברת להערה פנימית ולא נחשבת "שינוי לא שמור".
+    "הוספת המידע החסר לתגובה" (`missingInfoBlock`). השליחה תמיד בלחיצה.
+
 ## בהמשך
 - משימה 2.2: לטעון את Shell ב-loadComponent (lazy), מסך ההתחברות מחוצה לו –
   כדי להוריד את ה-bundle הראשוני מתחת ל-500KB. לא להגדיל את ה-budget.
 
-  - משימה 4.3: ה-Worker רץ בלי משתמש ← ה-Query Filter מחזיר 0 שורות. הפתרון כבר קיים (הזמנות במייל):
-  לרשת מ-`PollingBackgroundService` ולעבד כל משימה ב-`CreateOrganizationScope(job.OrganizationId)`. לא IgnoreQueryFilters כללי.
-
   - 6.1 (בדיקות אינטגרציה): 429 ביצירת פנייה; JSON של עובד מ-GET /api/tickets/{id} בלי שדות פנימיים.
-- 4.3: הסיווג של ה-AI דרך `ITicketClassifier.ApplyAsync` עם `Ai`, ו-`RoutingService` עם `job.OrganizationId`. אם מטפל כבר
-  סיווג ידנית (`ClassificationSource.Manual`) – תוצאת ה-AI נשמרת כהמלצה בלבד (11.2).
 - שלב ה': היקף `department` (מנהל/מנכ"ל) קיים ב-API, אין לו מסך. מנהל שפותח פנייה של עובד אחר במסך העובד רואה
   "הפנייה אינה שלך" (אזור handler פתוח ל-Handler בלבד).
 - ה-Seeder: צעד ManualClassify משאיר את הפנייה בתור המחלקה (כמו לפני 3.4), ואילו ב-API סיווג ידני מנתב למטפל לפי עומס.
   לא תוקן כדי לא להזיז את מספרי הפניות המתועדים – לתקן אם נוגעים ב-Seeder ממילא.
-- 4.3: ה-AI מקבל רק את התיאור המנוקה – לא קבצים ולא שמות קבצים (הערה ב-`IAiClient` וב-`StageNewTicket`).
+- 4.4: ה-Disposition של ניתוחים שנוצרו לפני ה-Migration `AiAnalysisOutcome` משוחזר לפי הסיווג הנוכחי (Ai ← Applied, Manual ←
+  ManuallyClassified) – לא מדויק לפנייה שסווגה ע"י ה-AI ותוקנה ידנית אחר כך. ב-Seeder החדש הערכים נכונים.
+- 4.4: Rate Limit של "נתח מחדש" לפי המסד (בלי נעילה): שתי בקשות באותו רגע ← אחת נכשלת ב-409 על ה-RowVersion של הפנייה, לא ב-429.
+- ה-Seeder: משימות AI שנכשלו מתועדות עם 3 ניסיונות (+150s) ונופלות לגיבוי אחרי 3–4 דקות – לפי הלוח הישן. לפי 4.3 זה ניסיון + 3 חוזרים
+  (~12.5 דקות). לא תוקן כדי לא להזיז זמנים ומספרי פניות.
+- בדיקה ידנית: שתי טרנזקציות claim במקביל מול SQL Server (READPAST) – הסקריפט נחסם (קורא את מחרוזת החיבור מ-user-secrets).
+  בהרצה של שני מופעי API רק אחד קיבל משימות, בלי כפילות – אבל זה לא מוכיח תחרות אמיתית.
 - פתוח (מחוץ ל-3.2): ניקוי קבצים יתומים (כשל במחיקה אחרי כשל במסד – נרשם Warning), סריקת וירוסים, Rate Limit לתגובות.
 
 ## מגבלה ידועה

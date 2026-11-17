@@ -16,6 +16,12 @@ public class TicketAiAnalysis
     public string SuggestedSolution { get; set; } = string.Empty;
     public string MissingInfoJson { get; set; } = string.Empty;
 
+    /// <summary>Valid, LowConfidence or UnknownCategory (spec 5.5) – an Invalid response is never stored.</summary>
+    public AiValidationVerdict Verdict { get; set; }
+
+    /// <summary>Applied to the ticket, or a recommendation only and why (task 4.4).</summary>
+    public AiAnalysisDisposition Disposition { get; set; }
+
     /// <summary>The ticket text exactly as sent to the AI, after PII redaction.</summary>
     public string RedactedInput { get; set; } = string.Empty;
 

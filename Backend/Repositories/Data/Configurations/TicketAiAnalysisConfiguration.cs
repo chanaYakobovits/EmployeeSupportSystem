@@ -19,6 +19,8 @@ public class TicketAiAnalysisConfiguration : IEntityTypeConfiguration<TicketAiAn
         builder.Property(a => a.Summary).IsRequired().HasMaxLength(300);
         builder.Property(a => a.SuggestedSolution).IsRequired().HasMaxLength(4000);
         builder.Property(a => a.MissingInfoJson).IsRequired().HasMaxLength(4000);
+        builder.Property(a => a.Verdict).HasConversion<byte>();
+        builder.Property(a => a.Disposition);
         builder.Property(a => a.RedactedInput).IsRequired(); // nvarchar(max): subject + description after redaction
 
         // One analysis per ticket (TicketId unique, spec 8.3).

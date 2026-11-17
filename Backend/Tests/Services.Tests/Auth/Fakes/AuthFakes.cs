@@ -53,6 +53,12 @@ public sealed class FakeUserRepository : IUserRepository
         IReadOnlyCollection<int> departmentIds, int? userId, CancellationToken cancellationToken) =>
         throw new NotSupportedException("Tested with EF Core InMemory in Routing/*.");
 
+    public Task<IReadOnlyList<string>> GetAllFullNamesAsync(CancellationToken cancellationToken) =>
+        throw new NotSupportedException("Tested with EF Core InMemory in Ai/*.");
+
+    public Task<IReadOnlyList<string>> GetNamePartsAsync(int userId, CancellationToken cancellationToken) =>
+        throw new NotSupportedException("Tested with EF Core InMemory in Ai/*.");
+
     public Task<IReadOnlyList<Common.DTOs.Tickets.AssigneeOptionDto>> GetHandlerOptionsAsync(int departmentId,
         CancellationToken cancellationToken) =>
         throw new NotSupportedException("Tested with EF Core InMemory in Tickets/*.");

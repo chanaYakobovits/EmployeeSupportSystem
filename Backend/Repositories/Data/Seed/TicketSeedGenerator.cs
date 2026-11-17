@@ -1,4 +1,4 @@
-using System.Text.Encodings.Web;
+﻿using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Unicode;
 using Common.Constants;
@@ -168,6 +168,7 @@ internal sealed class TicketSeedGenerator(SeedOrganization organization, Random 
 
         ticket.AiAnalysisJobs.Add(new AiAnalysisJob
         {
+            OrganizationId = ticket.OrganizationId,
             Status = processing ? AiJobStatus.Processing : AiJobStatus.Pending,
             Attempts = processing ? 1 : 0,
             NextAttemptAt = created,
@@ -539,7 +540,10 @@ internal sealed class TicketSeedGenerator(SeedOrganization organization, Random 
 
     private void AddAiArtifacts(Ticket ticket, TicketTemplate template, Source source, DateTime created, DateTime classifiedAt)
     {
-        var job = new AiAnalysisJob { CreatedAt = created, CompletedAt = classifiedAt };
+        var job = new AiAnalysisJob
+        {
+            OrganizationId = ticket.OrganizationId, CreatedAt = created, CompletedAt = classifiedAt
+        };
 
         if (source is Source.Ai or Source.LowConfidenceFallback)
         {
@@ -565,16 +569,21 @@ internal sealed class TicketSeedGenerator(SeedOrganization organization, Random 
                 Summary = template.Summary,
                 SuggestedSolution = template.Solution,
                 MissingInfoJson = JsonSerializer.Serialize(template.MissingInfo, JsonOptions),
+                Verdict = source == Source.Ai ? AiValidationVerdict.Valid : AiValidationVerdict.LowConfidence,
+                Disposition = source == Source.Ai ? AiAnalysisDisposition.Applied : AiAnalysisDisposition.LowConfidence,
                 RedactedInput = template.Subject is null ? template.Description : $"{template.Subject}\n\n{template.Description}",
                 InputTokens = random.Next(250, 700),
                 OutputTokens = random.Next(150, 400),
                 DurationMs = random.Next(900, 4500),
                 CreatedAt = classifiedAt
             };
+            // As the worker does (task 4.4, spec 3.1): a ticket without a subject gets the suggested one.
+            ticket.Subject ??= ticket.AiAnalysis.SuggestedSubject;
         }
         else
         {
-            // Three failed attempts (0s, +30s, +2m), then fallback to GENERAL.
+            // Three failed attempts (0s, +30s, +2m), then fallback to GENERAL. Older than task 4.3's schedule (a first
+            // attempt + 3 retries, ~12.5 minutes); kept so the classification times and ticket numbers do not move.
             job.Status = AiJobStatus.Failed;
             job.Attempts = 3;
             job.NextAttemptAt = created.AddSeconds(150);

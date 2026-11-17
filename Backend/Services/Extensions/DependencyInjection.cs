@@ -1,4 +1,4 @@
-using FluentValidation;
+﻿using FluentValidation;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -8,6 +8,7 @@ using Common.Options;
 using Repositories.Extensions;
 using Services.Implementations;
 using Services.Implementations.Ai;
+using Services.Implementations.Ai.Evaluation;
 using Services.Implementations.Email;
 using Services.Implementations.Files;
 using Services.Implementations.Tickets;
@@ -44,6 +45,7 @@ public static class DependencyInjection
         services.AddScoped<ITicketHandlingService, TicketHandlingService>();
         services.AddScoped<ITicketStatusService, TicketStatusService>();
         services.AddScoped<ITicketBulkService, TicketBulkService>();
+        services.AddScoped<ITicketAiAnalysisService, Implementations.Ai.TicketAiAnalysisService>();
         services.AddScoped<IAutoCloseService, AutoCloseService>();
         services.AddScoped<IRoutingService, Services.Implementations.Routing.RoutingService>();
         services.AddScoped<ITicketClassifier, TicketClassifier>();
@@ -161,6 +163,11 @@ public static class DependencyInjection
                 {
                     o.Temperature = null;
                 }
+
+                if (o.RetryDelaysSeconds.Length == 0)
+                {
+                    o.RetryDelaysSeconds = [.. AiOptions.DefaultRetryDelaysSeconds];
+                }
             })
             .Validate(o => !string.IsNullOrWhiteSpace(o.Model), "Ai:Model is required.")
             .Validate(o => o.TimeoutSeconds is >= 1 and <= 300, "Ai:TimeoutSeconds must be between 1 and 300.")
@@ -168,9 +175,27 @@ public static class DependencyInjection
             .Validate(o => o.Temperature is null or (>= 0f and <= 2f), "Ai:Temperature must be empty or between 0 and 2.")
             .Validate(o => o.MaxAttempts >= 1 && o.BatchSize >= 1 && o.WorkerIntervalSeconds >= 1 && o.FallbackAfterMinutes >= 1,
                 "Ai:MaxAttempts, BatchSize, WorkerIntervalSeconds and FallbackAfterMinutes must be positive.")
+            .Validate(o => o.RetryDelaysSeconds.All(d => d >= 1), "Ai:RetryDelaysSeconds must be at least 1 each.")
+            .Validate(o => o.CircuitBreakerFailures >= 1 && o.CircuitBreakerMinutes >= 1,
+                "Ai:CircuitBreakerFailures and CircuitBreakerMinutes must be positive.")
             .ValidateOnStart();
 
         services.AddSingleton<AiResponseValidator>();
+
+        // Spec 5.6: one breaker per process, shared by ticket creation and the worker.
+        services.AddSingleton<IAiCircuitBreaker, AiCircuitBreaker>();
+        services.AddSingleton<IAiAvailability, AiAvailabilityCheck>();
+        services.AddScoped<AiInputBuilder>();
+        services.AddScoped<IAiAnalysisProcessor, AiAnalysisProcessor>();
+
+        // Development-only evaluation of the AI classification (not in the spec; the endpoints are DevelopmentOnly).
+        services.AddOptions<AiEvaluationOptions>()
+            .Bind(configuration.GetSection(AiEvaluationOptions.SectionName))
+            .PostConfigure<IHostEnvironment>((o, environment) =>
+                o.DatasetPath = Path.GetFullPath(Path.Combine(environment.ContentRootPath, o.DatasetPath)))
+            .Validate(o => o.InputPricePerMillionUsd >= 0 && o.OutputPricePerMillionUsd >= 0,
+                "AiEvaluation prices must not be negative.");
+        services.AddScoped<IAiEvaluationService, AiEvaluationService>();
 
         // Typed client (spec 10.3). The per-attempt CancellationTokenSource in OpenAiClient is the timeout,
         // so HttpClient's own 100s timeout is turned off.

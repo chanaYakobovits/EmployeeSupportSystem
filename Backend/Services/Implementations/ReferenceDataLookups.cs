@@ -21,4 +21,9 @@ public static class ReferenceDataLookups
     public static Task<IReadOnlyList<CategoryDto>> CategoriesAsync(IReferenceDataCache cache,
         ICategoryRepository categories, int organizationId, CancellationToken cancellationToken) =>
         cache.GetOrCreateAsync(ReferenceData.Categories, organizationId, categories.GetAllAsync, cancellationToken);
+
+    /// <summary>"First Last" of every user of the organization (active or not) – names only, for PII redaction.</summary>
+    public static Task<IReadOnlyList<string>> UserNamesAsync(IReferenceDataCache cache, IUserRepository users,
+        int organizationId, CancellationToken cancellationToken) =>
+        cache.GetOrCreateAsync(ReferenceData.UserNames, organizationId, users.GetAllFullNamesAsync, cancellationToken);
 }

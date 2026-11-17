@@ -116,7 +116,7 @@ describe('TicketHandlePage', () => {
 
   // ---- area 1, 2, 5 ----
 
-  it('shows the ticket, the employee (name, department, role), the AI placeholder and the staff timeline', async () => {
+  it('shows the ticket, the employee (name, department, role), no AI area without viewAiAnalysis, and the staff timeline', async () => {
     api.history.and.returnValue(
       of(
         fakeStaffHistory([
@@ -142,7 +142,7 @@ describe('TicketHandlePage', () => {
     expect(details).toContain('נועה ברקוביץ');
     expect(details).toContain('פיתוח');
     expect(details).toContain('מפתחת');
-    expect(element.textContent).toContain('ניתוח AI יתווסף בהמשך');
+    expect(element.querySelector('app-ai-analysis-panel')).toBeNull();
     const note = element.querySelector('app-timeline li.internal')!;
     expect(note.textContent).toContain('פנימי');
     expect(note.textContent).toContain('בעיית דרייבר');

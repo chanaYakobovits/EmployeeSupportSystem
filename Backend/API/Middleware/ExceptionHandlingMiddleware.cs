@@ -1,4 +1,4 @@
-using API.Errors;
+﻿using API.Errors;
 using Common.Exceptions;
 using Microsoft.AspNetCore.Mvc;
 
@@ -7,7 +7,7 @@ namespace API.Middleware;
 /// <summary>
 /// Single place that converts exceptions to ProblemDetails (spec 11.4):
 /// Validation → 400, AuthenticationFailed → 401, Forbidden → 403, NotFound → 404, Conflict → 409, BusinessRule → 422,
-/// anything else → 500 without technical details.
+/// TooManyRequests → 429 (with Retry-After), anything else → 500 without technical details.
 /// </summary>
 public class ExceptionHandlingMiddleware
 {
@@ -45,6 +45,11 @@ public class ExceptionHandlingMiddleware
 
             context.Response.Clear();
             context.Response.StatusCode = problem.Status!.Value;
+            if (exception is TooManyRequestsException tooMany)
+            {
+                context.Response.Headers.RetryAfter =
+                    ((int)Math.Ceiling(Math.Max(tooMany.RetryAfter.TotalSeconds, 1))).ToString();
+            }
             await context.Response.WriteAsJsonAsync(problem, (System.Text.Json.JsonSerializerOptions?)null, "application/problem+json");
         }
     }
@@ -67,6 +72,7 @@ public class ExceptionHandlingMiddleware
                 NotFoundException => StatusCodes.Status404NotFound,
                 ConflictException => StatusCodes.Status409Conflict,
                 BusinessRuleException => StatusCodes.Status422UnprocessableEntity,
+                TooManyRequestsException => StatusCodes.Status429TooManyRequests,
                 _ => StatusCodes.Status500InternalServerError,
             };
 
@@ -126,6 +132,9 @@ public class ExceptionHandlingMiddleware
                 break;
             case StatusCodes.Status422UnprocessableEntity:
                 _logger.LogWarning("Business rule violated: {ErrorType}", (exception as AppException)?.ErrorType);
+                break;
+            case StatusCodes.Status429TooManyRequests:
+                _logger.LogInformation("Too many requests: {ErrorType}", (exception as AppException)?.ErrorType);
                 break;
             default:
                 _logger.LogError(exception, "Unhandled exception");

@@ -128,6 +128,23 @@ public sealed class UserRepository(AppDbContext db) : IUserRepository
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<string>> GetAllFullNamesAsync(CancellationToken cancellationToken) =>
+        await db.Users
+            .AsNoTracking()
+            .OrderBy(u => u.Id)
+            .Select(u => u.FirstName + " " + u.LastName)
+            .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<string>> GetNamePartsAsync(int userId, CancellationToken cancellationToken)
+    {
+        var name = await db.Users
+            .AsNoTracking()
+            .Where(u => u.Id == userId)
+            .Select(u => new { u.FirstName, u.LastName })
+            .SingleOrDefaultAsync(cancellationToken);
+        return name is null ? [] : [name.FirstName, name.LastName];
+    }
+
     public async Task<IReadOnlyList<AssigneeOptionDto>> GetHandlerOptionsAsync(int departmentId,
         CancellationToken cancellationToken) =>
         await db.Users
