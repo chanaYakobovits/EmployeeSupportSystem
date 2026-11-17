@@ -1,0 +1,47 @@
+<h2 class="section-title">השוואה בין מחלקות</h2>
+<p class="section-hint">לפי המחלקה המטפלת. פתוחות וחריגות – נכון לעכשיו; נפתרו וזמן ממוצע – בטווח שנבחר.</p>
+
+<app-data-table
+  caption="השוואה בין מחלקות"
+  [columns]="columns"
+  [rows]="rows()"
+  status="ready"
+  [paginated]="false"
+  [sort]="sort()"
+  [trackBy]="trackBy"
+  (sortChange)="sortChange.emit($event)"
+>
+  <ng-template appCell="name" let-row>
+    <span class="department">
+      @if (row.departmentId !== null) {
+        <a class="department-link" [routerLink]="departmentUrl(row.departmentId)" [queryParams]="rangeParams()">
+          {{ row.departmentName }}
+        </a>
+      } @else {
+        <span class="muted">{{ row.departmentName }}</span>
+      }
+      @if (!row.isActive) {
+        <app-badge tone="neutral">לא פעילה</app-badge>
+      }
+    </span>
+  </ng-template>
+
+  <ng-template appCell="open" let-row>{{ number(row.openCount) }}</ng-template>
+
+  <ng-template appCell="overdue" let-row>
+    @if (row.overdueOpenCount > 0) {
+      <span class="overdue">
+        <span class="visually-hidden">יש חריגות: </span>
+        {{ number(row.overdueOpenCount) }}
+      </span>
+    } @else {
+      {{ number(0) }}
+    }
+  </ng-template>
+
+  <ng-template appCell="resolved" let-row>{{ number(row.resolvedInRangeCount) }}</ng-template>
+
+  <ng-template appCell="average" let-row>{{ duration(row.averageResolutionHours) }}</ng-template>
+
+  <p tableEmpty class="empty">אין מחלקות להשוואה</p>
+</app-data-table>

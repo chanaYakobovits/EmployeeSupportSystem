@@ -1711,3 +1711,69 @@ Content-Type: application/json
 ### ~30 calls: ask before running (docs/ai-evaluation.md).
 POST {{API_HostAddress}}/api/dev/ai/evaluate
 Authorization: Bearer {{loginAdmin.response.body.$.accessToken}}
+
+### ============ Dashboards (task 5.1, spec 7.9, 9.3) ============
+### Seeded departments: 1 הנהלה, 2 פיתוח (Ron manages it), 3 הנהלת חשבונות (Rina), 4 מזכירות ומנהלה, 5 מערכות מידע,
+### 6 משאבי אנוש מרכזי. from/to – days in Israel, both included; default: the last 30 days; at most 366 days.
+### Cached for 60 seconds (the API log says "cache hit" / "computed"); any ticket change invalidates at once.
+### Uses the staffRon / staffAvner / staffAlon logins of the handler section above.
+
+### Ron – his department, its employees' tickets (view=requesters is the default) → 200
+GET {{API_HostAddress}}/api/dashboard/departments/2
+Authorization: Bearer {{staffRon.response.body.$.accessToken}}
+
+### Ron – the tickets his department handles
+GET {{API_HostAddress}}/api/dashboard/departments/2?view=handling
+Authorization: Bearer {{staffRon.response.body.$.accessToken}}
+
+### Ron – a custom range
+GET {{API_HostAddress}}/api/dashboard/departments/2?from=2026-10-01&to=2026-10-31
+Authorization: Bearer {{staffRon.response.body.$.accessToken}}
+
+### Ron – another department → 404 "המחלקה לא נמצאה"
+GET {{API_HostAddress}}/api/dashboard/departments/3
+Authorization: Bearer {{staffRon.response.body.$.accessToken}}
+
+### Ron – the organization dashboard → 403 (executive only)
+GET {{API_HostAddress}}/api/dashboard/organization
+Authorization: Bearer {{staffRon.response.body.$.accessToken}}
+
+### Avner (executive) – any department, e.g. accounting as a handling department
+GET {{API_HostAddress}}/api/dashboard/departments/3?view=handling
+Authorization: Bearer {{staffAvner.response.body.$.accessToken}}
+
+### Avner – the organization: the same metrics + the comparison by handling department ("לא נותבו" last)
+GET {{API_HostAddress}}/api/dashboard/organization
+Authorization: Bearer {{staffAvner.response.body.$.accessToken}}
+
+### Avner – a whole year (366 days) → 200
+GET {{API_HostAddress}}/api/dashboard/organization?from=2025-11-12&to=2026-11-12
+Authorization: Bearer {{staffAvner.response.body.$.accessToken}}
+
+### Avner – only from → 30 days from it
+GET {{API_HostAddress}}/api/dashboard/organization?from=2026-09-01
+Authorization: Bearer {{staffAvner.response.body.$.accessToken}}
+
+### from after to → 400 on from
+GET {{API_HostAddress}}/api/dashboard/organization?from=2026-11-10&to=2026-11-01
+Authorization: Bearer {{staffAvner.response.body.$.accessToken}}
+
+### More than a year → 400 on to
+GET {{API_HostAddress}}/api/dashboard/organization?from=2025-01-01&to=2026-11-12
+Authorization: Bearer {{staffAvner.response.body.$.accessToken}}
+
+### Unknown view → 400 on view
+GET {{API_HostAddress}}/api/dashboard/departments/2?view=everything
+Authorization: Bearer {{staffAvner.response.body.$.accessToken}}
+
+### Department that does not exist → 404
+GET {{API_HostAddress}}/api/dashboard/departments/999
+Authorization: Bearer {{staffAvner.response.body.$.accessToken}}
+
+### Employee (Noa) → 403
+GET {{API_HostAddress}}/api/dashboard/departments/2
+Authorization: Bearer {{loginEmployee.response.body.$.accessToken}}
+
+### Handler (Alon) → 403
+GET {{API_HostAddress}}/api/dashboard/organization
+Authorization: Bearer {{staffAlon.response.body.$.accessToken}}

@@ -1,0 +1,35 @@
+// Shared by the department and the organization dashboard pages.
+:host {
+  display: block;
+}
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 12px;
+  font-size: 14px;
+  color: var(--primary);
+  text-decoration: none;
+
+  &:hover,
+  &:focus-visible {
+    text-decoration: underline;
+  }
+}
+
+.department-select {
+  width: 240px;
+  max-width: 100%;
+}
+
+.toolbar {
+  margin-bottom: 20px;
+  padding: 12px 16px;
+}
+
+@media (max-width: 599.98px) {
+  .department-select {
+    width: 100%;
+  }
+}

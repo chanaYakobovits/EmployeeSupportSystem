@@ -1,0 +1,54 @@
+<p class="visually-hidden" role="status" aria-live="polite" aria-atomic="true">{{ store.announcement() }}</p>
+
+@switch (store.status()) {
+  @case ('loading') {
+    <app-loading-state message="טוען את הדשבורד..." />
+  }
+  @case ('error') {
+    <app-error-state (retry)="store.refresh()" />
+  }
+  @case ('ready') {
+    @if (store.metrics(); as metrics) {
+      <div class="updated-bar">
+        <span class="updated">
+          עודכן לאחרונה: <app-relative-time [value]="metrics.generatedAt" />
+        </span>
+        <button
+          mat-stroked-button
+          type="button"
+          class="refresh-button"
+          [disabled]="store.refreshing()"
+          (click)="store.refresh()"
+        >
+          <mat-icon aria-hidden="true">refresh</mat-icon>
+          רענון
+        </button>
+      </div>
+      @if (store.refreshing()) {
+        <mat-progress-bar mode="indeterminate" aria-hidden="true" />
+      }
+
+      @if (store.isEmpty()) {
+        <app-empty-state icon="query_stats" [heading]="emptyHeading" [description]="emptyDescription" />
+      } @else {
+        <app-metric-cards [cards]="metrics.cards" />
+
+        @if (store.isRangeEmpty()) {
+          <div class="range-empty surface-card">
+            <app-empty-state icon="bar_chart" [heading]="emptyHeading" [description]="emptyDescription" />
+          </div>
+        } @else {
+          <div class="charts">
+            @for (chart of charts(); track chart.id) {
+              <app-chart-card [chart]="chart" [class.wide]="chart.id === 'trend'" />
+            }
+          </div>
+        }
+
+        <app-oldest-tickets [tickets]="metrics.oldestOpen" [department]="oldestDepartment()" />
+
+        <ng-content />
+      }
+    }
+  }
+}

@@ -105,6 +105,11 @@ public static class AuthExtensions
                     .AddRequirements(new PasswordChangedRequirement())
                     .RequireRole(role.ToString()));
             }
+
+            options.AddPolicy(Policies.DashboardViewer, policy => policy
+                .RequireAuthenticatedUser()
+                .AddRequirements(new PasswordChangedRequirement())
+                .RequireRole(nameof(Role.DepartmentManager), nameof(Role.Executive)));
         });
         services.AddSingleton<Microsoft.AspNetCore.Authorization.IAuthorizationMiddlewareResultHandler,
             ProblemDetailsAuthorizationResultHandler>();

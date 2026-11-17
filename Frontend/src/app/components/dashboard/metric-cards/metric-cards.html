@@ -1,0 +1,33 @@
+<ul class="metric-cards" aria-label="מדדים">
+  @for (card of items(); track card.id) {
+    <li class="metric-card" [class]="'tone-' + card.tone" [class.attention]="card.attention" [attr.data-metric]="card.id">
+      <span class="metric-icon" aria-hidden="true"><mat-icon>{{ card.icon }}</mat-icon></span>
+      <span class="metric-text">
+        <span class="metric-label">{{ card.label }}</span>
+        <span class="metric-value">{{ card.value }}</span>
+        @if (card.note) {
+          @if (card.attention) {
+            <span class="metric-note attention-tag">
+              <mat-icon aria-hidden="true">priority_high</mat-icon>
+              {{ card.note }}
+            </span>
+          } @else {
+            <span class="metric-note">{{ card.note }}</span>
+          }
+        }
+        <!-- The definition for screen readers in the card's text; the (i) tooltip is for everyone else. -->
+        <span class="visually-hidden metric-hint">{{ card.hint }}</span>
+      </span>
+      <button
+        mat-icon-button
+        type="button"
+        class="metric-info"
+        [matTooltip]="card.hint"
+        matTooltipPosition="above"
+        [attr.aria-label]="'הסבר: ' + card.label"
+      >
+        <mat-icon aria-hidden="true">info</mat-icon>
+      </button>
+    </li>
+  }
+</ul>

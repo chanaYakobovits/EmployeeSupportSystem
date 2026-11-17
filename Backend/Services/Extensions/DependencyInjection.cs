@@ -54,6 +54,10 @@ public static class DependencyInjection
         // Departments, categories and SLA hours per organization, 10 minutes (spec 11.3).
         services.AddSingleton<IReferenceDataCache, MemoryReferenceDataCache>();
 
+        // Dashboards (task 5.1): 60 seconds, keyed by the organization's ticket data version (spec 11.3).
+        services.AddSingleton<IDashboardCache, Implementations.Dashboard.MemoryDashboardCache>();
+        services.AddScoped<IDashboardService, Implementations.Dashboard.DashboardService>();
+
         // Request validators (spec 11.4), run by the services. Stateless, so one instance each.
         services.AddValidatorsFromAssemblyContaining<Validators.UserListQueryValidator>(ServiceLifetime.Singleton);
 

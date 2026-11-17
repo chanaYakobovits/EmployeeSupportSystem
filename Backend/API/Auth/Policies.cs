@@ -14,6 +14,9 @@ public static class Policies
     public const string Executive = nameof(Role.Executive);
     public const string Admin = nameof(Role.Admin);
 
+    /// <summary>A department manager or the executive: the department dashboards (spec 9.3).</summary>
+    public const string DashboardViewer = nameof(DashboardViewer);
+
     /// <summary>
     /// Signed in, even with a pending password change. Only for GET /auth/me and (part B) POST /auth/change-password.
     /// </summary>

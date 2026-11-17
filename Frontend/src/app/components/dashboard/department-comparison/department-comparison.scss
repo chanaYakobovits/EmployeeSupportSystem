@@ -1,0 +1,50 @@
+:host {
+  display: block;
+  min-width: 0;
+}
+
+.section-title {
+  margin: 0 0 4px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.section-hint {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.department {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.department-link {
+  font-weight: 600;
+  color: var(--primary);
+  text-decoration: none;
+
+  &:hover,
+  &:focus-visible {
+    text-decoration: underline;
+  }
+}
+
+.muted {
+  color: var(--text-secondary);
+}
+
+// Not colour alone: bold + a hidden "יש חריגות" for screen readers + the column header says what it is.
+.overdue {
+  font-weight: 700;
+  color: var(--error-text);
+}
+
+.empty {
+  margin: 0;
+  padding: 24px;
+  color: var(--text-secondary);
+}

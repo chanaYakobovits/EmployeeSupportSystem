@@ -16,6 +16,25 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IOrganizationC
     /// </summary>
     private int? CurrentOrganizationId => organizationContext.OrganizationId;
 
+    /// <summary>
+    /// Organizations whose tickets this context changed and whose dashboard version was not bumped yet – kept by
+    /// <see cref="Interceptors.TicketChangesInterceptor"/> until the save (or the transaction's commit).
+    /// </summary>
+    internal HashSet<int> PendingTicketVersionBumps { get; } = [];
+
+    /// <summary>
+    /// For ExecuteUpdate/ExecuteDelete on tickets, which bypass SaveChanges and its interceptor: the organization's
+    /// dashboards are invalidated by the next SaveChanges (or commit) of this context. Call it inside the same
+    /// transaction as that SaveChanges.
+    /// </summary>
+    internal void NoteTicketsChangedOutsideTracking()
+    {
+        if (CurrentOrganizationId is { } organizationId)
+        {
+            PendingTicketVersionBumps.Add(organizationId);
+        }
+    }
+
     public DbSet<Organization> Organizations => Set<Organization>();
     public DbSet<Department> Departments => Set<Department>();
     public DbSet<User> Users => Set<User>();

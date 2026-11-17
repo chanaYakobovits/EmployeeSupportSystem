@@ -16,7 +16,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
 import { HasUnsavedChanges, unsavedMessage } from '../../../guards/unsaved-changes.guard';
 import { toUserMessage } from '../../../interceptors/error.interceptor';
@@ -36,7 +36,7 @@ import { StatusBadge } from '../../shared/status-badge/status-badge';
 import { Timeline } from '../../shared/timeline/timeline';
 import { UrgencyBadge } from '../../shared/urgency-badge/urgency-badge';
 import { CONFLICT_MESSAGE, LEFT_SCOPE_MESSAGE, TAKEN_MESSAGE } from '../handler-messages';
-import { safeQueueUrl } from '../handler-urls';
+import { RETURN_AREAS, ReturnArea, safeQueueUrl } from '../handler-urls';
 import { AiAnalysisPanel } from './ai-analysis-panel/ai-analysis-panel';
 import { openAssignDialog } from './assign-dialog/assign-dialog';
 import { openReclassifyDialog } from './reclassify-dialog/reclassify-dialog';
@@ -95,8 +95,15 @@ export class TicketHandlePage implements HasUnsavedChanges {
   protected readonly appliedMessage = RECOMMENDATION_APPLIED_MESSAGE;
   /** Created with the page: it loads the analysis (and checks a running one) as soon as the ticket is loaded. */
   private readonly ai = inject(TicketAiAnalysisStore);
-  /** The queue view the user came from (tab + filters), or the default tab. */
-  protected readonly queueUrl = safeQueueUrl(this.router.getCurrentNavigation()?.extras.state ?? history.state);
+  /** Opened from the queue (handler area) or from a dashboard (route data returnArea, task 5.2). */
+  private readonly returnArea: ReturnArea =
+    inject(ActivatedRoute).snapshot.data['returnArea'] === 'dashboard' ? 'dashboard' : 'handler';
+  /** The view the user came from (queue tab + filters, or a dashboard with its tab and range), or the area's home. */
+  protected readonly queueUrl = safeQueueUrl(
+    this.router.getCurrentNavigation()?.extras.state ?? history.state,
+    this.returnArea,
+  );
+  protected readonly backLabel = RETURN_AREAS[this.returnArea].label;
   /** Leaving because the ticket left the user's scope: nothing to keep. */
   private leaving = false;
 

@@ -1,0 +1,58 @@
+@if (store.isExecutive()) {
+  <a class="back-link" [routerLink]="organizationUrl" [queryParams]="store.rangeParams()">
+    <mat-icon class="icon-mirror-rtl" aria-hidden="true">arrow_forward</mat-icon>
+    חזרה לדשבורד הארגוני
+  </a>
+}
+
+<app-page-header [heading]="heading()" subtitle="איפה המחלקה עומדת ומה דורש תשומת לב">
+  @if (store.isExecutive() && store.departments().length > 0) {
+    <mat-form-field pageActions appearance="outline" class="department-select" subscriptSizing="dynamic">
+      <mat-label>מחלקה</mat-label>
+      <mat-select [value]="store.departmentId()" (selectionChange)="onDepartment($event.value)">
+        @for (department of store.departments(); track department.id) {
+          <mat-option [value]="department.id">{{ department.name }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+  }
+</app-page-header>
+
+@if (store.status() === 'notFound') {
+  <app-empty-state icon="search_off" [heading]="notFoundHeading" [description]="notFoundDescription">
+    @if (store.isExecutive()) {
+      <a mat-stroked-button [routerLink]="organizationUrl">לדשבורד הארגוני</a>
+    }
+  </app-empty-state>
+} @else {
+  @if (visibleViews().length > 1) {
+    <nav mat-tab-nav-bar class="tabs" aria-label="תצוגות הדשבורד" [tabPanel]="tabPanel" mat-stretch-tabs="false">
+      @for (tab of visibleViews(); track tab.view) {
+        <a
+          mat-tab-link
+          [routerLink]="[]"
+          [queryParams]="store.viewParams(tab.view)"
+          queryParamsHandling="merge"
+          [active]="store.view() === tab.view"
+          [attr.data-view]="tab.view"
+        >
+          {{ tab.label }}
+        </a>
+      }
+    </nav>
+  } @else {
+    <h2 class="single-view">{{ views[0].label }}</h2>
+  }
+
+  <mat-tab-nav-panel #tabPanel>
+    <div class="toolbar surface-card">
+      <app-dashboard-range-picker
+        [range]="store.range()"
+        [resolved]="store.metrics()?.range ?? null"
+        (rangeChange)="store.setRange($event)"
+      />
+    </div>
+
+    <app-dashboard-body [oldestDepartment]="oldestDepartment()" />
+  </mat-tab-nav-panel>
+}

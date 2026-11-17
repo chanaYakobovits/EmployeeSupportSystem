@@ -1,0 +1,11 @@
+@switch (store.status()) {
+  @case ('error') {
+    <app-error-state (retry)="go()" />
+  }
+  @case ('noDepartment') {
+    <app-empty-state icon="domain_disabled" [heading]="noDepartmentHeading" [description]="noDepartmentDescription" />
+  }
+  @default {
+    <app-loading-state message="פותח את הדשבורד..." />
+  }
+}

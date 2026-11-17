@@ -1,6 +1,6 @@
 <a class="back-link" [routerLink]="queueUrl">
   <mat-icon class="icon-mirror-rtl" aria-hidden="true">arrow_forward</mat-icon>
-  חזרה לתור הפניות
+  {{ backLabel }}
 </a>
 
 @switch (store.status()) {
@@ -12,7 +12,7 @@
   }
   @case ('notFound') {
     <app-empty-state icon="search_off" heading="הפנייה לא נמצאה" description="ייתכן שהקישור שגוי, או שהפנייה אינה בטיפולך.">
-      <a mat-stroked-button [routerLink]="queueUrl">חזרה לתור הפניות</a>
+      <a mat-stroked-button [routerLink]="queueUrl">{{ backLabel }}</a>
     </app-empty-state>
   }
   @case ('error') {

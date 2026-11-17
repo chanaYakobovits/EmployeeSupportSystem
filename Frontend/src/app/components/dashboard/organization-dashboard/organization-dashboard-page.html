@@ -1,0 +1,29 @@
+<app-page-header heading="דשבורד ארגוני" subtitle="תמונת מצב של כל הארגון והשוואה בין המחלקות">
+  @if (store.departments().length > 0) {
+    <mat-form-field pageActions appearance="outline" class="department-select" subscriptSizing="dynamic">
+      <mat-label>צפייה בדשבורד של מחלקה</mat-label>
+      <mat-select (selectionChange)="store.openDepartment($event.value)">
+        @for (department of store.departments(); track department.id) {
+          <mat-option [value]="department.id">{{ department.name }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+  }
+</app-page-header>
+
+<div class="toolbar surface-card">
+  <app-dashboard-range-picker
+    [range]="store.range()"
+    [resolved]="store.metrics()?.range ?? null"
+    (rangeChange)="store.setRange($event)"
+  />
+</div>
+
+<app-dashboard-body oldestDepartment="both">
+  <app-department-comparison
+    [rows]="store.comparisonRows()"
+    [sort]="store.comparisonSort()"
+    [rangeParams]="store.rangeParams()"
+    (sortChange)="store.setComparisonSort($event)"
+  />
+</app-dashboard-body>

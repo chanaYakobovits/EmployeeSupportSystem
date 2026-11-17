@@ -32,13 +32,16 @@ describe('app routes', () => {
     expect(guardedPaths).toEqual(areaPaths);
   });
 
-  it('the home page: a handler lands on the queue, everyone else on "my tickets"', () => {
+  it('the home page: a handler on the queue, a manager / executive on the dashboard, everyone else on "my tickets"', () => {
     const home = shellChildren.find((child) => child.path === '' && child.pathMatch === 'full');
     expect(typeof home?.redirectTo).toBe('function');
     expect(homePath(['Employee', 'Handler'])).toBe('handler');
     expect(homePath(['Employee', 'Handler', 'Admin'])).toBe('handler');
+    expect(homePath(['Employee', 'Handler', 'DepartmentManager'])).toBe('handler');
     expect(homePath(['Employee'])).toBe('employee');
-    expect(homePath(['Employee', 'DepartmentManager'])).toBe('employee');
+    expect(homePath(['Employee', 'Admin'])).toBe('employee');
+    expect(homePath(['Employee', 'DepartmentManager'])).toBe('dashboard');
+    expect(homePath(['Employee', 'Executive'])).toBe('dashboard');
   });
 
   it('voluntary password change is inside the shell, the mandatory one outside it', () => {

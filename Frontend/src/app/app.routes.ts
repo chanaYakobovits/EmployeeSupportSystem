@@ -9,9 +9,15 @@ import { Role } from './models/auth.models';
 
 const [EMPLOYEE, HANDLER, DASHBOARD, ADMIN] = APP_AREAS;
 
-/** Where a signed-in user lands: a handler on the ticket queue (spec 7.6), everyone else on "my tickets". */
+/**
+ * Where a signed-in user lands: a handler on the ticket queue (spec 7.6); a department manager or the executive on the
+ * dashboard (task 5.2 – /dashboard then picks the organization or the managed department); everyone else on "my tickets".
+ */
 export function homePath(roles: readonly Role[]): string {
-  return roles.includes('Handler') ? HANDLER.path : EMPLOYEE.path;
+  if (roles.includes('Handler')) {
+    return HANDLER.path;
+  }
+  return roles.includes('DepartmentManager') || roles.includes('Executive') ? DASHBOARD.path : EMPLOYEE.path;
 }
 
 const loadChangePasswordPage = () =>

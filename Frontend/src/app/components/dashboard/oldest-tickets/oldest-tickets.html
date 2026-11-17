@@ -1,0 +1,87 @@
+<h2 class="section-title" id="oldest-tickets-heading">10 הפניות הפתוחות הוותיקות / בחריגה</h2>
+
+<app-data-table
+  caption="הפניות הפתוחות הוותיקות או בחריגה"
+  [columns]="columns()"
+  [rows]="tickets()"
+  status="ready"
+  [paginated]="false"
+  [rowClass]="rowClass"
+>
+  <ng-template appCell="id" let-ticket>
+    <a class="ticket-number" [routerLink]="ticketUrl(ticket.id)" [state]="navigationState()">
+      <span class="visually-hidden">פנייה מספר </span><span dir="ltr">#{{ ticket.id }}</span>
+    </a>
+  </ng-template>
+
+  <ng-template appCell="subject" let-ticket>
+    <span class="subject" dir="auto" [class.excerpt]="ticket.isSubjectExcerpt">
+      @if (ticket.isSubjectExcerpt) {
+        <span class="visually-hidden">תקציר התיאור: </span>{{ ticket.subject }}…
+      } @else {
+        {{ ticket.subject }}
+      }
+    </span>
+  </ng-template>
+
+  <ng-template appCell="requesterDepartment" let-ticket>{{ ticket.requesterDepartmentName }}</ng-template>
+
+  <ng-template appCell="assignedDepartment" let-ticket>
+    @if (ticket.assignedDepartmentName) {
+      {{ ticket.assignedDepartmentName }}
+    } @else {
+      <span class="muted">טרם נותבה</span>
+    }
+  </ng-template>
+
+  <ng-template appCell="status" let-ticket>
+    <app-status-badge [status]="ticket.status" />
+  </ng-template>
+
+  <ng-template appCell="dueAt" let-ticket>
+    <span class="due">
+      <app-due-countdown [dueAt]="ticket.dueAt" [status]="ticket.status" [isOverdue]="ticket.isOverdue" />
+      @if (isOverdue(ticket)) {
+        <span class="overdue-mark"><mat-icon aria-hidden="true">error</mat-icon>חריגה</span>
+      }
+    </span>
+  </ng-template>
+
+  <!-- Phones: one card per ticket. -->
+  <ng-template appRowCard let-ticket>
+    <div class="ticket-card">
+      <span class="ticket-card-top">
+        <a class="ticket-number" [routerLink]="ticketUrl(ticket.id)" [state]="navigationState()">
+          <span class="visually-hidden">פנייה מספר </span><span dir="ltr">#{{ ticket.id }}</span>
+        </a>
+        <app-status-badge [status]="ticket.status" />
+      </span>
+      <span class="subject" dir="auto" [class.excerpt]="ticket.isSubjectExcerpt">
+        @if (ticket.isSubjectExcerpt) {
+          <span class="visually-hidden">תקציר התיאור: </span>{{ ticket.subject }}…
+        } @else {
+          {{ ticket.subject }}
+        }
+      </span>
+      <span class="ticket-card-meta">
+        @if (department() !== 'assigned') {
+          <span>{{ ticket.requesterDepartmentName }}</span>
+        }
+        @if (department() !== 'requester') {
+          <span>{{ ticket.assignedDepartmentName ?? 'טרם נותבה' }}</span>
+        }
+      </span>
+      <span class="ticket-card-meta">
+        <app-due-countdown [dueAt]="ticket.dueAt" [status]="ticket.status" [isOverdue]="ticket.isOverdue" />
+        @if (isOverdue(ticket)) {
+          <span class="overdue-mark"><mat-icon aria-hidden="true">error</mat-icon>חריגה</span>
+        }
+      </span>
+    </div>
+  </ng-template>
+
+  <div tableEmpty class="no-open">
+    <mat-icon aria-hidden="true">task_alt</mat-icon>
+    אין כרגע פניות פתוחות
+  </div>
+</app-data-table>

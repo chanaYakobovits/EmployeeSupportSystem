@@ -1,0 +1,40 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  min-width: 0;
+}
+
+.updated-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+
+.updated {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+// Two charts per row on wide screens (the trend over both), full width below 1024px.
+.charts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+
+  .wide {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 1023.98px) {
+  .charts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.range-empty {
+  padding: 8px;
+}

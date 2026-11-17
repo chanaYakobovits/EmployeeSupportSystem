@@ -2,15 +2,20 @@ import { ChangeDetectionStrategy, Component, computed, input } from '@angular/co
 
 import { TicketStatus } from '../../../models/ticket.models';
 import { statusLabel } from '../../../pipes/status-label.pipe';
+import { statusColorVar } from '../../../services/status-colors';
 
 /**
  * Ticket status as a "pill" (design guide): a 10% tint of the status colour behind text in the full colour.
- * Cancelled is lighter – an outline without a tint – but its text still passes WCAG AA. Colours: --status-* in styles.scss.
+ * Cancelled is lighter – an outline without a tint – but its text still passes WCAG AA.
+ * The colour comes from TICKET_STATUS_COLOR_VARS (services/status-colors.ts) – the same as the dashboard's status chart.
  */
 @Component({
   selector: 'app-status-badge',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: { '[class]': '"status-badge status-" + status()' },
+  host: {
+    '[class]': '"status-badge status-" + status()',
+    '[style.--status-color]': 'color()',
+  },
   template: `{{ label() }}`,
   styles: `
     :host {
@@ -26,26 +31,7 @@ import { statusLabel } from '../../../pipes/status-label.pipe';
       color: var(--status-color);
       background: color-mix(in srgb, var(--status-color) 10%, transparent);
     }
-    :host(.status-New) {
-      --status-color: var(--status-new);
-    }
-    :host(.status-Assigned) {
-      --status-color: var(--status-assigned);
-    }
-    :host(.status-InProgress) {
-      --status-color: var(--status-in-progress);
-    }
-    :host(.status-WaitingForEmployee) {
-      --status-color: var(--status-waiting);
-    }
-    :host(.status-Resolved) {
-      --status-color: var(--status-resolved);
-    }
-    :host(.status-Closed) {
-      --status-color: var(--status-closed);
-    }
     :host(.status-Cancelled) {
-      --status-color: var(--status-cancelled);
       background: transparent;
       border-color: var(--border);
     }
@@ -54,4 +40,5 @@ import { statusLabel } from '../../../pipes/status-label.pipe';
 export class StatusBadge {
   readonly status = input.required<TicketStatus>();
   protected readonly label = computed(() => statusLabel(this.status()));
+  protected readonly color = computed(() => statusColorVar(this.status()));
 }

@@ -309,13 +309,21 @@ public sealed class TicketRepository(AppDbContext db) : ITicketRepository
             ChangedAt = now,
         }));
 
-        return await db.Tickets
+        var updated = await db.Tickets
             .Where(t => t.AssignedToUserId == handlerUserId && TicketStatuses.Unresolved.Contains(t.Status))
             .ExecuteUpdateAsync(setters => setters
                     .SetProperty(t => t.AssignedToUserId, (int?)null)
                     .SetProperty(t => t.Status, t => demoted.Contains(t.Id) ? demoteTo : t.Status)
                     .SetProperty(t => t.UpdatedAt, now),
                 cancellationToken);
+
+        // ExecuteUpdate bypasses SaveChanges: the dashboards (statuses changed) are invalidated by the caller's save.
+        if (updated > 0)
+        {
+            db.NoteTicketsChangedOutsideTracking();
+        }
+
+        return updated;
     }
 
     // ===================== Auto-close (task 3.5) =====================

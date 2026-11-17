@@ -35,7 +35,7 @@ import { NotificationService } from '../../../services/notification.service';
 import { TicketViewStore } from '../../../services/ticket-view.store';
 import { TicketReply } from './ticket-reply/ticket-reply';
 import { AuthService } from '../../../services/auth.service';
-import { handlerTicketUrl } from '../../handler/handler-urls';
+import { staffTicketUrl } from '../../handler/handler-urls';
 import { openReopenDialog } from './reopen-dialog/reopen-dialog';
 import {
   CANCELLED_MESSAGE,
@@ -102,12 +102,14 @@ export class TicketViewPage implements HasUnsavedChanges {
       untracked(() => this.load(id));
     });
 
-    // Not the user's own ticket, but one they handle: it belongs on the handling screen (spec 7.7).
+    // Not the user's own ticket, but one they handle or manage: it belongs on the handling screen (spec 7.7) – the
+    // handler area's for a Handler, the dashboard area's for a manager / executive (task 5.2).
     effect(() => {
-      if (this.store.status() === 'staffView' && this.auth.roles().includes('Handler')) {
+      if (this.store.status() === 'staffView') {
         const id = idParam.parse(untracked(this.id));
-        if (id !== null) {
-          void this.router.navigateByUrl(handlerTicketUrl(id), { replaceUrl: true });
+        const url = id === null ? null : staffTicketUrl(id, this.auth.roles());
+        if (url !== null) {
+          void this.router.navigateByUrl(url, { replaceUrl: true });
         }
       }
     });

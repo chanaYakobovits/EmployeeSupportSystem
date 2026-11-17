@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Repositories.Data;
+using Repositories.Data.Interceptors;
 using Repositories.Data.Seed;
 using Repositories.Implementations;
 using Repositories.Interfaces;
@@ -28,7 +29,13 @@ public static class DependencyInjection
                 $"dotnet user-secrets set \"ConnectionStrings:{ConnectionStringName}\" \"<value>\" --project API");
         }
 
-        services.AddDbContext<AppDbContext>(options => options.UseSqlServer(connectionString)); // Scoped
+        // The dashboards' version per organization (spec 11.3), bumped on every saved ticket change.
+        services.AddSingleton<ITicketDataVersion, TicketDataVersions>();
+        services.AddSingleton<TicketChangesInterceptor>();
+
+        services.AddDbContext<AppDbContext>((sp, options) => options // Scoped
+            .UseSqlServer(connectionString)
+            .AddInterceptors(sp.GetRequiredService<TicketChangesInterceptor>()));
 
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IAuditLogRepository, AuditLogRepository>();
@@ -40,6 +47,7 @@ public static class DependencyInjection
         services.AddScoped<ITicketConversationRepository, TicketConversationRepository>();
         services.AddScoped<IUserInvitationRepository, UserInvitationRepository>();
         services.AddScoped<IAiAnalysisJobRepository, AiAnalysisJobRepository>();
+        services.AddScoped<IDashboardRepository, DashboardRepository>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
 
         // Demo data (spec 8.5). Exposed only through the Common interface; API allows it only in Development.

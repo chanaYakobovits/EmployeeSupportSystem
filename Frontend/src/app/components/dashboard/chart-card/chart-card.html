@@ -1,0 +1,53 @@
+<section class="chart-card surface-card" [attr.aria-labelledby]="headingId()">
+  <header class="chart-header">
+    <div class="chart-titles">
+      <h2 class="chart-title" [id]="headingId()">{{ chart().heading }}</h2>
+      <p class="chart-note">{{ chart().note }}</p>
+    </div>
+    <button mat-button type="button" class="chart-toggle" [attr.aria-controls]="contentId()" (click)="toggle()">
+      <mat-icon aria-hidden="true">{{ showTable() ? 'bar_chart' : 'table_rows' }}</mat-icon>
+      {{ showTable() ? 'הצג כגרף' : 'הצג כטבלה' }}
+    </button>
+  </header>
+
+  <div [id]="contentId()">
+    @if (showTable()) {
+      <div class="table-scroll">
+        <table class="chart-table">
+          <caption class="visually-hidden">{{ chart().heading }}</caption>
+          <thead>
+            <tr>
+              @for (column of chart().table.columns; track $index) {
+                <th scope="col">{{ column }}</th>
+              }
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of chart().table.rows; track $index) {
+              <tr>
+                @for (cell of row; track $index) {
+                  @if ($first) {
+                    <th scope="row">{{ cell }}</th>
+                  } @else {
+                    <td>{{ cell }}</td>
+                  }
+                }
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    } @else {
+      <div class="chart-box" [style.height.px]="height()">
+        <canvas
+          baseChart
+          role="img"
+          [attr.aria-label]="chart().summary"
+          [type]="chart().config.type"
+          [data]="chart().config.data"
+          [options]="chart().config.options"
+        ></canvas>
+      </div>
+    }
+  </div>
+</section>

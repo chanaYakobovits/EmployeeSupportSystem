@@ -1,4 +1,6 @@
+import { Role } from '../../models/auth.models';
 import { TicketListScope } from '../../models/ticket.models';
+import { DASHBOARD_HOME_URL, dashboardTicketUrl } from '../dashboard/dashboard-urls';
 
 /** The handler's landing page: the default tab of the queue. */
 export const HANDLER_HOME_URL = '/handler';
@@ -34,10 +36,34 @@ export interface HandlerNavigationState {
   queueUrl?: string;
 }
 
-/** A queue URL from the navigation state – only a /handler URL is accepted (the state may be anything). */
-export function safeQueueUrl(state: unknown): string {
+/**
+ * The areas the handling screen is opened from (route data "returnArea"): the queue, or a dashboard (task 5.2 – a
+ * manager / executive may not have the Handler role). Each with its home and its "back" text.
+ */
+export type ReturnArea = 'handler' | 'dashboard';
+
+export const RETURN_AREAS: Readonly<Record<ReturnArea, { home: string; label: string }>> = {
+  handler: { home: HANDLER_HOME_URL, label: 'חזרה לתור הפניות' },
+  dashboard: { home: DASHBOARD_HOME_URL, label: 'חזרה לדשבורד' },
+};
+
+/**
+ * The URL to go back to, from the navigation state – only a URL of the area itself, and not another ticket, is
+ * accepted (the state may be anything); otherwise the area's home.
+ */
+export function safeQueueUrl(state: unknown, area: ReturnArea = 'handler'): string {
+  const home = RETURN_AREAS[area].home;
   const url = (state as HandlerNavigationState | null | undefined)?.queueUrl;
-  return typeof url === 'string' && url.startsWith(`${HANDLER_HOME_URL}/`) && !url.startsWith(`${HANDLER_HOME_URL}/tickets`)
-    ? url
-    : HANDLER_HOME_URL;
+  return typeof url === 'string' && url.startsWith(`${home}/`) && !url.startsWith(`${home}/tickets`) ? url : home;
+}
+
+/**
+ * The handling screen of a ticket for a staff member: a Handler's is in the handler area; a department manager's or an
+ * executive's (who may not have the Handler role) – in the dashboard area. null = no staff screen for these roles.
+ */
+export function staffTicketUrl(id: number, roles: readonly Role[]): string | null {
+  if (roles.includes('Handler')) {
+    return handlerTicketUrl(id);
+  }
+  return roles.includes('DepartmentManager') || roles.includes('Executive') ? dashboardTicketUrl(id) : null;
 }

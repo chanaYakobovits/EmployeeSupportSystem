@@ -19,7 +19,9 @@
 - 3.6 עדכון מרובה (שרת: bulk/status ו-bulk/assign; מסך: בחירה, סרגל פעולות, חלון תוצאה בתור המטפל) – הושלם.
 - 4.3 ניתוח AI ברקע (תור AiAnalysisJobs, AiAnalysisWorker, Circuit Breaker, סיווג וניתוב ע"י ה-AI) – הושלם.
 - 4.4 הצגת ניתוח ה-AI למטפל (GET /ai-analysis, ‏"נתח מחדש", אזור 2 במסך הטיפול, טיוטת AI באזור הכתיבה, נושא מוצע) – הושלם.
-- הבא בתור: שלב ה' (דשבורדים, 5.1).
+- 5.1 שאילתות מדדים לדשבורד המחלקה והארגון (GET /api/dashboard/departments/{id}, ‏/organization, ‏Cache עם גרסה לכל ארגון) – הושלם.
+- 5.2 מסכי הדשבורד (מחלקתי + ארגוני ב-Angular: כרטיסים, 3 גרפים ב-ng2-charts, טבלאות, השוואת מחלקות, נחיתה לפי תפקיד) – הושלם.
+- הבא בתור: שלב ו' (6.1 בדיקות אוטומטיות).
 - תוספת שלא באפיון: בדיקת איכות סיווג AI על 30 פניות לדוגמה – אחרי משימה 4.3. שלב 1 (סט הבדיקה
   `Backend/Tests/AiEvaluation/ai-evaluation-set.json` + `AiEvaluationSetTests`) – הושלם ונבדק. שלב 2 (`AiInputBuilder` משותף,
   POST /api/dev/ai/analyze ו-/evaluate) – הושלם. שלב 3 (`docs/ai-evaluation.md`: הוראות, מדדים, טבלאות הרצות/גרסאות/תיאורים) – הושלם.
@@ -534,13 +536,79 @@
     `aiDraft` עד שהשדה מתרוקן: הודעה (role=status) + "נקה והתחל מאפס". טיוטה שלא נערכה – לא עוברת להערה פנימית ולא נחשבת "שינוי לא שמור".
     "הוספת המידע החסר לתגובה" (`missingInfoBlock`). השליחה תמיד בלחיצה.
 
+- דשבורדים – API (משימה 5.1, 4.5, 7.9, 9.3, 11.3):
+  * `GET /api/dashboard/departments/{id}?from&to&view=requesters|handling` (policy `DashboardViewer` = DepartmentManager או Executive)
+    ו-`GET /api/dashboard/organization?from&to` (Executive). `DashboardService` בודק שוב מול המסד (`GetTicketViewerAsync`): לא מנהל/מנכ"ל ←
+    403 `dashboard-not-allowed`; מנהל ומחלקה שאינה `ManagedDepartmentId` ← 404 "המחלקה לא נמצאה"; מחלקה שלא בארגון ← 404; מנכ"ל – כל
+    מחלקה (גם לא פעילה). view חסר ← requesters (RequesterDepartmentId), ‏handling ← AssignedDepartmentId. סדר: 400 ← 403 ← 404 ← Cache.
+  * טווח: `DateOnly` בשעון ישראל, שני הימים כלולים. בלי שניהם ← 30 הימים עד היום; רק אחד ← 30 יום ממנו/עד אליו (`DashboardRange`).
+    from > to ← 400 על from; מעל 366 ימים (`DashboardLimits.MaxRangeDays`) ← 400 על to; view לא מוכר ← 400 על view.
+  * **הגדרות המדדים – רק ב-`Repositories/Implementations/DashboardMetrics.cs`** (Expressions עם הערה לכל אחד; הרפוזיטורי מרכיב אותם
+    ב-`Row(...)` ולא כותב תנאים משלו): פתוחות = `TicketStatuses.Unresolved` (מצב נוכחי; Resolved לא פתוחה); חריגות = `TicketSlaQueries.IsOverdue`;
+    חדשות השבוע = מחצות בישראל לפני 6 ימים (7 ימים כולל היום, לא תלוי בטווח); נפתרו בטווח = ResolvedAt בטווח וסטטוס Resolved/Closed
+    (פתיחה מחדש מאפסת ResolvedAt ← נספר הפתרון האחרון); זמן פתרון = AVG(DATEDIFF(second, CreatedAt, ResolvedAt)) בשעות קלנדריות, כולל המתנה;
+    עמידה ב-SLA = ResolvedAt ≤ DueAt מתוך נפתרו עם DueAt (DueAt כבר כולל השהיה ושעון חדש); סווגו אוטומטית = ClassificationSource Ai מתוך
+    שנפתחו בטווח; קטגוריה/סטטוס = שנפתחו בטווח (סטטוס נוכחי; כל 7 הסטטוסים עם אפסים; קטגוריה null = "טרם סווגה", אחרונה);
+    מגמה = נפתחו לפי CreatedAt מול **נסגרו לפי ClosedAt** (ביטול לא נספר), יום = `CONVERT(date, x AT TIME ZONE 'UTC' AT TIME ZONE 'Israel Standard Time')`
+    – ב-LINQ (`EF.Functions.AtTimeZone`), בלי SQL ידני; ימים חסרים משלימים ב-`DashboardMapping`. 10 הוותיקות = Unresolved, בחריגה קודם,
+    CreatedAt, Id. אחוז/ממוצע בלי מכנה ← null (לא 0); אחוזים ושעות בספרה אחת.
+  * **השוואת המחלקות (מנכ"ל) – לפי המחלקה המטפלת** (פתוחות, חריגות, נפתרו + זמן ממוצע בטווח): המדדים מודדים ביצועי טיפול. כל המחלקות
+    הפעילות (גם 0), לא פעילות רק עם פניות, לפי שם; שורת "לא נותבו" (AssignedDepartmentId null) אחרונה ורק כשיש – כך שהסכום = הכרטיסים.
+  * שאילתות: 6 לכל דשבורד, ‏7 בארגוני – כל אחת SELECT אחד עם GROUP BY/COUNT(CASE)/AVG(CASE), בלי שליפת פניות (`DashboardRepository`, ‏AsNoTracking).
+    האינדקס של 8.4 לכל היקף מתועד בראש המחלקה. פערים (לא שונו – למדידה ב-6.2): ClassificationSource/ResolvedAt/ClosedAt לא באינדקסים,
+    ו-`IsOverdue` שולח את רשימת הסטטוסים כפרמטר (OPENJSON + OUTER APPLY) כי היא משתנה מקומי ב-`TicketSlaQueries`.
+  * Cache: `IDashboardCache` (`MemoryDashboardCache`, ‏60 שניות), מפתח `dashboard:{org}:{version}:{deptId|org}:{view|-}:{from}:{to}`. הגרסה –
+    `ITicketDataVersion` (Common; ‏`TicketDataVersions` Singleton ב-Repositories), נקראת לפני השאילתות. **מעלים אותה רק ב-`TicketChangesInterceptor`**
+    (SaveChanges + Transaction interceptor, רשום ב-AddDbContext): כל Ticket ב-Added/Modified/Deleted. בלי טרנזקציה – אחרי save מוצלח; בטרנזקציה –
+    רק אחרי Commit; כשל/Rollback ← בלי. **ExecuteUpdate/Delete על פניות עוקפים אותו** ← לקרוא ל-`db.NoteTicketsChangedOutsideTracking()`
+    (היום רק `UnassignUnresolvedTicketsAsync`). הבדיקה מול ההרשאה לפני ה-Cache. מקומי לשרת (13.1).
+  * לוג: היקף, טווח, משתמש, cache hit/computed, משך.
+  * בדיקות: `Tests/Services.Tests/Dashboard/` – ‏`DashboardServiceTests` (InMemory + repository מזויף: הרשאות, טווח, Cache, interceptor),
+    ‏`DashboardRepositorySqlTests` (SQL Server אמיתי: כל המדדים על סט ידוע T1–T13, גבולות יום בחורף ובקיץ, ExecuteUpdate, Commit/Rollback).
+    בדיקות SQL Server: משתנה הסביבה `ESS_TEST_SQLSERVER` (למשל `Server=.\SQLEXPRESS;Trusted_Connection=True;TrustServerCertificate=True`),
+    מסד זמני `EssTests_{guid}` עם Migrate שנמחק בסוף; בלי המשתנה ← מדולגות (`SqlServerFactAttribute`).
+
+- דשבורדים – Frontend (משימה 5.2, 4.5, 7.9, 11.6):
+  * חבילות: `ng2-charts@8.0.0` + `chart.js@4.5.1` (גרסאות מדויקות; תלויות: `lodash-es`, ‏`@kurkle/color`). ‏`provideCharts` עם רישום ידני
+    (Bar/Line controllers+elements, ‏Point, ‏Category/Linear scales, ‏Tooltip, ‏Legend – **לא** `withDefaultRegisterables`) ב-`providers` של
+    `dashboard.routes.ts`, לא ב-app.config – כך Chart.js רק ב-chunk עצל (~188KB, ~58KB בהעברה). ה-initial לא השתנה (~399KB).
+  * נחיתה: `homePath` – ‏Handler ← תור; אחרת DepartmentManager/Executive ← `/dashboard`; אחרת "הפניות שלי". `/dashboard` הוא מסך
+    (`DashboardLandingPage` + `DashboardLandingStore`, לא guard – כדי שלכישלון יהיה "נסה שוב"): מנכ"ל ← `organization`; מנהל ← המחלקה
+    ש-`manager.id` שלה הוא המשתמש (`GET /api/departments`; לא בהכרח המחלקה שלו). לא נמצאה ← "לא נמצאה מחלקה בניהולך". ה-query נשמר.
+  * נתיבים: `organization` (roleGuard Executive), ‏`departments/:id` (‏404 ← "המחלקה לא נמצאה"), ‏`tickets/:id` ← **`TicketHandlePage` הקיים**
+    עם `data.returnArea: 'dashboard'` (מנהל/מנכ"ל בלי Handler; הפעולות לפי allowedActions). `safeQueueUrl(state, area)` + ‏`RETURN_AREAS`
+    (‏"חזרה לתור הפניות" / "חזרה לדשבורד"). `staffTicketUrl(id, roles)` (handler-urls): ‏Handler ← ‏/handler, מנהל/מנכ"ל ← ‏/dashboard –
+    גם מסך העובד מפנה בו DTO צוות (במקום "הפנייה אינה שלך" למנהל).
+  * מצב בכתובת (`components/dashboard/dashboard-range.ts`): `?view=handling` (חסר = requesters), ‏`?days=7|90` (חסר = 30, ברירת המחדל של
+    השרת – לא נשלח), או `?from&to` (מותאם; לא תקין ← 30). ל-7/90 הלקוח שולח from/to לפי `israelToday()`. ולידציה כמו בשרת (from ≤ to, ≤ 366).
+    הטווח שמוצג – `range` מהתשובה. מעבר לשונית/מחלקה שומר את הטווח.
+  * `DashboardStore` (services, מסופק במסך; `data.dashboard` = department/organization): ‏request computed ← `toObservable` + switchMap.
+    `refresh()` – אותה בקשה, המספרים נשארים (progress bar) והכרזה "הנתונים עודכנו". ריק מלא (לא נפתחו, לא נפתרו ואין פתוחות) ← "אין פניות
+    בטווח שנבחר" במקום הכול; לא נפתחו בטווח אבל יש פתוחות ← הכרטיסים והטבלה נשארים, ובמקום הגרפים אותו empty-state.
+  * לשונית "פניות בטיפול המחלקה": כש-`handlerCount > 0` למחלקה (פניות מגיעות למחלקה רק דרך מטפלים פעילים), או כשהכתובת כבר `view=handling`.
+    בלי הלשונית – כותרת "פניות של עובדי המחלקה". בורר מחלקה (mat-select, מחלקות פעילות) + "חזרה לדשבורד הארגוני" – רק למנכ"ל.
+  * כרטיסים (`metric-cards`, ‏`metricCards()` טהור): 6 לפי 7.9. הסבר לכל כרטיס – `CARD_HINTS` ב-`dashboard-messages.ts`, **לפי `DashboardMetrics.cs`
+    – לשנות יחד**: tooltip על (i) + אותו טקסט visually-hidden בכרטיס. חריגות > 0: גבול/רקע אדום + אייקון + "דורש טיפול". null ← "—" + סיבה.
+    `formatDuration` (‏dashboard-format.ts): פחות משעה ← דקות; אחרת שעות שלמות: "שעה", "שעתיים", "יום ו-4 שעות", "יומיים ושעה".
+  * גרפים (`dashboard-charts.ts`, טהור): כל בונה מחזיר `{ config, table, summary, note }` מאותו מערך – הטבלה של "הצג כטבלה" והטקסט החלופי
+    (`aria-label` של ה-canvas, ‏`role="img"`) לא יכולים לסטות מהגרף. קטגוריה: אופקי, תוויות מימין, מהגדול לקטן, "טרם סווגה" אחרונה. סטטוס:
+    `TICKET_STATUS_COLOR_VARS` (services/status-colors.ts) – **המקור היחיד לצבעי הסטטוס**, גם ל-`app-status-badge` (‏`--status-color` מהמפה);
+    ל-canvas דרך `cssColor()` (getComputedStyle). מגמה: ציר זמן משמאל לימין, ‏legend/tooltip ‏rtl, ‏"נסגרו" מקווקו ובנקודה מרובעת (לא רק צבע).
+    בלי אנימציה תחת prefers-reduced-motion.
+  * טבלאות: `app-oldest-tickets` (‏app-data-table, ‏paginated=false; קישור ל-`/dashboard/tickets/:id` עם state של החזרה; requesters ← מחלקה
+    מטפלת, handling ← מחלקת הפונה, ארגוני ← שתיהן; ‏row-overdue + "חריגה"; כרטיסים ב-XSmall). `app-department-comparison`: **מיון בלקוח**
+    (`sortComparison`) – תוצאה מקובצת של כמה עשרות שורות, לא רשימת רשומות. ברירת מחדל חריגות↓, פתוחות↓, שם; "לא נותבו" תמיד אחרונה ובלי
+    קישור; לא פעילה ← תג. שם מחלקה ← הדשבורד שלה עם הטווח.
+  * בדיקות: `components/dashboard/**/*.spec.ts` (+ ‏`testing/dashboard-fixtures.ts`), ‏`handler-urls.spec.ts`, ‏`status-badge.spec.ts`, ‏`app.routes.spec.ts`.
+
 ## בהמשך
+- 6.2: למדוד את הדשבורד על 100,000 פניות (פערי האינדקסים ו-OPENJSON שב-5.1 למעלה). הקריאה הראשונה אחרי עלייה ~3 שניות (הידור שאילתות EF).
 - משימה 2.2: לטעון את Shell ב-loadComponent (lazy), מסך ההתחברות מחוצה לו –
   כדי להוריד את ה-bundle הראשוני מתחת ל-500KB. לא להגדיל את ה-budget.
 
   - 6.1 (בדיקות אינטגרציה): 429 ביצירת פנייה; JSON של עובד מ-GET /api/tickets/{id} בלי שדות פנימיים.
-- שלב ה': היקף `department` (מנהל/מנכ"ל) קיים ב-API, אין לו מסך. מנהל שפותח פנייה של עובד אחר במסך העובד רואה
-  "הפנייה אינה שלך" (אזור handler פתוח ל-Handler בלבד).
+- היקף `department` של GET /api/tickets (רשימת כל פניות המחלקה למנהל/מנכ"ל) קיים ב-API ואין לו מסך – הדשבורד (5.2) מציג רק את
+  10 הוותיקות. פנייה בודדת כבר נפתחת למנהל/מנכ"ל ב-`/dashboard/tickets/:id`.
 - ה-Seeder: צעד ManualClassify משאיר את הפנייה בתור המחלקה (כמו לפני 3.4), ואילו ב-API סיווג ידני מנתב למטפל לפי עומס.
   לא תוקן כדי לא להזיז את מספרי הפניות המתועדים – לתקן אם נוגעים ב-Seeder ממילא.
 - 4.4: ה-Disposition של ניתוחים שנוצרו לפני ה-Migration `AiAnalysisOutcome` משוחזר לפי הסיווג הנוכחי (Ai ← Applied, Manual ←

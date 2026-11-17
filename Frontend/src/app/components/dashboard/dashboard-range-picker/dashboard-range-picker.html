@@ -1,0 +1,52 @@
+<div class="range-picker">
+  <mat-button-toggle-group
+    class="segmented"
+    aria-label="טווח תאריכים"
+    hideSingleSelectionIndicator
+    [value]="segment()"
+    (change)="onSegment($event.value)"
+  >
+    @for (days of presets; track days) {
+      <mat-button-toggle [value]="'' + days">{{ days }} יום</mat-button-toggle>
+    }
+    <mat-button-toggle value="custom">טווח מותאם</mat-button-toggle>
+  </mat-button-toggle-group>
+
+  @if (segment() === 'custom') {
+    <form class="custom-range" (submit)="apply($event)" aria-label="טווח מותאם" novalidate>
+      <mat-form-field appearance="outline" class="date" subscriptSizing="dynamic">
+        <mat-label>מתאריך</mat-label>
+        <input
+          matInput
+          type="date"
+          name="from"
+          [value]="from()"
+          [max]="to() || today"
+          (change)="from.set($any($event.target).value)"
+        />
+      </mat-form-field>
+      <mat-form-field appearance="outline" class="date" subscriptSizing="dynamic">
+        <mat-label>עד תאריך</mat-label>
+        <input
+          matInput
+          type="date"
+          name="to"
+          [value]="to()"
+          [min]="from()"
+          (change)="to.set($any($event.target).value)"
+        />
+      </mat-form-field>
+      <button mat-stroked-button type="submit" class="apply-button">החל</button>
+      @if (error(); as error) {
+        <p class="range-error" role="alert">{{ error }}</p>
+      }
+    </form>
+  }
+
+  @if (resolvedText()) {
+    <p class="resolved">
+      <span class="visually-hidden">הנתונים מוצגים לימים </span>
+      <span aria-hidden="true">טווח: </span><span dir="ltr">{{ resolvedText() }}</span>
+    </p>
+  }
+</div>

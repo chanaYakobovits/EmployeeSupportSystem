@@ -30,6 +30,8 @@
     "@angular/router": "^20.1.0",
     "@fontsource/heebo": "^5.3.0",
     "@fontsource/material-symbols-outlined": "^5.3.9",
+    "chart.js": "4.5.1",
+    "ng2-charts": "8.0.0",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0",
     "zone.js": "~0.15.0"

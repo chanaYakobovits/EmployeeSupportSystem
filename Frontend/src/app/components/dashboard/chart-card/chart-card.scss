@@ -1,0 +1,71 @@
+:host {
+  display: block;
+  min-width: 0; // inside a grid: lets the canvas shrink
+}
+
+.chart-card {
+  padding: 16px 20px 20px;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.chart-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.chart-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.chart-note {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.chart-box {
+  position: relative;
+  width: 100%;
+}
+
+.table-scroll {
+  max-height: 360px;
+  overflow: auto;
+}
+
+.chart-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+
+  th,
+  td {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    text-align: start;
+    white-space: nowrap;
+  }
+
+  thead th {
+    position: sticky;
+    top: 0;
+    background: var(--bg-page);
+    font-weight: 600;
+    color: var(--text-secondary);
+  }
+
+  tbody th {
+    font-weight: 500;
+  }
+
+  td {
+    font-variant-numeric: tabular-nums;
+  }
+}
